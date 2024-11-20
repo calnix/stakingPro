@@ -169,6 +169,10 @@ We may want to begin distributing rewards in an additional token. This new distr
 - Auto-stake the airdrop allocation of MOCA for the users instead of airdropping directly to their wallets
 - Users can unstake later on to claim their airdrop if they wish to
 
+3. Staked Nfts and NFTStreaming
+
+StakingPro needs to support the functional interface of NFTStreaming's check.
+
 ## Nft locker monitoring
 
 - pause on incorrect withdrawal of nft
