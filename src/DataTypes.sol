@@ -55,7 +55,7 @@ contract DataTypes {
         // index: reward token
         uint256 vaultIndex;             //rewardsAccPerAllocPoint
         uint256 vaultNftIndex;          //rewardsAccPerNFT
-        uint256 vaultRpIndex;           //rewardsAccPerRealmPoint
+        uint256 vaultRpIndex;           //rewardsAccPerRealmPoint 
 
         // fees: pct values, with 18dp precision
         Fees rewardTokenFees;
