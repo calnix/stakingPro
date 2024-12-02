@@ -232,33 +232,51 @@ If we do not remove ended pools from circulation, reward calculation for the rem
 2. When updating NFT boost value
 
 All userIndexes must be updated when updating NFT boost value, to prevent stale rewards calculations.
+**create batch fn to update multiple users**
 
-# Others
+3. RP support
 
-1. Rewards to be given out in multiple tokens instead of just $MOCA.
+<insert>
 
-We may want to begin distributing rewards in an additional token. This new distribution may begin mid-way.
+## Additional Admin functions
 
-2. StakeBehalf
+1. Batch update vaultIndexes  - for removing ended vaults from circulation
+
+2. Batch update userIndexes - for updating NFTBoost index.
+
+3. StakeBehalf
 
 - Context: Airdrop MOCA to users outside of Staking Pro in some campaign
 - Auto-stake the airdrop allocation of MOCA for the users instead of airdropping directly to their wallets
 - Users can unstake later on to claim their airdrop if they wish to
 
-3. Staked Nfts and NFTStreaming
+# Others / Integrations
 
-StakingPro needs to support the functional interface of NFTStreaming's check.
+## 1. NftLocker and NftRegistry
 
-4. Moca Rewards
+- Locker to be deployed on mainnet
+- Registry to be deployed on Base
+- Need to customize and test LZ DVN configurations for ETH<>BASE.
+ 
+## 2. MocaToken
 
-On an ad-hoc basis.
-Evm to non-evm.
+- MocaOFT to be deployed on Base
+- Rate limits need to be tested and configured.
+- Need to customize and test LZ DVN configurations for ETH<>BASE.
 
-## Nft locker monitoring
+## 3. Staked Nfts and NFTStreaming
+
+NFTLocker needs to support the functional interface of NFTStreaming's check.
+Users should be able to stake their NFTs and yet be able to collect MOCA streams.
+
+## 4. Nft locker monitoring
 
 - pause on incorrect withdrawal of nft
 
-## Migration
+## 5. Migration
 
-- on Pro release, simple will be deprecated.
-- simple staking must be blocked [!]
+- On Pro release, simple will be deprecated
+- Simple staking contract will be paused, this prevents `stake` from being called.
+- Onus is on the user to unstake accordingly.
+
+**Note: Pausing the staking contract does not pause reward calculations for staked amounts. I.e. if a user chooses to unstake months after the contract has been paused, his on-chain rewards calculations will include the paused period as well. Pausing only prevents new inflows.**
