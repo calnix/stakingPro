@@ -141,21 +141,92 @@ After creation, fees can only be modified such that:
 
 ## Updatable dimensions [!]
 
-1. Creation nfts required
+1. Creation nfts required ✅
 
 Changing this will only affect new pools.
+This is acceptable and easy to implement.
 
-2. emissionPerSecond [!]
+2. emissionPerSecond ✅
 
-This might be very complicated/not at all possible. will confirm.
+Possible to modify `emissionPerSecond`.
+Need to update poolIndex before modifying.
 
-3. NFT Staking Boost
+- book the past and close the book.
+- the index is representative of rewardsAccPerToken
+- doubling the EPS has the same effect as doubling the time delta
+- so there will not be any drift or offchain support needed.
+
+> important to ensure that any vaults that are expired have been removed from the pool, before updates are made.
+
+3. NFT Staking Boost ✅
 
 +10% Boost per Nft on base Rewards for both Staking Power and Token Rewards.
 
-4. Pool Cooldown Period
+Modifying the boost per NFT, impacts all vaults in existence.
 
-Changing this will only affect new pools that are deactivated after the cooldown period has been adjusted
+All `userIndexes` must be synced upon update - requires off-chain support.
+
+Assuming there are vaults still stale across more than 1 update, the rewards calculation will be off at a user Index level.
+This is because on the most latest checkpoint, the user's rewards are: `(currentVaultIndex - staleUserIndex) * userAllocPoints`,
+where userAllocPoints are based on the most recent NFT boost percentage.
+![Example](image.png)
+
+4. Pool Cooldown Period ✅
+
+Changing this will only affect new pools that are deactivated after the cooldown period has been adjusted.
+
+5. Ad-hoc distribution of tokens
+
+This could be for MOCA or other tokens, on an adhoc basis.
+For example, we might want to reward stakers for an arbitrary 2 month period; disregarding all prior staking activity.
+
+For forward distribution:
+
+- a user's rewards is calculated based on the delta: (vaultIndex - userIndex)
+- the vaultIndex upon updating would be same as poolIndex
+- ~~on startTime, tokenIndex should be set to PoolIndex [requires offchain to call fn at startTime]~~
+- each token has its own index, which is updated similar to `_calculatePoolIndex` [generalize to `_calculateIndex`]
+- this requires passing pool.totalAllocPoints to `_calculateIndex` when calculating tokenIndex
+- but we need a userTokenIndex to track delta against tokenIndex.
+- we could have a single `userTokenIndex` variable, but that would not allow for concurrent token distributions.
+
+### Solution: Token Reward Vault
+
+- single contract for multiple tokens
+- independent tracking at a token level for ad-hoc distribution [**consider moving into pool contract**]
+-  
+
+X-chain Token distribution
+
+- need users to supply `dstAddress` [in-case non-evm]
+- all accounting logics remain the same
+- claim ends with a x-chain LZ txn to send tokens to destination address
+- need a vault on dstChain containing tokens
+
+> be able to upgrade the rewards vault by pointing it to a new one. 
+
+```solidity
+    
+    struct TokenData {
+        uint256 emissionPerSecond
+        uint256 startTime
+        uint256 endTime
+        uint256 tokenIndex
+        //...
+        uint256 precision;
+        
+    }
+    
+    // what if non-evm
+    mapping (address token => TokenData token) public tokens;
+
+
+```
+
+## OffChain support
+
+1. To remove ended pools from circulation
+
 
 # Others
 
@@ -172,6 +243,10 @@ We may want to begin distributing rewards in an additional token. This new distr
 3. Staked Nfts and NFTStreaming
 
 StakingPro needs to support the functional interface of NFTStreaming's check.
+
+4. Moca Rewards
+
+On an ad-hoc basis, 
 
 ## Nft locker monitoring
 
