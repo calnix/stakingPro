@@ -214,7 +214,7 @@ X-chain Token distribution
         uint256 tokenIndex
         //...
         uint256 precision;
-        
+
     }
     
     // what if non-evm
@@ -227,6 +227,11 @@ X-chain Token distribution
 
 1. To remove ended pools from circulation
 
+If we do not remove ended pools from circulation, reward calculation for the remaining active pools will be diluted.
+
+2. When updating NFT boost value
+
+All userIndexes must be updated when updating NFT boost value, to prevent stale rewards calculations.
 
 # Others
 
@@ -246,7 +251,8 @@ StakingPro needs to support the functional interface of NFTStreaming's check.
 
 4. Moca Rewards
 
-On an ad-hoc basis, 
+On an ad-hoc basis.
+Evm to non-evm.
 
 ## Nft locker monitoring
 
