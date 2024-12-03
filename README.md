@@ -275,6 +275,16 @@ All userIndexes must be updated when updating NFT boost value, to prevent stale 
 4. **Batching**
    - `stakeRP` accepts arrays for batch operations
 
+Note:
+- Users only need to go through the above FE/BE/Signature process to 'onboard' their RP onto the contract.
+- Once on the contract, reassigning RP to other vaults will not require signatures; can be purely on-chain.
+- However, if the user wishes to 'onboard' additional RP, the above process must be repeated.
+
+Hence, there would be 2 `stakeRp` functions:
+
+- `stakeRP(vaultId, realmId, amount, expiry, signature)`
+- `stakeRP(vaultId, amount)`
+
 ## Additional Admin functions
 
 1. Batch update vaultIndexes
