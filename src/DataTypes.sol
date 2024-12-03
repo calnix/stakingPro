@@ -89,6 +89,9 @@ contract DataTypes {
         uint256[] tokenIds;     // nfts staked: array.length < 4
         uint256 stakedTokens;   
         uint256 stakedRealmPoints;   
+    }
+
+    struct UserAccounting {
 
         // indexes: based on reward tokens
         uint256 userIndex; 

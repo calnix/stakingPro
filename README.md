@@ -15,129 +15,104 @@ Chain: Base
 - $MOCA tokens
 - Staking Power [off-chain]
 
-## Pool creation
+## Vault creation
 
-- Only MocaNFT holders can create pools
-- 5 NFTs required to create a single pool
-- Creation NFTs are locked to created pool
+- Only MocaNFT holders can create vaults
+- 5 NFTs required to create a single vault
+- Creation NFTs are locked to created vault
 - Creation NFTs do not count towards rewards calc. or boosting.
-- Creator will have to define the fee structure levied upon rewards earned by pool
+- Creator will have to define the fee structure levied upon rewards earned by vault
     -- a single fee structure applies to both MOCA rewards and Staking Power
 
-## Pool characteristics
+## Vault characteristics
 
-- Pools have no expiry date unless the pool creator decides to deactivate the pool.
-- All participants in the pool ($MOCA stakers, Moca NFT Stakers, RP committers, Pool Creator) will earn both Staking Power and $MOCA token rewards.
+- Vault have no expiry date unless the vault creator decides to deactivate it.
+- All participants in the vault ($MOCA stakers, Moca NFT Stakers, RP committers, Pool Creator) will earn both Staking Power and $MOCA token rewards.
 - `No max limit` on RP, $MOCA or NFTs staked.
-- All assets (except creation NFTs) can be staked and unstaked from a pool any time. [$MOCA, NFTs, RP]
+- All assets (except creation NFTs) can be staked and unstaked at any time; [$MOCA, NFTs, RP].
 
-### Note on RP [ignore pending discussion]
+**Note that RP will not be on-chain**
 
-- Users have to delegate a minimum of 50 RP per pool per stake function call.
-- Staked RP cannot be unstaked back to a user's balance; it can only be shuffled about between pools.
-- Users can transfer any amount of RP from pool to pool, at any time.
+## Vault deactivation
 
-> Note: users will pay gas for all on-chain RP related transactions using their Realm Wallet
+- Vault can be deactivated by the owner.
+- Vault will enter a 7-day cooldown period.
 
-## Pool deactivation
-
-- Pool can be deactivated by the owner.
-- Pool will enter a 7-day cooldown period.
-
-- During cooldown, pool will continue to earn rewards as per normal. However, there can be no inflow of assets.
+- During cooldown, vault will continue to earn rewards as per normal. However, there can be no inflow of assets.
   - this is to facilitate users early warning notice to move their assets to another pool, avoiding disruption.
 
-- After cooldown, the pool creator can unstake creation NFTs.
+- After cooldown, the vault creator can unstake creation NFTs.
   - No further staking is possible.
   - No reactivation is possible.
-  - pool no longer earns rewards.
+  - Vault no longer earns rewards.
+
+> for any unstaking action after cooldown, have the fn check if vault's weight has been removed from the pool.
+> add check for unstaking and claiming
 
 ## Rewards Emitted
 
-Two types:
+1. Staking Power (on-chain emission)
+2. Token Rewards (ad-hoc distribution)
 
-1. Staking Power
-2. $Moca Tokens
+All participants ($MOCA stakers, Moca NFT Stakers, RP Stakers, Pool Creator) will earn Staking Power and Tokens.
 
-Rewards are distributed on a relative basis. Pools compete against each other for a slice of a constant global emission rate of either rewards type.
+- Each vault earns rewards proportional to its total allocation points
+- Allocation points = boosted value of staked assets
+- Global `emissionPerSecond` rate determines Staking Power emission
+- Token rewards distributed through separate contract
+- Each token type (MOCA, etc.) has dedicated tracking for distribution periods
 
-All participants in the pool ($MOCA stakers, Moca NFT Stakers, RP Stakers, Pool Creator) will earn both Staking Power and $MOCA token rewards.
+**Staking Power rewards are simply calculated for record-keeping purposes. It does not actually exist on-chain**
 
 ### Rewards emissions calculation
 
-**Staking Power Rewards**
-
-- Based on RP
-- Higher the RP delegated to a pool relative to other pools, higher the Staking Power pool participants will receive
-
-**$MOCA Token Rewards**
-
-- Based on `$MOCA tokens` staked
-- The greater the $MOCA tokens staked to a pool, relative to other pools, the greater the amount of $MOCA tokens as rewards the pool would receive.
+**We will need to define how much staking power is emitted per second, on deployment**
 
 ### Rewards boosters
 
-**Moca NFTS**
+**Applicable to Moca NFTs Only**
 
-- Moca NFTs staked will act as a boost to both types of rewards for a pool
-- The creation NFTs do not contribute to the boosting effect - only NFTs staked after.
-- 10% boost per NFT staked - applied to both reward types.
+- Staking Moca NFTs boosts all reward types
+- Creation NFTs do not provide a boost
+- Each staked NFT provides a flat 10% boost to base rewards
+- Maximum boost is capped at total number of staked NFTs × 10%
 
 ## Rewards and Boost calculations
 
-- 10% per nft, applied on the base. I.e., boosting effects will not stack.
-- unclaimed rewards are not auto-compounded; therefore can be ignored as part rewards calculations.
+Formula: `finalRewards = baseRewards × (1 + (numberOfStakedNFTs × 0.1))`
+
+Example:
+- With 3 staked NFTs: `finalRewards = baseRewards × (1 + (3 × 0.1)) = baseRewards × 1.3`
+- With 5 staked NFTs: `finalRewards = baseRewards × (1 + (5 × 0.1)) = baseRewards × 1.5`
+
+Notes:
+- Boosts are additive, not multiplicative (they don't compound)
+- Unclaimed rewards do not affect boost calculations
 
 ## Fees
 
-Creator of the pool will be able to adjust the fee structure.
+Vault creators set a single fee structure that applies to both Staking Power and all token rewards:
 
-There is only a single fee structure for a pool, which applies the same to both types of rewards (Staking power, $MOCA).
+1. Pool Creator Fee (0-50%)
+2. NFT Stakers Fee (split among NFT stakers, excluding creation NFTs)
+3. MOCA Stakers Fee (min 50%, split proportionally)
+4. RP Stakers Fee (split proportionally)
 
-After creation, fees can only be modified such that:
-    - creator cannot increase their portion of fees.
-    - creator can only reduce their own fee, in a manner to increase the rewards enjoyed by other pool participants.
-
-### Fee types
-
-1) Pool Creator Rewards: 0% - 100%
-
-2) Total NFT Staking Rewards
-    - Total rewards for all NFT stakers (excluding creation nfts).
-    - If multiple NFTs are staked into a pool, rewards will be split between all NFT holders.
-
-3) Total $MOCA Staking Rewards
-    - Total rewards for $MOCA Stakers.
-    - Rewards will be proportionally distributed between all $MOCA stakers
-
-4) RP Rewards
-    - Total rewards for users who commit RP.
-    - Rewards will be proportionally distributed between all the RP committers depending on their commitment
-
-> Total Fee % across the 4 fee types would naturally add up to be 100%
-
-**The portion of rewards to $MOCA Stakers cannot fall below a minimum of 50%. This is applicable to both rewards denominated in tokens and RP.**
-
-### Min. Fee portion to MOCA stakers
-
-- set to 50% initially.
-- would like to be updatable  
-
-> Note: Gas fees used during commission adjustment will be paid by the Pool Creator.
+Rules:
+- Total fees must equal 100%
+- MOCA stakers must receive ≥50% of all rewards
+- Creators can only decrease their fee % to benefit other participants
 
 ## Claiming Rewards
 
-- Staking power is recorded off-chain
-- Only MocaTokens can be claimed from the contract
-- Users can claim at any time
-
-**Claiming fees: 1-click claim all rewards. user to claim everything across the board at once, irrespective of if its nft staking or creator rewards**
+- Only tokens claimable on-chain
+- Single-click claim for all reward types (NFT staking, creator, token rewards)
 
 ## Financing
 
-- partial deposits whenever
-- ability to withdraw extra deposits
-    - track totalDeposits and TotalRewardsDeposited, so can withdraw/deposit rewards arbitrarily
+- Allow partial deposits at any time
+- Enable withdrawal of excess deposits
+    - Track `totalDeposits` and `TotalRewardsDeposited` for flexible reward management
 
 ## Updatable dimensions [!]
 
@@ -158,6 +133,8 @@ Need to update poolIndex before modifying.
 
 > important to ensure that any vaults that are expired have been removed from the pool, before updates are made.
 
+**`emissionPerSecond` is only applicable to Staking Power; not tokens**
+
 3. NFT Staking Boost ✅
 
 +10% Boost per Nft on base Rewards for both Staking Power and Token Rewards.
@@ -171,57 +148,100 @@ This is because on the most latest checkpoint, the user's rewards are: `(current
 where userAllocPoints are based on the most recent NFT boost percentage.
 ![Example](image.png)
 
+>In the pic above assume that Vault B is really 2 vaults - Adam and the other user occupy different vaults.
+
 4. Pool Cooldown Period ✅
 
 Changing this will only affect new pools that are deactivated after the cooldown period has been adjusted.
 
-5. Ad-hoc distribution of tokens
+5. Ad-hoc distribution of tokens ✅
 
-This could be for MOCA or other tokens, on an adhoc basis.
-For example, we might want to reward stakers for an arbitrary 2 month period; disregarding all prior staking activity.
+Distribution of token rewards for specific time periods, independent of prior staking history.
+For example, we might want to reward stakers for an arbitrary 2 month period; disregarding all previous staking activity.
 
 For forward distribution:
 
-- a user's rewards is calculated based on the delta: (vaultIndex - userIndex)
-- the vaultIndex upon updating would be same as poolIndex
-- ~~on startTime, tokenIndex should be set to PoolIndex [requires offchain to call fn at startTime]~~
-- each token has its own index, which is updated similar to `_calculatePoolIndex` [generalize to `_calculateIndex`]
-- this requires passing pool.totalAllocPoints to `_calculateIndex` when calculating tokenIndex
-- but we need a userTokenIndex to track delta against tokenIndex.
-- we could have a single `userTokenIndex` variable, but that would not allow for concurrent token distributions.
+- Each token type has its own reward index tracking
+- Rewards calculated using: `(tokenIndex - userIndex) × userAllocationPoints`
+- Supports concurrent reward distributions for different tokens
+- Index calculation follows same logic as pool index updates
+- Each token has `tokenIndex`, and each user has a unique `userIndex` for each token.
 
-### Solution: Token Reward Vault
+**Each token will require a corresponding userAccount**
+- think multi-pool, with shared nested vaults
 
-- single contract for multiple tokens
-- independent tracking at a token level for ad-hoc distribution [**consider moving into pool contract**]
--  
+### Token Distribution System
 
-X-chain Token distribution
+#### Core Components
 
-- need users to supply `dstAddress` [in-case non-evm]
-- all accounting logics remain the same
-- claim ends with a x-chain LZ txn to send tokens to destination address
-- need a vault on dstChain containing tokens
+- Token Reward Vault contract to handle multiple token distributions
+- Per-token tracking of distribution periods and indices
+- Cross-chain distribution support via LayerZero
 
-> be able to upgrade the rewards vault by pointing it to a new one. 
+#### Key Features
+
+1. **Independent Distribution Periods**
+   - Each token can have its own emission schedule
+   - Multiple concurrent distributions possible
+   - Rewards calculated as: `rewards = (tokenIndex - userTokenIndex) × userAllocPoints`
+
+2. **Cross-chain Distribution**
+   - Users specify destination address for rewards
+   - LayerZero integration for cross-chain transfers
+   - Destination chain requires token vault
+
+#### Token Distribution Data [WIP]
 
 ```solidity
     
     struct TokenData {
-        uint256 emissionPerSecond
-        uint256 startTime
-        uint256 endTime
-        uint256 tokenIndex
-        //...
+        bytes32 tokenAddr;  // LZ: to account for non-evm addr
+        
+        uint256 startTime;
+        uint256 endTime;
         uint256 precision;
+        uint256 emissionPerSecond;
+        
+        uint256 tokenIndex;
+        //...
+    }
 
+    struct UserData {
+        bytes32 tokenAddr;  // LZ: to account for non-evm addr
+        
+        uint256 stakedTokens;   
+        uint256 stakedRealmPoints;   
+
+        // indexes: based on reward tokens
+        uint256 userIndex; 
+        uint256 userNftIndex;
+        
+        //.....
     }
     
-    // what if non-evm
-    mapping (address token => TokenData token) public tokens;
+    // just stick staking power as 0x0?
+    mapping (bytes32 token => TokenData token) public tokens;
+
+    // vault base attributes
+    mapping(bytes32 vaultId => DataTypes.Vault vault) public vaults;
+    // for independent reward tracking              
+    mapping (bytes32 token => mapping(bytes32 vaultId => DataTypes.VaultAccounting vaultAccount)) public vaultAccounts;
+    // generic userInfo wrt to vault 
+    mapping(address user => mapping (bytes32 vaultId => DataTypes.UserInfo userInfo)) public users;
+    // Tracks rewards accrued for each user: per token type
+    mapping(address user => mapping (bytes32 vaultId => mapping (bytes32 token => DataTypes.UserAccounting userAccount))) public userAccounts;
 
 
 ```
+
+### X-chain Token distribution
+
+- need users to supply `dstAddress` [for non-evm]
+- all accounting logics remain the same
+- `claim` ends with a x-chain LZ txn to send tokens to destination address
+- need a vault on dstChain containing tokens
+
+> consider being able to add functionality to the rewards vault by adding modules.
 
 ## OffChain support
 
@@ -240,9 +260,13 @@ All userIndexes must be updated when updating NFT boost value, to prevent stale 
 
 ## Additional Admin functions
 
-1. Batch update vaultIndexes  - for removing ended vaults from circulation
+1. Batch update vaultIndexes
 
-2. Batch update userIndexes - for updating NFTBoost index.
+- for removing ended vaults from circulation
+
+2. Batch update userIndexes
+
+- for supporting updatability of NFTBoost index
 
 3. StakeBehalf
 
@@ -280,3 +304,8 @@ Users should be able to stake their NFTs and yet be able to collect MOCA streams
 - Onus is on the user to unstake accordingly.
 
 **Note: Pausing the staking contract does not pause reward calculations for staked amounts. I.e. if a user chooses to unstake months after the contract has been paused, his on-chain rewards calculations will include the paused period as well. Pausing only prevents new inflows.**
+
+# Contracts 
+
+- may combine both LZ modules into 1 [pending LZ response]
+![alt text](image-1.png)
