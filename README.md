@@ -116,12 +116,12 @@ Rules:
 
 ## Updatable dimensions [!]
 
-1. Creation nfts required ✅
+### 1. Creation nfts required ✅
 
 Changing this will only affect new pools.
 This is acceptable and easy to implement.
 
-2. emissionPerSecond ✅
+### 2. emissionPerSecond ✅
 
 Possible to modify `emissionPerSecond`.
 Need to update poolIndex before modifying.
@@ -135,7 +135,7 @@ Need to update poolIndex before modifying.
 
 **`emissionPerSecond` is only applicable to Staking Power; not tokens**
 
-3. NFT Staking Boost ✅
+### 3. NFT Staking Boost ✅
 
 +10% Boost per Nft on base Rewards for both Staking Power and Token Rewards.
 
@@ -150,11 +150,11 @@ where userAllocPoints are based on the most recent NFT boost percentage.
 
 >In the pic above assume that Vault B is really 2 vaults - Adam and the other user occupy different vaults.
 
-4. Pool Cooldown Period ✅
+### 4. Pool Cooldown Period ✅
 
 Changing this will only affect new pools that are deactivated after the cooldown period has been adjusted.
 
-5. Ad-hoc distribution of tokens ✅
+### 5. Ad-hoc distribution of tokens ✅
 
 Distribution of token rewards for specific time periods, independent of prior staking history.
 For example, we might want to reward stakers for an arbitrary 2 month period; disregarding all previous staking activity.
@@ -254,7 +254,7 @@ If we do not remove ended pools from circulation, reward calculation for the rem
 All userIndexes must be updated when updating NFT boost value, to prevent stale rewards calculations.
 **create batch fn to update multiple users**
 
-3. RP support
+3. RP support [!]
 
 <insert>
 
