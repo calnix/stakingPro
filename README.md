@@ -254,9 +254,26 @@ If we do not remove ended pools from circulation, reward calculation for the rem
 All userIndexes must be updated when updating NFT boost value, to prevent stale rewards calculations.
 **create batch fn to update multiple users**
 
-3. RP support [!]
+**3. RP support [!]**
 
-<insert>
+1. **Frontend Initiation**
+   - User requests to stake RP via frontend
+   - Backend validates and generates signed message: [userAddr, amount, vaultId, realmId, expiry, nonce]
+
+2. **Contract Interaction**
+   - User calls `stakeRP(vaultId, realmId, amount, expiry, signature)`
+   - Contract validates signature against the signer stored on contract, and nonce at a user address level
+   - Emits `RPstaked(userAddr, vaultId, realmId, amount)` event
+
+3. **Safety Measures** (Optional)
+   - Off-chain monitor validates RP creation; check against an indepedent record.
+   - Admin can call `cancelRP(userAddr, vaultId, realmId, amount)` if issues detected
+   - On cancellation:
+    - record RP cancelled per realmId, per vaultID
+    - record user's gas negated
+
+4. **Batching**
+   - `stakeRP` accepts arrays for batch operations
 
 ## Additional Admin functions
 
