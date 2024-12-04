@@ -107,6 +107,7 @@ Rules:
 
 - Only tokens claimable on-chain
 - Single-click claim for all reward types (NFT staking, creator, token rewards)
+- Users can claim all reward types at a token level. I.e. everything that has been emitted to them in tokenA.
 
 ## Financing
 
@@ -131,9 +132,10 @@ Need to update poolIndex before modifying.
 - doubling the EPS has the same effect as doubling the time delta
 - so there will not be any drift or offchain support needed.
 
-> important to ensure that any vaults that are expired have been removed from the pool, before updates are made.
+Note, as per point 5, each token will have its own `emissionPerSecond` variable for independent tracking.
+So will staking power.
 
-**`emissionPerSecond` is only applicable to Staking Power; not tokens**
+> important to ensure that any vaults that are expired have been removed from the pool, before updates are made.
 
 ### 3. NFT Staking Boost ✅
 
@@ -152,7 +154,8 @@ where userAllocPoints are based on the most recent NFT boost percentage.
 
 ### 4. Pool Cooldown Period ✅
 
-Changing this will only affect new pools that are deactivated after the cooldown period has been adjusted.
+Changing this will only affect active pools that are not in cooldown mode.
+When cooldown fn is activated, fn checks against the global variable.
 
 ### 5. Ad-hoc distribution of tokens ✅
 
@@ -177,6 +180,7 @@ For forward distribution:
 - Token Reward Vault contract to handle multiple token distributions
 - Per-token tracking of distribution periods and indices
 - Cross-chain distribution support via LayerZero
+- Most edge-ist case:  dist. moca on base and on eth independently
 
 #### Key Features
 
@@ -196,7 +200,8 @@ For forward distribution:
     
     struct TokenData {
         bytes32 tokenAddr;  // LZ: to account for non-evm addr
-        
+        uint256 chainId;    // dist. moca on base and on eth independently 
+
         uint256 startTime;
         uint256 endTime;
         uint256 precision;
@@ -295,12 +300,6 @@ Hence, there would be 2 `stakeRp` functions:
 
 - for supporting updatability of NFTBoost index
 
-3. StakeBehalf
-
-- Context: Airdrop MOCA to users outside of Staking Pro in some campaign
-- Auto-stake the airdrop allocation of MOCA for the users instead of airdropping directly to their wallets
-- Users can unstake later on to claim their airdrop if they wish to
-
 # Others / Integrations
 
 ## 1. NftLocker and NftRegistry
@@ -332,7 +331,23 @@ Users should be able to stake their NFTs and yet be able to collect MOCA streams
 
 **Note: Pausing the staking contract does not pause reward calculations for staked amounts. I.e. if a user chooses to unstake months after the contract has been paused, his on-chain rewards calculations will include the paused period as well. Pausing only prevents new inflows.**
 
-# Contracts 
+# Contracts
 
 - may combine both LZ modules into 1 [pending LZ response]
 ![alt text](image-1.png)
+
+# KIV
+
+1. StakeBehalf
+
+- Context: Airdrop MOCA to users outside of Staking Pro in some campaign
+- Auto-stake the airdrop allocation of MOCA for the users instead of airdropping directly to their wallets
+- Users can unstake later on to claim their airdrop if they wish to
+
+However, we will need to airdrop into a specific vault as a user can have multiple vaults under their name.
+Need to further think how.
+
+2. Special NFTS
+
+Of the 8888 MocaNfts, 25 of them are 1-1 special types. May want to give special effects, surrounding staking boost or creation requirements.
+Pending confirmation.
