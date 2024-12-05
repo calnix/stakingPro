@@ -14,8 +14,14 @@ contract DataTypes {
         uint256 totalStakedTokens;
         uint256 totalStakedRealmPoints;
 
-        // boosted balance
-        uint256 totalAllocPoints;
+        // boosted balances
+        uint256 boostedStakedTokens;
+        uint256 boostedRealmPoints;
+
+        // staking power: is continuously emitted
+        uint256 emissionPerSecond;
+        uint256 lastUpdateTimeStamp;  
+        uint256 stakingPowerIndex;                      
     }
 
     

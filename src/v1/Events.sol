@@ -4,13 +4,7 @@ pragma solidity 0.8.24;
 import {DataTypes} from './DataTypes.sol';
 
 
-event DistributionUpdated(uint256 indexed newPoolEPS, uint256 indexed startTime);
-
-
-
-
-
-
+event DistributionUpdated(uint256 indexed newPoolEPS, uint256 indexed newEndTime);
 event RouterUpdated(address indexed oldRouter, address indexed newRouter);
 
 event VaultCreated(address indexed creator, bytes32 indexed vaultId);

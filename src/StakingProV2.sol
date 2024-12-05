@@ -14,7 +14,6 @@ import {Ownable2Step, Ownable} from "openzeppelin-contracts/contracts/access/Own
 // interfaces
 import {INftRegistry} from "./interfaces/INftRegistry.sol";
 import {IRewardsVault} from "./interfaces/IRewardsVault.sol";
-import {IRealmPoints} from "./interfaces/IRealmPoints.sol";
 
 
 contract StakingPro is Pausable, Ownable2Step {
@@ -23,8 +22,18 @@ contract StakingPro is Pausable, Ownable2Step {
     INftRegistry public immutable NFT_REGISTRY;
     IRewardsVault public immutable REWARDS_VAULT;
 
-    // times
-    uint256 public immutable startTime;
+    uint256 public immutable startTime; // can start arbitrarily after deployment
+    uint256 public endTime;             // if we need to end 
+
+    uint256 public NFT_MULTIPLIER = 10; //note 
+
+    // pool emergency state
+    bool public isFrozen;
+
+    // pool data
+    DataTypes.PoolAccounting public pool;
+
+//-------------------------------mappings-------------------------------------------
 
     // just stick staking power as 0x0?
     mapping (bytes32 token => TokenData token) public tokens;       // token address as bytes32 for handling non-EVM tokens
@@ -40,5 +49,35 @@ contract StakingPro is Pausable, Ownable2Step {
     // Tracks rewards accrued for each user: per token type
     mapping(address user => mapping (bytes32 vaultId => mapping (bytes32 token => DataTypes.UserAccount userAccount))) public userAccounts;
 
+//-------------------------------constructor-------------------------------------------
+
+    constructor(address registry, address rewardsVault, uint256 startTime_, uint256 emissionPerSecond, address owner) payable Ownable(owner) {
+
+        // sanity check input data: time, period, rewards
+        require(owner > address(0), "Zero address");
+        require(startTime_ > block.timestamp, "Invalid startTime");
+        require(emissionPerSecond > 0, "emissionPerSecond = 0");
+
+        // interfaces: supporting contracts
+        NFT_REGISTRY = INftRegistry(registry);              
+        REWARDS_VAULT = IRewardsVault(rewardsVault);    
+
+        // instantiate data
+        DataTypes.PoolAccounting memory pool_;
+
+        // set startTime & pool.lastUpdateTimeStamp
+        startTime = pool_.lastUpdateTimeStamp = startTime_;
+        endTime = startTime_ + duration;   
+
+        pool_.emissionPerSecond = emissionPerSecond;
+
+        // update storage
+        pool = pool_;
+
+        emit DistributionUpdated(pool_.emissionPerSecond, startTime);
+    }
+
+
+//-------------------------------external-------------------------------------------
 
 }

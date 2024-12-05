@@ -10,6 +10,8 @@ Chain: Base
 
 **No limits on staking: MOCA, RP, NFTS; at a pool or contract level**
 
+When users stake MOCA or any other asset, they do not get a ERC20 stk equivalent, i.e. no stkMOCA is issued as a receipt.
+
 ## Rewards assets
 
 - $MOCA tokens
