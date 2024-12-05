@@ -7,15 +7,23 @@ contract DataTypes {
                                   POOL
     //////////////////////////////////////////////////////////////*/
 
-    struct Pool {
+    struct PoolAccounting {
+        // rewards: x
+        uint256 totalAllocPoints;                // totalBalanceBoosted
+        uint256 emissisonPerSecond;           
+    
+        // rewards: y
+        uint256 index;                       // rewardsAccPerAllocPoint (to date) || rewards are booked into index
+        uint256 lastUpdateTimeStamp;  
+        
+        // for updating emissions: denominated in reward tokens
+        uint256 totalStakingRewards;       
+        uint256 rewardsEmitted;            // prevent ddos rewards vault
 
         // staked assets
-        uint256 totalStakedNfts;
-        uint256 totalStakedTokens;
-        uint256 totalStakedRealmPoints;
-
-        // boosted balance
-        uint256 totalAllocPoints;
+        //uint256 totalStakedTokens;
+        //uint256 totalStakedNfts;
+        //uint256 totalStakedRealmPoints;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -26,11 +34,10 @@ contract DataTypes {
     struct Vault {
         bytes32 vaultId;   
         address creator;
+        uint256 startTime;             // uint40
         uint256[] creationTokenIds;     // nfts staked for creation
 
-        uint256 startTime;              // uint40
-        uint256 endTime;                // cooldown ends at this time
-
+        
         // note: applicable to staked tokens
         uint256 multiplier;
         uint256 allocPoints; 

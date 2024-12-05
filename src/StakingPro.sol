@@ -259,9 +259,6 @@ contract StakingPro is Pausable, Ownable2Step {
         NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, vaultId);
     }
 
-    //TODO stake rp
-    function stakeRealmPoints(bytes32 vaultId, address onBehalfOf, uint256 amount) external whenStarted whenNotPaused {}
-
     // claim MocaTokens
     function claimRewards(bytes32 vaultId, address onBehalfOf) external whenStarted whenNotPaused {
         require(vaultId > 0, "Invalid vaultId");

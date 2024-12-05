@@ -66,9 +66,17 @@ All participants ($MOCA stakers, Moca NFT Stakers, RP Stakers, Pool Creator) wil
 
 ### Rewards emissions calculation
 
+- stake RP -> eligible for Staking Power rewards -> all staking power rewards are based on RP + nft boost
+
+- Token rewards are calculated based on staked MOCA, accounting for NFT boosting effect
+- Staking power rewards are calculated based on staked RP, accounting for NFT boosting effect
+
+However, there is a single fee structure that is applied to both token and staking power emissions.
+Therefore, RP stakers would also be eligible for token rewards; although their RP contribution does not have weight upon token rewards calculation.
+
 **We will need to define how much staking power is emitted per second, on deployment**
 
-### Rewards boosters
+## Rewards boosters
 
 **Applicable to Moca NFTs Only**
 
@@ -77,7 +85,7 @@ All participants ($MOCA stakers, Moca NFT Stakers, RP Stakers, Pool Creator) wil
 - Each staked NFT provides a flat 10% boost to base rewards
 - Maximum boost is capped at total number of staked NFTs × 10%
 
-## Rewards and Boost calculations
+### Rewards and Boost calculations
 
 Formula: `finalRewards = baseRewards × (1 + (numberOfStakedNFTs × 0.1))`
 
