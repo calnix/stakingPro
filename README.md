@@ -298,6 +298,8 @@ Hence, there would be 2 `stakeRp` functions:
 - `stakeRP(vaultId, realmId, amount, expiry, signature)`
 - `stakeRP(vaultId, amount)`
 
+![alt text](image-2.png)
+
 ## Additional Admin functions
 
 1. Batch update vaultIndexes
@@ -359,3 +361,8 @@ Need to further think how.
 
 Of the 8888 MocaNfts, 25 of them are 1-1 special types. May want to give special effects, surrounding staking boost or creation requirements.
 Pending confirmation.
+
+3. Can the rewards calculation be modified such that it considers both tokens and RP staked
+
+Currently there are two tracks, token rewards being calculated on boosted staked Moca tokens, while staking power being calculated on boosted staked Realm Points.
+Would like the possibility to have either reward calculation be a combination of the two.

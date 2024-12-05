@@ -81,10 +81,10 @@ contract DataTypes {
         uint256 vaultNftIndex;          //rewardsAccPerNFT
         uint256 vaultRpIndex;           //rewardsAccPerRealmPoint 
 
-        // fees: pct values, following token precision
+        // fees: pct values (<= 50%)
         uint256 nftFeeFactor;
         uint256 creatorFeeFactor;   
-        uint256 realmPointFeeFactor;
+        uint256 realmPointsFeeFactor;
 
         // rewards: reward token | based on allocPoints
         uint256 totalAccRewards;
@@ -96,11 +96,12 @@ contract DataTypes {
         uint256 totalClaimedRewards;    // total: staking, nft, creator, rp
     }
 
+    //can consider removing; unless stack issues
     struct Fees {
-        // fees: pct values, following token precision
+        // fees: pct values
         uint256 nftFeeFactor;
         uint256 creatorFeeFactor;   
-        uint256 realmPointFeeFactor;
+        uint256 realmPointsFeeFactor;
     }
 
 
