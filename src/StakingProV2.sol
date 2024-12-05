@@ -20,6 +20,12 @@ import {IRealmPoints} from "./interfaces/IRealmPoints.sol";
 contract StakingPro is Pausable, Ownable2Step {
     using SafeERC20 for IERC20;
 
+    INftRegistry public immutable NFT_REGISTRY;
+    IRewardsVault public immutable REWARDS_VAULT;
+
+    // times
+    uint256 public immutable startTime;
+
     // just stick staking power as 0x0?
     mapping (bytes32 token => TokenData token) public tokens;       // token address as bytes32 for handling non-EVM tokens
 
@@ -30,9 +36,9 @@ contract StakingPro is Pausable, Ownable2Step {
     mapping (bytes32 vaultId => mapping(bytes32 token => DataTypes.VaultAccount vaultAccount)) public vaultAccounts;
 
     // generic userInfo wrt to vault 
-    mapping(address user => mapping (bytes32 vaultId => DataTypes.UserInfo userInfo)) public users;
+    mapping(address user => mapping (bytes32 vaultId => DataTypes.User user)) public users;
     // Tracks rewards accrued for each user: per token type
-    mapping(address user => mapping (bytes32 vaultId => mapping (bytes32 token => DataTypes.UserAccounting userAccount))) public userAccounts;
+    mapping(address user => mapping (bytes32 vaultId => mapping (bytes32 token => DataTypes.UserAccount userAccount))) public userAccounts;
 
 
 }

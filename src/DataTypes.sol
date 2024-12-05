@@ -18,6 +18,30 @@ contract DataTypes {
         uint256 totalAllocPoints;
     }
 
+    
+    /*//////////////////////////////////////////////////////////////
+                                 TOKEN
+    //////////////////////////////////////////////////////////////*/
+        
+    struct TokenData {
+        uint256 chainId;    // dist. moca on base and on eth independently 
+        bytes32 tokenAddr;  // LZ: to account for non-evm addr
+        uint256 precision;
+        
+        uint256 startTime;
+        uint256 endTime;
+        uint256 emissionPerSecond;        
+
+        uint256 tokenIndex;
+        uint256 lastUpdateTimeStamp;  
+
+        // for updating emissions: denominated in reward tokens
+        uint256 totalStakingRewards;       
+        uint256 rewardsEmitted;            // prevent ddos rewards vault
+
+        //...
+    }
+
     /*//////////////////////////////////////////////////////////////
                                  VAULT
     //////////////////////////////////////////////////////////////*/
@@ -39,20 +63,22 @@ contract DataTypes {
         uint256 stakedNfts;            //2^8 -1 NFTs. uint8
         uint256 stakedTokens;
         uint256 stakedRealmPoints;
-        
-        // rewards
-        VaultAccounting accounting;
     }
 
-    struct VaultAccounting {
+    //Note: Each vault has an account for each token type
+    struct VaultAccount {
+        //uint256 chainId;    
+        //bytes32 tokenAddr;  
+
         // index: reward token
         uint256 vaultIndex;             //rewardsAccPerAllocPoint
         uint256 vaultNftIndex;          //rewardsAccPerNFT
         uint256 vaultRpIndex;           //rewardsAccPerRealmPoint 
 
-        // fees: pct values, with 18dp precision
-        Fees rewardTokenFees;
-        Fees stakingPowerFees;
+        // fees: pct values, following token precision
+        uint256 nftFeeFactor;
+        uint256 creatorFeeFactor;   
+        uint256 realmPointFeeFactor;
 
         // rewards: reward token | based on allocPoints
         uint256 totalAccRewards;
@@ -61,11 +87,11 @@ contract DataTypes {
         uint256 accRealmPointsRewards;
 
         uint256 rewardsAccPerToken;
-        uint256 totalClaimedRewards;    // total: staking, nft, creator
+        uint256 totalClaimedRewards;    // total: staking, nft, creator, rp
     }
 
     struct Fees {
-        // fees: pct values, with 18dp precision
+        // fees: pct values, following token precision
         uint256 nftFeeFactor;
         uint256 creatorFeeFactor;   
         uint256 realmPointFeeFactor;
@@ -76,7 +102,7 @@ contract DataTypes {
                                   USER
     //////////////////////////////////////////////////////////////*/
 
-    struct UserInfo {
+    struct User {
 
         // staked assets
         uint256[] tokenIds;     // nfts staked: array.length < 4
@@ -84,7 +110,7 @@ contract DataTypes {
         uint256 stakedRealmPoints;   
     }
 
-    struct UserAccounting {
+    struct UserAccount {
 
         // indexes: based on reward tokens
         uint256 userIndex; 
@@ -101,4 +127,6 @@ contract DataTypes {
         //rewards: creatorFees
         uint256 claimedCreatorRewards;
     }
+
+
 }
