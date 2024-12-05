@@ -19,9 +19,11 @@ contract DataTypes {
         uint256 boostedRealmPoints;
 
         // staking power: is continuously emitted
-        uint256 emissionPerSecond;
-        uint256 lastUpdateTimeStamp;  
-        uint256 stakingPowerIndex;                      
+        //uint256 emissionPerSecond;
+        //uint256 lastUpdateTimeStamp;  
+        //uint256 stakingPowerIndex;       
+
+        //uint256 stakingPowerEmitted;               
     }
 
     
@@ -42,8 +44,9 @@ contract DataTypes {
         uint256 lastUpdateTimeStamp;  
 
         // for updating emissions: denominated in reward tokens
-        uint256 totalStakingRewards;       
-        uint256 rewardsEmitted;            // prevent ddos rewards vault
+        uint256 totalDeposited;       
+        uint256 totalWithdrawn;
+        uint256 totalEmitted;
 
         //...
     }

@@ -39,7 +39,7 @@ contract StakingPro is Pausable, Ownable2Step {
 //-------------------------------mappings--------------------------------------------
 
     // just stick staking power as 0x0?
-    mapping (bytes32 token => TokenData token) public tokens;       // token address as bytes32 for handling non-EVM tokens
+    mapping (bytes32 token => DataTypes.TokenData token) public tokens;       // token address as bytes32 for handling non-EVM tokens
 
     // vault base attributes
     mapping(bytes32 vaultId => DataTypes.Vault vault) public vaults;
@@ -48,9 +48,9 @@ contract StakingPro is Pausable, Ownable2Step {
     mapping (bytes32 vaultId => mapping(bytes32 token => DataTypes.VaultAccount vaultAccount)) public vaultAccounts;
 
     // generic userInfo wrt to vault 
-    mapping(address user => mapping (bytes32 vaultId => DataTypes.User user)) public users;
+    mapping(address user => mapping(bytes32 vaultId => DataTypes.User user)) public users;
     // Tracks rewards accrued for each user: per token type
-    mapping(address user => mapping (bytes32 vaultId => mapping (bytes32 token => DataTypes.UserAccount userAccount))) public userAccounts;
+    mapping(address user => mapping(bytes32 vaultId => mapping(bytes32 token => DataTypes.UserAccount userAccount))) public userAccounts;
 
 //-------------------------------constructor------------------------------------------
 
@@ -58,8 +58,8 @@ contract StakingPro is Pausable, Ownable2Step {
 
         // sanity check input data: time, period, rewards
         require(owner > address(0), "Zero address");
-        require(startTime_ > block.timestamp, "Invalid startTime");
         require(emissionPerSecond > 0, "emissionPerSecond = 0");
+        require(startTime_ > block.timestamp, "Invalid startTime");
 
         // interfaces: supporting contracts
         NFT_REGISTRY = INftRegistry(registry);              
@@ -68,12 +68,21 @@ contract StakingPro is Pausable, Ownable2Step {
         // instantiate data
         DataTypes.PoolAccounting memory pool_;
 
-        // set startTime & pool.lastUpdateTimeStamp
-        startTime = pool_.lastUpdateTimeStamp = startTime_;
-        endTime = startTime_ + duration;   
+        // set startTime 
+        startTime = startTime_;
 
-        pool_.emissionPerSecond = emissionPerSecond;
+        // setup staking power
+        DataTypes.TokenData memory token = tokens[0]; 
+            tokens[0].chainId = block.chainId; 
+            tokens[0].precision = 1e18;
 
+            tokens[0].startTime = startTime_;
+            tokens[0].emissionPerSecond = emissionPerSecond;
+            
+            tokens[0].lastUpdateTimeStamp = startTime_;
+        
+        token[0] = token;
+        
         // update storage
         pool = pool_;
 
@@ -86,7 +95,6 @@ contract StakingPro is Pausable, Ownable2Step {
     /**
       * @notice Creates empty vault
       * @dev Nfts must be committed to create vault. Creation NFTs are locked to create vault
-      * 
      */
     function createVault(address onBehalfOf, uint256[] calldata tokenIds, DataTypes.Fees calldata fees) external whenStarted whenNotPaused {
 
@@ -162,14 +170,14 @@ contract StakingPro is Pausable, Ownable2Step {
         }
         
         // totalBalance = totalAllocPoints (boosted balances)
-        (uint256 nextPoolIndex, uint256 currentTimestamp, uint256 emittedRewards) = _calculatePoolIndex(pool_.stakingPowerIndex, pool_.emissionPerSecond, pool_.lastUpdateTimeStamp, pool.totalAllocPoints);
+        (uint256 nextStakingPowerIndex, uint256 currentTimestamp, uint256 emittedRewards) = _calculateRewardIndex(pool_.stakingPowerIndex, pool_.emissionPerSecond, pool_.lastUpdateTimeStamp, pool.totalAllocPoints);
 
         if(nextPoolIndex != pool_.index) {
             
             // prev timestamp, oldIndex, newIndex: emit prev timestamp since you know the currentTimestamp as per txn time
-            emit PoolIndexUpdated(pool_.lastUpdateTimeStamp, pool_.index, nextPoolIndex);
+            emit PoolIndexUpdated(pool_.lastUpdateTimeStamp, pool_.stakingPowerIndex, nextStakingPowerIndex);
 
-            pool_.index = nextPoolIndex;
+            pool_.index = nextStakingPowerIndex;
             pool_.rewardsEmitted += emittedRewards; 
             pool_.lastUpdateTimeStamp = block.timestamp;
         }
@@ -182,23 +190,23 @@ contract StakingPro is Pausable, Ownable2Step {
 
     /**
      * @dev Calculates latest pool index. Pool index represents accRewardsPerAllocPoint since startTime.
-     * @param currentPoolIndex Latest pool index as per previous update
+     * @param currentRewardIndex Latest reward index as per previous update
      * @param emissionPerSecond Reward tokens emitted per second (in wei)
-     * @param lastUpdateTimestamp Time at which previous update occured
+     * @param lastUpdateTimestamp Time at which previous update occurred
      * @param totalBalance Total allocPoints of the pool 
      * @return nextPoolIndex: Updated pool index, 
                currentTimestamp: either lasUpdateTimestamp or block.timestamp, 
                emittedRewards: rewards emitted from lastUpdateTimestamp till now
      */
-    function _calculatePoolIndex(uint256 currentPoolIndex, uint256 emissionPerSecond, uint256 lastUpdateTimestamp, uint256 totalBalance) internal view returns (uint256, uint256, uint256) {
+    function _calculateRewardIndex(uint256 currentRewardIndex, uint256 emissionPerSecond, uint256 lastUpdateTimestamp, uint256 totalBalance) internal view returns (uint256, uint256, uint256) {
         if (
-            emissionPerSecond == 0                           // 0 emissions. no rewards setup. 
+            emissionPerSecond == 0                           // 0 emissions. no rewards setup.
             || totalBalance == 0                             // nothing has been staked
-            || lastUpdateTimestamp == block.timestamp        // assetIndex already updated
+            || lastUpdateTimestamp == block.timestamp        // rewardIndex already updated
             || lastUpdateTimestamp > endTime                 // distribution has ended
         ) {
 
-            return (currentPoolIndex, lastUpdateTimestamp, 0);                       
+            return (currentRewardIndex, lastUpdateTimestamp, 0);                       
         }
 
         uint256 currentTimestamp;
@@ -213,9 +221,9 @@ contract StakingPro is Pausable, Ownable2Step {
         
         uint256 emittedRewards = emissionPerSecond * timeDelta;
 
-        uint256 nextPoolIndex = ((emittedRewards * TOKEN_PRECISION) / totalBalance) + currentPoolIndex;
+        uint256 nextRewardIndex = ((emittedRewards * TOKEN_PRECISION) / totalBalance) + currentPoolIndex;
     
-        return (nextPoolIndex, currentTimestamp, emittedRewards);
+        return (nextRewardIndex, currentTimestamp, emittedRewards);
     }
 
     /*//////////////////////////////////////////////////////////////
