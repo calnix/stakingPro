@@ -25,32 +25,62 @@ contract StakingPro is Pausable, Ownable2Step {
     uint256 public immutable startTime; // can start arbitrarily after deployment
     uint256 public endTime;             // if we need to end 
 
-    uint256 public NFT_MULTIPLIER = 10; //note 
+    // staked assets
+    uint256 totalStakedNfts;
+    uint256 totalStakedTokens;
+    uint256 totalStakedRealmPoints;
+
+    // boosted balances
+    uint256 boostedStakedTokens;
+    uint256 boostedRealmPoints;
 
     // pool emergency state
     bool public isFrozen;
 
-    // pool data
-    DataTypes.PoolAccounting public pool;
+    //------- modifiables -------------
 
     // creation nft requirement
     uint256 public creationNftsRequired = 5;
 
+    uint256 public NFT_MULTIPLIER = 10; //note: wrangle as pct; differing precision base
+
+    //--------------------------------
+
+    /** track token distributions
+
+        each distribution has an poolId
+        two different poolIds could lead to the same token - w/ just different distribution schedules
+        
+        each time a vault is created we must update all the active tokenIndexes,
+        which means we must loop through all the active indexes.
+     */
+    uint256[] public activeVaults;    // we do not expect a large number of concurrently active pools
+    uint256 public totalVaults;
+    uint256 public completedVaults;
+
 //-------------------------------mappings--------------------------------------------
 
-    // just stick staking power as 0x0?
-    mapping (bytes32 token => DataTypes.TokenData token) public tokens;       // token address as bytes32 for handling non-EVM tokens
+    /**
+        users create pools for staking
+        tokens are distributed via vaults
+        vaults are created and managed on an ad-hoc basis
+     */
 
-    // vault base attributes
-    mapping(bytes32 vaultId => DataTypes.Vault vault) public vaults;
+    // just stick staking power as poolId:0 => tokenData{uint256 chainId:0, bytes32 tokenAddr: 0,...}
+    // token address as bytes32 for handling of non-EVM tokens
+    mapping(uint256 vaultId => DataTypes.VaultData vault) public vaults;
 
-    // for independent reward tracking              
-    mapping (bytes32 vaultId => mapping(bytes32 token => DataTypes.VaultAccount vaultAccount)) public vaultAccounts;
+    // pool base attributes
+    mapping(bytes32 poolId => DataTypes.Pool pool) public pools;
 
-    // generic userInfo wrt to vault 
-    mapping(address user => mapping(bytes32 vaultId => DataTypes.User user)) public users;
-    // Tracks rewards accrued for each user: per token type
-    mapping(address user => mapping(bytes32 vaultId => mapping(bytes32 token => DataTypes.UserAccount userAccount))) public userAccounts;
+    // for independent reward distribution tracking              
+    mapping(bytes32 poolId => mapping(uint256 vaultId => DataTypes.PoolAccount poolAccount)) public poolAccounts;
+
+    // generic userInfo wrt to pool 
+    mapping(address user => mapping(bytes32 poolId => DataTypes.User user)) public users;
+
+    // Tracks rewards accrued for each user, per pool
+    mapping(address user => mapping(bytes32 poolId => mapping(uint256 vaultId => DataTypes.UserAccount userAccount))) public userAccounts;
 
 //-------------------------------constructor------------------------------------------
 
@@ -65,28 +95,26 @@ contract StakingPro is Pausable, Ownable2Step {
         NFT_REGISTRY = INftRegistry(registry);              
         REWARDS_VAULT = IRewardsVault(rewardsVault);    
 
-        // instantiate data
-        DataTypes.PoolAccounting memory pool_;
-
         // set startTime 
         startTime = startTime_;
 
         // setup staking power
-        DataTypes.TokenData memory token = tokens[0]; 
-            tokens[0].chainId = block.chainId; 
-            tokens[0].precision = 1e18;
+        DataTypes.TokenData memory vault = vaults[0]; 
+            // tokenAddr and chainId are intentionally left 0
+            vault.precision = 1e18;
 
-            tokens[0].startTime = startTime_;
-            tokens[0].emissionPerSecond = emissionPerSecond;
+            vault.startTime = startTime_;
+            vault.emissionPerSecond = emissionPerSecond;
             
-            tokens[0].lastUpdateTimeStamp = startTime_;
-        
-        token[0] = token;
-        
-        // update storage
-        pool = pool_;
+            vault.lastUpdateTimeStamp = startTime_;
 
-        emit DistributionUpdated(pool_.emissionPerSecond, startTime);
+        vaults[0] = vault;
+
+        // update vault tracking
+        activeVaults.push();
+        ++ totalVaults;
+
+        emit DistributionUpdated(emissionPerSecond, startTime);
     }
 
 
@@ -111,7 +139,7 @@ contract StakingPro is Pausable, Ownable2Step {
         }
 
         //note: MOCA stakers must receive ≥50% of all rewards
-        uint256 totalFeeFactor = fees.creatorFeeFactor + fees.nftFeeFactor + fees.realmPointFeeFactor;
+        uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointFeeFactor;
         require(totalFeeFactor <= 50, "Cannot exceed 50%");
 
         // vaultId generation
@@ -123,7 +151,8 @@ contract StakingPro is Pausable, Ownable2Step {
         }
 
         // update poolIndex: book prior rewards, based on prior alloc points 
-        (DataTypes.PoolAccounting memory pool_, ) = _updatePoolIndex();
+       
+        _updateTokenIndexes();
 
         // build vault
         DataTypes.Vault memory vault; 
@@ -145,7 +174,7 @@ contract StakingPro is Pausable, Ownable2Step {
         pool = pool_;
         vaults[vaultId] = vault;
         
-        emit VaultCreated(onBehalfOf, vaultId); //emit totaLAllocPpoints updated?
+        emit VaultCreated(onBehalfOf, vaultId); //emit totaLAllocPoints updated?
 
         // record NFT commitment on registry contract
         NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, vaultId);
@@ -154,6 +183,13 @@ contract StakingPro is Pausable, Ownable2Step {
 
 
 //-------------------------------internal-------------------------------------------
+
+
+    function _updateTokenIndexes() internal {
+        
+        // get active
+    }
+
 
     /**
      * @dev Check if pool index is in need of updating, to bring it in-line with present time

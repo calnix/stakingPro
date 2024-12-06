@@ -7,57 +7,9 @@ contract DataTypes {
                                   POOL
     //////////////////////////////////////////////////////////////*/
 
+
     struct Pool {
-
-        // staked assets
-        uint256 totalStakedNfts;
-        uint256 totalStakedTokens;
-        uint256 totalStakedRealmPoints;
-
-        // boosted balances
-        uint256 boostedStakedTokens;
-        uint256 boostedRealmPoints;
-
-        // staking power: is continuously emitted
-        //uint256 emissionPerSecond;
-        //uint256 lastUpdateTimeStamp;  
-        //uint256 stakingPowerIndex;       
-
-        //uint256 stakingPowerEmitted;               
-    }
-
-    
-    /*//////////////////////////////////////////////////////////////
-                                 TOKEN
-    //////////////////////////////////////////////////////////////*/
-        
-    struct TokenData {
-        uint256 chainId;    // dist. moca on base and on eth independently 
-        bytes32 tokenAddr;  // LZ: to account for non-evm addr
-        uint256 precision;
-        
-        uint256 startTime;
-        uint256 endTime;
-        uint256 emissionPerSecond;        
-
-        uint256 tokenIndex;
-        uint256 lastUpdateTimeStamp;  
-
-        // for updating emissions: denominated in reward tokens
-        uint256 totalDeposited;       
-        uint256 totalWithdrawn;
-        uint256 totalEmitted;
-
-        //...
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                                 VAULT
-    //////////////////////////////////////////////////////////////*/
-
-
-    struct Vault {
-        bytes32 vaultId;   
+        bytes32 poolId;   
         address creator;
         uint256[] creationTokenIds;     // nfts staked for creation
 
@@ -74,17 +26,17 @@ contract DataTypes {
         uint256 stakedRealmPoints;
     }
 
-    //Note: Each vault has an account for each token type
-    struct VaultAccount {
-        //uint256 chainId;    
-        //bytes32 tokenAddr;  
+    //Note: Each pool has an account for each vaultId
+    struct PoolAccount {
+        uint256 chainId;    
+        bytes32 tokenAddr;  
 
         // index: reward token
-        uint256 vaultIndex;             //rewardsAccPerAllocPoint
-        uint256 vaultNftIndex;          //rewardsAccPerNFT
-        uint256 vaultRpIndex;           //rewardsAccPerRealmPoint 
+        uint256 poolIndex;             //rewardsAccPerAllocPoint
+        uint256 poolNftIndex;          //rewardsAccPerNFT
+        uint256 poolRpIndex;           //rewardsAccPerRealmPoint 
 
-        // fees: pct values (<= 50%)
+        // fees: pct values, sum <= 50%
         uint256 nftFeeFactor;
         uint256 creatorFeeFactor;   
         uint256 realmPointsFeeFactor;
@@ -138,5 +90,28 @@ contract DataTypes {
         uint256 claimedCreatorRewards;
     }
 
+    /*//////////////////////////////////////////////////////////////
+                                 TOKEN
+    //////////////////////////////////////////////////////////////*/
+        
+    struct VaultData {
+        uint256 chainId;    // dist. moca on base and on eth independently 
+        bytes32 tokenAddr;  // LZ: to account for non-evm addr
+        uint256 precision;
+        
+        uint256 endTime;
+        uint256 startTime;
+        uint256 emissionPerSecond;        
+
+        uint256 tokenIndex;
+        uint256 lastUpdateTimeStamp;  
+
+        // for updating emissions: denominated in reward tokens
+        uint256 totalDeposited;       
+        uint256 totalWithdrawn;
+        uint256 totalEmitted;
+
+        //...
+    }
 
 }
