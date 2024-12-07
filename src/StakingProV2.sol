@@ -48,39 +48,42 @@ contract StakingPro is Pausable, Ownable2Step {
 
     /** track token distributions
 
-        each distribution has an poolId
-        two different poolIds could lead to the same token - w/ just different distribution schedules
+        each distribution has an id
+        two different distributionsIds could lead to the same token - w/ just different distribution schedules
         
-        each time a vault is created we must update all the active tokenIndexes,
+        each time a vault is updated we must update all the active tokenIndexes,
         which means we must loop through all the active indexes.
      */
-    uint256[] public activeVaults;    // we do not expect a large number of concurrently active pools
-    uint256 public totalVaults;
-    uint256 public completedVaults;
+    // array stores key values for distributions mapping 
+    uint256[] public activeDistributions;    // we do not expect a large number of concurrently active distributions
+    uint256 public totalDistributions;
+    uint256 public completedDistributions;
 
 //-------------------------------mappings--------------------------------------------
 
     /**
-        users create pools for staking
-        tokens are distributed via vaults
-        vaults are created and managed on an ad-hoc basis
+        users create vaults for staking
+        tokens are distributed via distributions
+        distributions are created and managed on an ad-hoc basis
      */
 
-    // just stick staking power as poolId:0 => tokenData{uint256 chainId:0, bytes32 tokenAddr: 0,...}
-    // token address as bytes32 for handling of non-EVM tokens
-    mapping(uint256 vaultId => DataTypes.VaultData vault) public vaults;
+    // vault base attributes
+    mapping(bytes32 vaultId => DataTypes.Vault vault) public vaults;
 
-    // pool base attributes
-    mapping(bytes32 poolId => DataTypes.Pool pool) public pools;
+    // just stick staking power as distributionId:0 => tokenData{uint256 chainId:0, bytes32 tokenAddr: 0,...}
+    mapping(uint256 distributionId => DataTypes.Distribution distribution) public distributions;
+
+    // global tracking of user assets
+    mapping(address user => DataTypes.User user) public users;
+
+    // user's assets per vault
+    mapping(address user => mapping(bytes32 vaultId => DataTypes.User user)) public usersVaultAssets;
 
     // for independent reward distribution tracking              
-    mapping(bytes32 poolId => mapping(uint256 vaultId => DataTypes.PoolAccount poolAccount)) public poolAccounts;
+    mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) public vaultAccounts;
 
-    // generic userInfo wrt to pool 
-    mapping(address user => mapping(bytes32 poolId => DataTypes.User user)) public users;
-
-    // Tracks rewards accrued for each user, per pool
-    mapping(address user => mapping(bytes32 poolId => mapping(uint256 vaultId => DataTypes.UserAccount userAccount))) public userAccounts;
+    // rewards accrued per user, per distribution
+    mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) public userAccounts;
 
 //-------------------------------constructor------------------------------------------
 
@@ -130,7 +133,7 @@ contract StakingPro is Pausable, Ownable2Step {
         uint256 incomingNfts = tokenIds.length;
         if(incomingNfts != creationNftsRequired) revert Errors.IncorrectCreationNfts();
         
-        for (uint256 i = 0; i < creationNftsRequired; i++) {
+        for (uint256 i; i < creationNftsRequired; i++) {
 
             (address owner, bytes32 nftVaultId) = NFT_REGISTRY.nfts(tokenIds[i]);
             
@@ -139,7 +142,7 @@ contract StakingPro is Pausable, Ownable2Step {
         }
 
         //note: MOCA stakers must receive ≥50% of all rewards
-        uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointFeeFactor;
+        uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
         require(totalFeeFactor <= 50, "Cannot exceed 50%");
 
         // vaultId generation
@@ -147,81 +150,163 @@ contract StakingPro is Pausable, Ownable2Step {
         {
             uint256 salt = block.number - 1;
             vaultId = _generateVaultId(salt, onBehalfOf);
-            while (vaults[vaultId].vaultId != bytes32(0)) vaultId = _generateVaultId(--salt, onBehalfOf);      // If vaultId exists, generate new random Id
+            while (vaults[vaultId].vaultId != bytes32(0)) vaultId = _generateVaultId(--salt, onBehalfOf);      // If poolId exists, generate new random Id
         }
-
-        // update poolIndex: book prior rewards, based on prior alloc points 
-       
-        _updateTokenIndexes();
-
         // build vault
-        DataTypes.Vault memory vault; 
+        DataTypes.Pool memory vault; 
             vault.vaultId = vaultId;
             vault.creator = onBehalfOf;
-            vault.startTime = block.timestamp; 
-            vault.creationTokenIds = tokenIds;  //record creation Nfts
+            vault.creationTokenIds = tokenIds;  
             
-            // index
-            vault.accounting.vaultIndex = pool_.index;
-            //note: nftIndex
+            vault.startTime = block.timestamp; 
 
-            // fees
-            vault.accounting.rewardTokenFees = rewardTokenFees;
-            vault.accounting.stakingPowerFees = stakingPowerFees;
+          // fees
+            vault.nftFeeFactor = fees.nftFeeFactor;
+            vault.creatorFeeFactor = fees.creatorFeeFactor;
+            vault.realmPointsFeeFactor = fees.realmPointsFeeFactor;
 
 
         // update storage
-        pool = pool_;
         vaults[vaultId] = vault;
-        
-        emit VaultCreated(onBehalfOf, vaultId); //emit totaLAllocPoints updated?
+
+        //update: emit VaultCreated(onBehalfOf, poolId); //emit totaLAllocPoints updated?
 
         // record NFT commitment on registry contract
-        NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, vaultId);
+        NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, poolId);
     }  
 
+    // no staking limits on staking assets
+    function stakeTokens(bytes32 vaultId, address onBehalfOf, uint256 amount) external whenStarted whenNotPaused {
+        require(amount > 0, "Invalid amount");
+        require(vaultId > 0, "Invalid vaultId");
+ 
+        // check if vault exists + cache user & vault structs to memory
+       (DataTypes.User memory userGlobal, DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault_) = _cache(vaultId, onBehalfOf);
 
+        // update all indexes and book all prior rewards [user and all distributions]
+       (DataTypes.UserInfo memory userInfo, DataTypes.Vault memory vault) = _updateUserIndexes(onBehalfOf, userInfo_, vault_);
+
+        //_updateUserIndexes -> _updateVaultIndex::calc_Rewards -> _updatePoolIndex
+        //_updateUserAccounts  -> _updateVaultAccounts::calc_Rewards for each activeDistribution -> _updateDistributionIndexes::_updateDistributionIndex
+
+        /**
+            user to stake in a specific vault
+            that vault must be updated and booked first
+            - update all active distributions
+            - update all vault accounts for specified vault [per distribution]
+            - update all user accounts for specified vault  [per distribution]
+            - book stake and update vault assets
+            - book stake 
+         */
+
+        // update vaultIndexes: book prior rewards, based on prior alloc points 
+        _updateDistributionIndexes();
+
+        // update pool Accounts - for active vaults
+        uint256 numOfActiveVaults = activeVaults.length;
+        if (numOfActiveVaults > 0){
+
+            for (uint256 i; i < activeVaults.length; i++) {
+                
+                // get currentVaultIndex
+                DataTypes.VaultData memory vault = vaults[activeVaults[i]];
+                
+                // update corresponding pool account
+                poolAccounts[poolId][vault.vaultId].poolIndex = vault.index; 
+
+                // nft index ?
+
+            }
+        }
+
+
+
+        // calc. allocPoints
+        uint256 incomingAllocPoints = (amount * vault.multiplier);
+
+        // increment allocPoints
+        vault.allocPoints += incomingAllocPoints;
+        pool.totalAllocPoints += incomingAllocPoints;   //storage
+        
+        // increment stakedTokens: user, vault
+        vault.stakedTokens += amount;
+        userInfo.stakedTokens += amount;
+
+        // update storage
+        vaults[vaultId] = vault;
+        users[onBehalfOf][vaultId] = userInfo;
+
+        emit StakedMoca(onBehalfOf, vaultId, amount);
+
+        // note: how does staked moca boost staking power?
+    
+        // mint stkMOCA
+        //_mint(onBehalfOf, amount);
+
+        // grab MOCA
+        STAKED_TOKEN.safeTransferFrom(onBehalfOf, address(this), amount);
+    }
 
 //-------------------------------internal-------------------------------------------
 
+    /**
+        stake() -> _updateUserIndexes -> updateVault -> updateDistributions
+        create() -> updateDistributions [no pool created, so no userIndexes for it either]
 
-    function _updateTokenIndexes() internal {
-        
-        // get active
+        stakedMoca -> token rewards, 
+        stakedRP -> Staking power rewards
+     */
+
+    function _updateDistributionIndexes() internal {
+        if(activeVaults.length == 0) revert;
+
+        uint256 numOfDistributions = activeDistributions.length;
+
+        for(uint256 i; i < numOfDistributions; ++i) {
+
+            DataTypes.VaultData memory distribution = distributions[activeDistributions[i]];
+            _updateVaultIndex(distribution);
+
+            // update storage
+            distributions[activeDistributions[i]] = distribution;
+        }
+
     }
 
-
-    /**
-     * @dev Check if pool index is in need of updating, to bring it in-line with present time
-     * @return poolAccounting struct, 
-               currentTimestamp: either lasUpdateTimestamp or block.timestamp
-     */
-    function _updatePoolIndex() internal returns (DataTypes.PoolAccounting memory, uint256) {
-        // cache
-        DataTypes.PoolAccounting memory pool_ = pool;
+    function _updateDistributionIndex(DataTypes.VaultData memory vault) internal return(DataTypes.VaultData memory) {
         
         // already updated: return
-        if(block.timestamp == pool_.lastUpdateTimeStamp) {
-            return (pool_, pool_.lastUpdateTimeStamp);
+        if(vault.lastUpdateTimeStamp == block.timestamp) {
+            // do nothing
         }
         
-        // totalBalance = totalAllocPoints (boosted balances)
-        (uint256 nextStakingPowerIndex, uint256 currentTimestamp, uint256 emittedRewards) = _calculateRewardIndex(pool_.stakingPowerIndex, pool_.emissionPerSecond, pool_.lastUpdateTimeStamp, pool.totalAllocPoints);
+        uint256 nextVaultIndex;
+        uint256 currentTimestamp;
+        uint256 emittedRewards;
 
-        if(nextPoolIndex != pool_.index) {
+        // staking power
+        if(vault.chainId == 0) {
             
-            // prev timestamp, oldIndex, newIndex: emit prev timestamp since you know the currentTimestamp as per txn time
-            emit PoolIndexUpdated(pool_.lastUpdateTimeStamp, pool_.stakingPowerIndex, nextStakingPowerIndex);
+            // staked RP is the base of Staking power rewards
+            (nextVaultIndex, currentTimestamp, emittedRewards) = _calculateVaultIndex(vault.index, vault.emissionPerSecond, vault.lastUpdateTimeStamp, boostedRealmPoints, vault.TOKEN_PRECISION);
 
-            pool_.index = nextStakingPowerIndex;
-            pool_.rewardsEmitted += emittedRewards; 
-            pool_.lastUpdateTimeStamp = block.timestamp;
+        } else {
+
+            // staked Moca is the base of token rewards
+            (nextVaultIndex, currentTimestamp, emittedRewards) = _calculateVaultIndex(vault.index, vault.emissionPerSecond, vault.lastUpdateTimeStamp, boostedStakedTokens, vault.TOKEN_PRECISION);
         }
 
-        // update storage
-        pool = pool_;
+        if(nextVaultIndex != vault.index) {
+            
+            // prev timestamp, oldIndex, newIndex: emit prev timestamp since you know the currentTimestamp as per txn time
+            // emit VaultIndexUpdated(pool_.lastUpdateTimeStamp, pool_.index, nextPoolIndex); note: update event
 
-        return (pool_, currentTimestamp);
+            vault.index = nextVaultIndex;
+            vault.totalEmitted += emittedRewards; 
+            vault.lastUpdateTimeStamp = block.timestamp;
+        }
+
+        return vault;
     }
 
     /**
@@ -234,15 +319,15 @@ contract StakingPro is Pausable, Ownable2Step {
                currentTimestamp: either lasUpdateTimestamp or block.timestamp, 
                emittedRewards: rewards emitted from lastUpdateTimestamp till now
      */
-    function _calculateRewardIndex(uint256 currentRewardIndex, uint256 emissionPerSecond, uint256 lastUpdateTimestamp, uint256 totalBalance) internal view returns (uint256, uint256, uint256) {
+    function _calculateVaultIndex(uint256 currentVaultIndex, uint256 emissionPerSecond, uint256 lastUpdateTimestamp, uint256 totalBalance, uint256 precision) internal view returns (uint256, uint256, uint256) {
         if (
             emissionPerSecond == 0                           // 0 emissions. no rewards setup.
             || totalBalance == 0                             // nothing has been staked
-            || lastUpdateTimestamp == block.timestamp        // rewardIndex already updated
+            || lastUpdateTimestamp == block.timestamp        // vaultIndex already updated
             || lastUpdateTimestamp > endTime                 // distribution has ended
         ) {
 
-            return (currentRewardIndex, lastUpdateTimestamp, 0);                       
+            return (currentVaultIndex, lastUpdateTimestamp, 0);                       
         }
 
         uint256 currentTimestamp;
@@ -257,10 +342,52 @@ contract StakingPro is Pausable, Ownable2Step {
         
         uint256 emittedRewards = emissionPerSecond * timeDelta;
 
-        uint256 nextRewardIndex = ((emittedRewards * TOKEN_PRECISION) / totalBalance) + currentPoolIndex;
+        uint256 nextVaultIndex = ((emittedRewards * precision) / totalBalance) + currentVaultIndex;
     
-        return (nextRewardIndex, currentTimestamp, emittedRewards);
+        return (nextVaultIndex, currentTimestamp, emittedRewards);
     }
+
+
+    ///@dev cache vault and user structs from storage to memory. checks that vault exists, else reverts.
+    function _cache(bytes32 vaultId, address onBehalfOf) internal view returns(DataTypes.User memory, DataTypes.User memory, DataTypes.Vault memory) {
+        
+        // ensure vault exists
+        DataTypes.Vault memory vault = vaults[vaultId];
+        if(vault.creator == address(0)) revert Errors.NonExistentVault(vaultId);
+
+        // get global and vault level user data
+        DataTypes.User memory userGlobal = users[onBehalfOf];
+        DataTypes.User memory userVaultAssets = usersVaultAssets[onBehalfOf][vaultId];
+
+        return (userGlobal, userVaultAssets, vault);
+    }
+
+    ///@dev concat two uint256 arrays: [1,2,3],[4,5] -> [1,2,3,4,5]
+    function _concatArrays(uint256[] memory arr1, uint256[] memory arr2) internal pure returns(uint256[] memory) {
+        
+        // create resulting arr
+        uint256 len1 = arr1.length;
+        uint256 len2 = arr2.length;
+        uint256[] memory resArr = new uint256[](len1 + len2);
+        
+        uint256 i;
+        for (; i < len1; i++) {
+            resArr[i] = arr1[i];
+        }
+        
+        uint256 j;
+        while (j < len2) {
+            resArr[i++] = arr2[j++];
+        }
+
+        return resArr;
+    }
+
+    ///@dev Generate a poolId. keccak256 is cheaper than using a counter with a SSTORE, even accounting for eventual collision retries.
+    function _generatePoolId(uint256 salt, address onBehalfOf) internal view returns (bytes32) {
+        return bytes32(keccak256(abi.encode(onBehalfOf, block.timestamp, salt)));
+    }
+
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS

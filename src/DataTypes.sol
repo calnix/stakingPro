@@ -8,26 +8,32 @@ contract DataTypes {
     //////////////////////////////////////////////////////////////*/
 
 
-    struct Pool {
-        bytes32 poolId;   
+    struct Vault {
+        bytes32 vaultId;   // do i need?
         address creator;
         uint256[] creationTokenIds;     // nfts staked for creation
 
         uint256 startTime;              // uint40
         uint256 endTime;                // cooldown ends at this time
 
-        // note: applicable to staked tokens
-        uint256 multiplier;
-        uint256 allocPoints; 
+        // fees: pct values, sum <= 50%
+        uint256 nftFeeFactor;
+        uint256 creatorFeeFactor;   
+        uint256 realmPointsFeeFactor;
 
         // staked assets
         uint256 stakedNfts;            //2^8 -1 NFTs. uint8
         uint256 stakedTokens;
         uint256 stakedRealmPoints;
+
+        // boosted balances 
+        uint256 totalBoost;
+        uint256 boostedStakedTokens; 
+        uint256 boostedRealmPoints;
     }
 
-    //Note: Each pool has an account for each vaultId
-    struct PoolAccount {
+    //Note: Each vault has an account for each vaultId
+    struct VaultAccount {
         uint256 chainId;    
         bytes32 tokenAddr;  
 
@@ -35,11 +41,6 @@ contract DataTypes {
         uint256 poolIndex;             //rewardsAccPerAllocPoint
         uint256 poolNftIndex;          //rewardsAccPerNFT
         uint256 poolRpIndex;           //rewardsAccPerRealmPoint 
-
-        // fees: pct values, sum <= 50%
-        uint256 nftFeeFactor;
-        uint256 creatorFeeFactor;   
-        uint256 realmPointsFeeFactor;
 
         // rewards: reward token | based on allocPoints
         uint256 totalAccRewards;
@@ -51,7 +52,7 @@ contract DataTypes {
         uint256 totalClaimedRewards;    // total: staking, nft, creator, rp
     }
 
-    //can consider removing; unless stack issues
+    //note: can consider removing; unless stack issues
     struct Fees {
         // fees: pct values
         uint256 nftFeeFactor;
@@ -67,9 +68,10 @@ contract DataTypes {
     struct User {
 
         // staked assets
-        uint256[] tokenIds;     // nfts staked: array.length < 4
+        uint256[] tokenIds;     
         uint256 stakedTokens;   
-        uint256 stakedRealmPoints;   
+        uint256 stakedRealmPoints;
+
     }
 
     struct UserAccount {
@@ -94,16 +96,18 @@ contract DataTypes {
                                  TOKEN
     //////////////////////////////////////////////////////////////*/
         
-    struct VaultData {
+    struct Distribution {
+        //uint256 poolId;
+
         uint256 chainId;    // dist. moca on base and on eth independently 
         bytes32 tokenAddr;  // LZ: to account for non-evm addr
-        uint256 precision;
+        uint256 TOKEN_PRECISION;
         
         uint256 endTime;
         uint256 startTime;
         uint256 emissionPerSecond;        
 
-        uint256 tokenIndex;
+        uint256 index;
         uint256 lastUpdateTimeStamp;  
 
         // for updating emissions: denominated in reward tokens
@@ -111,7 +115,7 @@ contract DataTypes {
         uint256 totalWithdrawn;
         uint256 totalEmitted;
 
-        //...
+        //...claimed?
     }
 
 }

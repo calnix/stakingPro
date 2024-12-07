@@ -6,6 +6,7 @@ import {DataTypes} from './DataTypes.sol';
 
 event DistributionUpdated(uint256 indexed newPoolEPS, uint256 indexed startTime);
 
+event VaultIndexUpdated(bytes32 indexed vaultId, uint256 indexed vaultIndex, uint256 indexed vaultAccruedRewards);
 
 
 
@@ -17,7 +18,6 @@ event VaultCreated(address indexed creator, bytes32 indexed vaultId);
 
 
 event PoolIndexUpdated(uint256 indexed lastUpdateTimestamp, uint256 indexed oldIndex, uint256 indexed newIndex);
-event VaultIndexUpdated(bytes32 indexed vaultId, uint256 indexed vaultIndex, uint256 indexed vaultAccruedRewards);
 event VaultMultiplierUpdated(bytes32 indexed vaultId, uint256 indexed oldMultiplier, uint256 indexed newMultiplier);
 
 event UserIndexesUpdated(address indexed user, bytes32 indexed vaultId, uint256 userIndex, uint256 userNftIndex, uint256 userAccruedRewards);
