@@ -31,8 +31,8 @@ contract StakingPro is Pausable, Ownable2Step {
     uint256 totalStakedRealmPoints;
 
     // boosted balances
-    uint256 boostedStakedTokens;
-    uint256 boostedRealmPoints;
+    uint256 totalBoostedRealmPoints;
+    uint256 totalBoostedStakedTokens;
 
     // pool emergency state
     bool public isFrozen;
@@ -180,6 +180,9 @@ contract StakingPro is Pausable, Ownable2Step {
         require(amount > 0, "Invalid amount");
         require(vaultId > 0, "Invalid vaultId");
  
+        // get vault + user's vault assets
+        DataTypes.Vault memory vault = vaults[vaultId];
+        DataTypes.User memory userVaultAssets = usersVaultAssets[onBehalfOf][vaultId];
      
         //_updateUserIndexes -> _updateVaultIndex::calc_Rewards -> _updatePoolIndex
         //_updateUserAccounts  -> _updateVaultAccounts::calc_Rewards for each activeDistribution -> _updateDistributionIndexes::_updateDistributionIndex
@@ -199,30 +202,31 @@ contract StakingPro is Pausable, Ownable2Step {
         // - update all active distributions: book prior rewards, based on prior alloc points
         // - update all vault accounts for each active distribution 
         // - update user's account
-        _updateUserAccounts(onBehalfOf, vaultId);
+        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
 
-
-        // calc. allocPoints
-        uint256 incomingAllocPoints = (amount * vault.totalBoostFactor);
-
-        // increment allocPoints
-        vault.allocPoints += incomingAllocPoints;
-        pool.totalAllocPoints += incomingAllocPoints;   //storage
+        // calc. boostedStakedTokens
+        uint256 incomingBoostedStakedTokens = (amount * vault.totalBoostFactor);
         
-        // increment stakedTokens: user, vault
+        // increment: vault
         vault.stakedTokens += amount;
-        userInfo.stakedTokens += amount;
+        vault.boostedStakedTokens += incomingBoostedStakedTokens;
 
-        // update storage
+        //increment: userVaultAssets
+        userVaultAssets.stakedTokens += amount;
+        userVaultAssets.boostedStakedTokens += incomingBoostedStakedTokens;
+
+        //increment: user global
+        //......
+
+        // update storage: mappings 
         vaults[vaultId] = vault;
-        users[onBehalfOf][vaultId] = userInfo;
+        usersVaultAssets[onBehalfOf][vaultId] = userVaultAssets;
 
-        emit StakedMoca(onBehalfOf, vaultId, amount);
-
-        // note: how does staked moca boost staking power?
-    
-        // mint stkMOCA
-        //_mint(onBehalfOf, amount);
+        // update storage: variables
+        totalStakedTokens += amount;
+        totalBoostedStakedTokens += incomingBoostedStakedTokens;
+        
+        // emit StakedMoca(onBehalfOf, vaultId, amount);
 
         // grab MOCA
         STAKED_TOKEN.safeTransferFrom(onBehalfOf, address(this), amount);
@@ -335,12 +339,12 @@ contract StakingPro is Pausable, Ownable2Step {
         if(distribution.chainId == 0) {
             
             // staked RP is the base of Staking power rewards
-            (nextDistributionIndex, currentTimestamp, emittedRewards) = _calculateDistributionIndex(distribution.index, distribution.emissionPerSecond, distribution.lastUpdateTimeStamp, boostedRealmPoints, distribution.TOKEN_PRECISION);
+            (nextDistributionIndex, currentTimestamp, emittedRewards) = _calculateDistributionIndex(distribution.index, distribution.emissionPerSecond, distribution.lastUpdateTimeStamp, totalBoostedRealmPoints, distribution.TOKEN_PRECISION);
 
         } else {
 
             // staked Moca is the base of token rewards
-            (nextDistributionIndex, currentTimestamp, emittedRewards) = _calculateDistributionIndex(distribution.index, distribution.emissionPerSecond, distribution.lastUpdateTimeStamp, boostedStakedTokens, distribution.TOKEN_PRECISION);
+            (nextDistributionIndex, currentTimestamp, emittedRewards) = _calculateDistributionIndex(distribution.index, distribution.emissionPerSecond, distribution.lastUpdateTimeStamp, totalBoostedStakedTokens, distribution.TOKEN_PRECISION);
         }
 
         if(nextDistributionIndex != distribution.index) {
@@ -517,7 +521,7 @@ contract StakingPro is Pausable, Ownable2Step {
 
     /// called prior to affecting any state change to a user
     /// applies fees onto the vaultIndex to return the userIndex
-    function _updateUserAccounts(address user, bytes32 vaultId) internal {
+    function _updateUserAccounts(address user, bytes32 vaultId, DataTypes.Vault memory vault, DataTypes.User memory userVaultAssets) internal {
 
         /** user -> vaultId (stake)
             - this changes the composition for both the user and vault
@@ -527,10 +531,6 @@ contract StakingPro is Pausable, Ownable2Step {
 
             loop thru userAccounts -> vaultAccounts -> distri
          */
-
-        // get vault + user's vault assets
-        DataTypes.Vault memory vault = vaults[vaultId];
-        DataTypes.User memory userVaultAssets = usersVaultAssets[user][vaultId];
 
         // always > 0, staking power is setup on deployment
         uint256 numOfUserAccounts = activeDistributions.length;

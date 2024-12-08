@@ -28,7 +28,7 @@ contract DataTypes {
         uint256 stakedRealmPoints;
 
         // boosted balances 
-        uint256 totalBoostFactor;
+        uint256 totalBoostFactor;   // no. of nfts * nftBoostFactor | 1.XXX
         uint256 boostedRealmPoints;
         uint256 boostedStakedTokens; 
     }
