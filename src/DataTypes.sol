@@ -17,6 +17,7 @@ contract DataTypes {
         uint256 endTime;                // cooldown ends at this time
 
         // fees: pct values, sum <= 50%
+        // fee factors are expressed as w/ 1e18 precision
         uint256 nftFeeFactor;
         uint256 creatorFeeFactor;   
         uint256 realmPointsFeeFactor;
@@ -27,20 +28,20 @@ contract DataTypes {
         uint256 stakedRealmPoints;
 
         // boosted balances 
-        uint256 totalBoost;
-        uint256 boostedStakedTokens; 
+        uint256 totalBoostFactor;
         uint256 boostedRealmPoints;
+        uint256 boostedStakedTokens; 
     }
 
-    //Note: Each vault has an account for each vaultId
+    //Note: Each vault has an account for each distribution
     struct VaultAccount {
         uint256 chainId;    
         bytes32 tokenAddr;  
 
         // index: reward token
-        uint256 poolIndex;             //rewardsAccPerAllocPoint
-        uint256 poolNftIndex;          //rewardsAccPerNFT
-        uint256 poolRpIndex;           //rewardsAccPerRealmPoint 
+        uint256 index;             //rewardsAccPerAllocPoint
+        uint256 nftIndex;          //rewardsAccPerNFT
+        uint256 rpIndex;           //rewardsAccPerRealmPoint 
 
         // rewards: reward token | based on allocPoints
         uint256 totalAccRewards;
@@ -48,8 +49,8 @@ contract DataTypes {
         uint256 accNftStakingRewards;            
         uint256 accRealmPointsRewards;
 
-        uint256 rewardsAccPerToken;
-        uint256 totalClaimedRewards;    // total: staking, nft, creator, rp
+        uint256 rewardsAccPerUnitStaked;    // rewardsAccPerUnitStaked: per unit rp or staked moca
+        uint256 totalClaimedRewards;        // total: staking, nft, creator, rp
     }
 
     //note: can consider removing; unless stack issues
@@ -66,27 +67,34 @@ contract DataTypes {
     //////////////////////////////////////////////////////////////*/
 
     struct User {
-
         // staked assets
         uint256[] tokenIds;     
         uint256 stakedTokens;   
         uint256 stakedRealmPoints;
 
+        // boosted balances 
+        uint256 boostedRealmPoints;
+        uint256 boostedStakedTokens;         
     }
 
     struct UserAccount {
 
-        // indexes: based on reward tokens
-        uint256 userIndex; 
-        uint256 userNftIndex;
+        // indexes: precision is based on reward tokens
+        uint256 index; 
+        uint256 nftIndex;
+        uint256 rpIndex;           
 
-        //rewards: tokens (from staking tokens less of fees)
+        //rewards: from staking MOCA; less of fees
         uint256 accStakingRewards;          // receivable      
         uint256 claimedStakingRewards;      // received
 
         //rewards: NFTs
         uint256 accNftStakingRewards; 
         uint256 claimedNftRewards;
+
+        //rewards: RP
+        uint256 accRealmPointsRewards; 
+        uint256 claimedRealmPointsRewards;
 
         //rewards: creatorFees
         uint256 claimedCreatorRewards;
@@ -108,12 +116,12 @@ contract DataTypes {
         uint256 emissionPerSecond;        
 
         uint256 index;
+        uint256 totalEmitted;
         uint256 lastUpdateTimeStamp;  
 
         // for updating emissions: denominated in reward tokens
         uint256 totalDeposited;       
         uint256 totalWithdrawn;
-        uint256 totalEmitted;
 
         //...claimed?
     }

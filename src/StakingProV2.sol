@@ -180,12 +180,7 @@ contract StakingPro is Pausable, Ownable2Step {
         require(amount > 0, "Invalid amount");
         require(vaultId > 0, "Invalid vaultId");
  
-        // check if vault exists + cache user & vault structs to memory
-       (DataTypes.User memory userGlobal, DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault_) = _cache(vaultId, onBehalfOf);
-
-        // update all indexes and book all prior rewards [user and all distributions]
-       (DataTypes.UserInfo memory userInfo, DataTypes.Vault memory vault) = _updateUserIndexes(onBehalfOf, userInfo_, vault_);
-
+     
         //_updateUserIndexes -> _updateVaultIndex::calc_Rewards -> _updatePoolIndex
         //_updateUserAccounts  -> _updateVaultAccounts::calc_Rewards for each activeDistribution -> _updateDistributionIndexes::_updateDistributionIndex
 
@@ -199,30 +194,16 @@ contract StakingPro is Pausable, Ownable2Step {
             - book stake 
          */
 
-        // update vaultIndexes: book prior rewards, based on prior alloc points 
-        _updateDistributionIndexes();
 
-        // update pool Accounts - for active vaults
-        uint256 numOfActiveVaults = activeVaults.length;
-        if (numOfActiveVaults > 0){
-
-            for (uint256 i; i < activeVaults.length; i++) {
-                
-                // get currentVaultIndex
-                DataTypes.VaultData memory vault = vaults[activeVaults[i]];
-                
-                // update corresponding pool account
-                poolAccounts[poolId][vault.vaultId].poolIndex = vault.index; 
-
-                // nft index ?
-
-            }
-        }
-
+        // update all vault accounts for specified vault [per distribution]
+        // - update all active distributions: book prior rewards, based on prior alloc points
+        // - update all vault accounts for each active distribution 
+        // - update user's account
+        _updateUserAccounts(onBehalfOf, vaultId);
 
 
         // calc. allocPoints
-        uint256 incomingAllocPoints = (amount * vault.multiplier);
+        uint256 incomingAllocPoints = (amount * vault.totalBoostFactor);
 
         // increment allocPoints
         vault.allocPoints += incomingAllocPoints;
@@ -249,69 +230,135 @@ contract StakingPro is Pausable, Ownable2Step {
 
 //-------------------------------internal-------------------------------------------
 
-    /**
-        stake() -> _updateUserIndexes -> updateVault -> updateDistributions
-        create() -> updateDistributions [no pool created, so no userIndexes for it either]
-
-        stakedMoca -> token rewards, 
-        stakedRP -> Staking power rewards
-     */
-
+/*
+    // update all active distributions: book prior rewards, based on prior alloc points 
     function _updateDistributionIndexes() internal {
-        if(activeVaults.length == 0) revert;
+        if(activeDistributions.length == 0) revert; // at least staking power should have been setup on deployment
 
         uint256 numOfDistributions = activeDistributions.length;
 
         for(uint256 i; i < numOfDistributions; ++i) {
 
-            DataTypes.VaultData memory distribution = distributions[activeDistributions[i]];
-            _updateVaultIndex(distribution);
+            DataTypes.Distribution memory distribution = distributions[activeDistributions[i]];
+            _updateDistributionIndex(distribution);
 
             // update storage
             distributions[activeDistributions[i]] = distribution;
         }
-
     }
+*/
 
-    function _updateDistributionIndex(DataTypes.VaultData memory vault) internal return(DataTypes.VaultData memory) {
+/*
+    // update all vault accounts per active distribution, for specified vault
+    function _updateVaultAccounts(bytes32 vaultId) internal {
+
+        DataTypes.Vault memory vault = vaults[vaultId];
+
+        // always > 0, staking power is setup on deployment
+        uint256 numOfActiveVaults = activeDistributions.length;
+        
+        // update each vault account
+        for (uint256 i; i < numOfActiveVaults; i++) {
+
+            DataTypes.Distribution memory distribution_ = distributions[activeDistributions[i]];
+            // get vault account for active distribution
+            DataTypes.VaultData memory vaultAccount = vaultAccounts[vaultId][activeDistributions[i]];
+
+            // get latest distributionIndex
+            DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_);
+            
+            // vault already been updated by a prior txn; skip updating
+            if(distribution.index == vaultAccount.index) continue;
+
+            // If vault has ended, vaultIndex should not be updated, beyond the final update.
+            if(block.timestamp >= vault.endTime) continue;
+
+            // update vault rewards + fees
+            uint256 accruedRewards; 
+            uint256 accCreatorFee; 
+            uint256 accTotalNftFee;
+            uint256 accRealmPointsFee;
+
+            // Calculate rewards based on distribution type (staking power or token rewards)
+            uint256 stakedBalance = distribution.chainId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
+            accruedRewards = _calculateRewards(stakedBalance, distribution.index, vaultAccount.index);
+
+            // calc. creator fees
+            if(vault.creatorFeeFactor > 0) {
+                accCreatorFee = (accruedRewards * vault.creatorFeeFactor) / distribution.TOKEN_PRECISION;
+            }
+
+            // nft fees accrued only if there were staked NFTs
+            if(vault.stakedNfts > 0) {
+                if(vault.nftFeeFactor > 0) {
+                    accTotalNftFee = (accruedRewards * vault.nftFeeFactor) / distribution.TOKEN_PRECISION;
+
+                    vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);              // nftIndex: rewardsAccPerNFT
+                }
+            }
+
+            if(vault.realmPointsFeeFactor > 0) {
+                accRealmPointsFee = (accruedRewards * vault.realmPointsFeeFactor) / distribution.TOKEN_PRECISION;
+            } 
+            
+            // book rewards: total, Creator, NFT, RealmPoints
+            vaultAccount.totalAccRewards += accruedRewards;
+            vaultAccount.accCreatorRewards += accCreatorFee;
+            vaultAccount.accNftStakingRewards += accTotalNftFee;
+            vaultAccount.accRealmPointsRewards += accRealmPointsFee;
+
+            // reference for users' to calc. rewards: rewards net of fees
+            vaultAccount.rewardsAccPerUnitStaked += ((accruedRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) * TOKEN_PRECISION) / stakedBalance;
+
+            // update vaultIndex
+            vaultAccount.vaultIndex = distribution.index;
+
+            // emit VaultIndexUpdated
+
+            // update storage
+            distributions[activeDistributions[i]] = distribution;     
+            vaultAccounts[vaultId][activeDistributions[i]] = vaultAccount;   
+        }   
+    }
+*/
+    //
+    function _updateDistributionIndex(DataTypes.Distribution memory distribution) internal return(DataTypes.Distribution memory) {
         
         // already updated: return
-        if(vault.lastUpdateTimeStamp == block.timestamp) {
-            // do nothing
-        }
+        if(distribution.lastUpdateTimeStamp == block.timestamp) return distribution;
         
         uint256 nextVaultIndex;
         uint256 currentTimestamp;
         uint256 emittedRewards;
 
         // staking power
-        if(vault.chainId == 0) {
+        if(distribution.chainId == 0) {
             
             // staked RP is the base of Staking power rewards
-            (nextVaultIndex, currentTimestamp, emittedRewards) = _calculateVaultIndex(vault.index, vault.emissionPerSecond, vault.lastUpdateTimeStamp, boostedRealmPoints, vault.TOKEN_PRECISION);
+            (nextDistributionIndex, currentTimestamp, emittedRewards) = _calculateDistributionIndex(distribution.index, distribution.emissionPerSecond, distribution.lastUpdateTimeStamp, boostedRealmPoints, distribution.TOKEN_PRECISION);
 
         } else {
 
             // staked Moca is the base of token rewards
-            (nextVaultIndex, currentTimestamp, emittedRewards) = _calculateVaultIndex(vault.index, vault.emissionPerSecond, vault.lastUpdateTimeStamp, boostedStakedTokens, vault.TOKEN_PRECISION);
+            (nextDistributionIndex, currentTimestamp, emittedRewards) = _calculateDistributionIndex(distribution.index, distribution.emissionPerSecond, distribution.lastUpdateTimeStamp, boostedStakedTokens, distribution.TOKEN_PRECISION);
         }
 
-        if(nextVaultIndex != vault.index) {
+        if(nextDistributionIndex != distribution.index) {
             
             // prev timestamp, oldIndex, newIndex: emit prev timestamp since you know the currentTimestamp as per txn time
             // emit VaultIndexUpdated(pool_.lastUpdateTimeStamp, pool_.index, nextPoolIndex); note: update event
 
-            vault.index = nextVaultIndex;
-            vault.totalEmitted += emittedRewards; 
-            vault.lastUpdateTimeStamp = block.timestamp;
+            distribution.index = nextDistributionIndex;
+            distribution.totalEmitted += emittedRewards; 
+            distribution.lastUpdateTimeStamp = block.timestamp;
         }
 
-        return vault;
+        return distribution;
     }
 
     /**
      * @dev Calculates latest pool index. Pool index represents accRewardsPerAllocPoint since startTime.
-     * @param currentRewardIndex Latest reward index as per previous update
+     * @param currentDistributionIndex Latest reward index as per previous update
      * @param emissionPerSecond Reward tokens emitted per second (in wei)
      * @param lastUpdateTimestamp Time at which previous update occurred
      * @param totalBalance Total allocPoints of the pool 
@@ -319,15 +366,15 @@ contract StakingPro is Pausable, Ownable2Step {
                currentTimestamp: either lasUpdateTimestamp or block.timestamp, 
                emittedRewards: rewards emitted from lastUpdateTimestamp till now
      */
-    function _calculateVaultIndex(uint256 currentVaultIndex, uint256 emissionPerSecond, uint256 lastUpdateTimestamp, uint256 totalBalance, uint256 precision) internal view returns (uint256, uint256, uint256) {
+    function _calculateDistributionIndex(uint256 currentDistributionIndex, uint256 emissionPerSecond, uint256 lastUpdateTimestamp, uint256 totalBalance, uint256 distributionPrecision) internal view returns (uint256, uint256, uint256) {
         if (
             emissionPerSecond == 0                           // 0 emissions. no rewards setup.
             || totalBalance == 0                             // nothing has been staked
-            || lastUpdateTimestamp == block.timestamp        // vaultIndex already updated
+            || lastUpdateTimestamp == block.timestamp        // index already updated
             || lastUpdateTimestamp > endTime                 // distribution has ended
         ) {
 
-            return (currentVaultIndex, lastUpdateTimestamp, 0);                       
+            return (currentDistributionIndex, lastUpdateTimestamp, 0);                       
         }
 
         uint256 currentTimestamp;
@@ -342,9 +389,176 @@ contract StakingPro is Pausable, Ownable2Step {
         
         uint256 emittedRewards = emissionPerSecond * timeDelta;
 
-        uint256 nextVaultIndex = ((emittedRewards * precision) / totalBalance) + currentVaultIndex;
+        //note: totalBalance is expressed 1e18. emittedRewards is variable as per distribution.TOKEN_PRECISION
+        //note: paper the math for this 
+        uint256 nextDistributionIndex = ((emittedRewards * 1E18) / distributionPrecision / totalBalance) + currentDistributionIndex;   
+
+        //note: here on out the index should be denominated in 1E18 - applicable to MOCA,RP,SP
     
-        return (nextVaultIndex, currentTimestamp, emittedRewards);
+        return (nextDistributionIndex, currentTimestamp, emittedRewards);
+    }
+
+
+    // update specified vault account
+    // returns updated vault account and updated distribution structs 
+    function _updateVaultAccount(
+        DataTypes.Vault memory vault, 
+        DataTypes.VaultData memory vaultAccount, 
+        DataTypes.Distribution memory distribution_) internal return(DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
+
+        // get latest distributionIndex
+        DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_);
+        
+        // vault already been updated by a prior txn; skip updating
+        if(distribution.index == vaultAccount.index) continue;
+
+        // If vault has ended, vaultIndex should not be updated, beyond the final update.
+        if(block.timestamp >= vault.endTime) continue;
+
+        // update vault rewards + fees
+        uint256 accruedRewards; 
+        uint256 accCreatorFee; 
+        uint256 accTotalNftFee;
+        uint256 accRealmPointsFee;
+
+        // calculate rewards owed to MOCA token stakers
+        totalAccRewards = _calculateRewards(vault.stakedTokens, distribution.index, vaultAccount.index);
+
+        // calc. creator fees
+        if(vault.creatorFeeFactor > 0) {
+            accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / 1E18;
+        }
+
+        // nft fees accrued only if there were staked NFTs
+        if(vault.stakedNfts > 0) {
+            if(vault.nftFeeFactor > 0) {
+
+                accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / 1E18;
+                vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);              // nftIndex: rewardsAccPerNFT
+            }
+        }
+
+        // rp fees accrued only if there were staked RP 
+        if(vault.stakedRealmPoints > 0) {
+            if(vault.realmPointsFeeFactor > 0) {
+                accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / 1E18;
+                vaultAccount.rpIndex += (accRealmPointsFee / vault.stakedRealmPoints);              // rpIndex: rewardsAccPerRP
+            }
+        } 
+        
+        // book rewards: total, Creator, NFT, RealmPoints
+        vaultAccount.totalAccRewards += totalAccRewards;
+        vaultAccount.accCreatorRewards += accCreatorFee;
+        vaultAccount.accNftStakingRewards += accTotalNftFee;
+        vaultAccount.accRealmPointsRewards += accRealmPointsFee;
+
+        // reference for moca staker's to calc. rewards net of fees
+        // do division at the end again, instead of using the indexes to avoid rounding-down drift
+        vaultAccount.rewardsAccPerUnitStaked += ((totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) * 1E18) / vault.stakedTokens;
+
+        // update vaultIndex
+        vaultAccount.vaultIndex = distribution.index;
+
+        // emit VaultIndexUpdated    
+
+        return (vaultAccount, distribution);
+    }
+
+    function _updateUserAccount(
+        DataTypes.User memory user, DataTypes.UserAccount memory userAccount, 
+        DataTypes.Vault memory vault, DataTypes.VaultData memory vaultAccount, DataTypes.Distribution memory distribution) internal returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory)  {
+        
+        // get updated vaultAccount and distribution
+        DataTypes.VaultData memory vaultAccount, DataTypes.Distribution memory distribution = _updateVaultAccount(vault, vaultAccount, distribution);
+
+        uint256 newUserIndex = vaultAccount.rewardsAccPerUnitStaked;    // less of fees
+        uint256 newUserNftIndex = vaultAccount.nftIndex;
+        uint256 newUserRpIndex = vaultAccount.rpIndex;
+
+        uint256 accruedRewards;
+        if(userAccount.index != newUserIndex) { // if this index has not been updated, the subsequent ones would not have. check once here, no need repeat. 
+            if(user.stakedTokens > 0) {
+                // users whom staked tokens are eligible for rewards less of fees
+                accruedRewards = _calculateRewards(user.stakedTokens, newUserIndex, userAccount.index);
+                userAccount.accStakingRewards += accruedRewards;
+
+                // emit RewardsAccrued(user, accruedRewards);
+            }
+        }
+
+        uint256 userStakedNfts = user.tokenIds.length;
+        if(userStakedNfts > 0) {
+
+            // total accrued rewards from staking NFTs
+            uint256 accNftStakingRewards = (newUserNftIndex - userAccount.nftIndex) * userStakedNfts;
+            userAccount.accNftStakingRewards += accNftStakingRewards;
+
+            //emit NftRewardsAccrued(user, accNftStakingRewards);
+        }
+
+        if(user.stakedRealmPoints > 0){
+            
+            // users whom staked RP are eligible for a portion of RP fees
+            uint256 accRealmPointsRewards = (newUserRpIndex - userAccount.rpIndex) * user.stakedRealmPoints;
+            userAccount.accRealmPointsRewards += accRealmPointsRewards;
+
+            //emit something
+        }
+
+        // update user indexes
+        userAccount.userIndex = newUserIndex;
+        userAccount.userNftIndex = newUserNftIndex;
+        userAccount.rpIndex = newUserRpIndex;
+
+        // emit UserIndexesUpdated(user, vault.vaultId, newUserIndex, newUserNftIndex, userInfo.accStakingRewards);
+
+        return (userAccount, vaultAccount, distribution);
+    }
+
+    /// called prior to affecting any state change to a user
+    /// applies fees onto the vaultIndex to return the userIndex
+    function _updateUserAccounts(address user, bytes32 vaultId) internal {
+
+        /** user -> vaultId (stake)
+            - this changes the composition for both the user and vault
+            - before booking the change we must update all vault and user accounts
+            -- distr_0: distriData, vaultAccount, userAccount
+            -- distr_1: distriData, vaultAccount, userAccount
+
+            loop thru userAccounts -> vaultAccounts -> distri
+         */
+
+        // get vault + user's vault assets
+        DataTypes.Vault memory vault = vaults[vaultId];
+        DataTypes.User memory userVaultAssets = usersVaultAssets[user][vaultId];
+
+        // always > 0, staking power is setup on deployment
+        uint256 numOfUserAccounts = activeDistributions.length;
+        
+        // update each user account, looping thru distributions
+        for (uint256 i; i < numOfUserAccounts; i++) {
+             
+            uint256 distributionId = activeDistributions[i];   
+
+            // get corresponding user+vault account for this active distribution 
+            DataTypes.Distribution memory distribution = distributions[distributionId];
+            DataTypes.VaultData memory vaultAccount = vaultAccounts[vaultId][distributionId];
+            DataTypes.UserAccount memory userAccount = userAccounts[user][vaultId][distributionId];
+
+            
+            (DataTypes.UserAccount memory userAccount, DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateUserAccount(userVaultAssets, userAccount, vault, vaultAccount, distribution);
+
+            //update storage: accounts and distributions
+            distributions[distributionId] = distribution;     
+            vaultAccounts[vaultId][distributionId] = vaultAccount;  
+            userAccounts[user][vaultId][distributionId] = userAccount;
+        }
+ 
+    }
+
+    // for calc. rewards from index deltas. assumes tt indexes are rebased to 1E18 precision
+    function _calculateRewards(uint256 balance, uint256 currentIndex, uint256 priorIndex) internal pure returns (uint256) {
+        return (balance * (currentIndex - priorIndex)) / 1E18;
     }
 
 
@@ -383,8 +597,8 @@ contract StakingPro is Pausable, Ownable2Step {
         return resArr;
     }
 
-    ///@dev Generate a poolId. keccak256 is cheaper than using a counter with a SSTORE, even accounting for eventual collision retries.
-    function _generatePoolId(uint256 salt, address onBehalfOf) internal view returns (bytes32) {
+    ///@dev Generate a vaultId. keccak256 is cheaper than using a counter with a SSTORE, even accounting for eventual collision retries.
+    function _generateVaultId(uint256 salt, address onBehalfOf) internal view returns (bytes32) {
         return bytes32(keccak256(abi.encode(onBehalfOf, block.timestamp, salt)));
     }
 

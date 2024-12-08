@@ -73,6 +73,7 @@ All participants ($MOCA stakers, Moca NFT Stakers, RP Stakers, Pool Creator) wil
 
 However, there is a single fee structure that is applied to both token and staking power emissions.
 Therefore, RP stakers would also be eligible for token rewards; although their RP contribution does not have weight upon token rewards calculation.
+Vice versa, this applies to MOCA token stakers as well.
 
 **We will need to define how much staking power is emitted per second, on deployment**
 
