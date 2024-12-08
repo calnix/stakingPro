@@ -42,8 +42,8 @@ contract StakingPro is Pausable, Ownable2Step {
     // creation nft requirement
     uint256 public creationNftsRequired = 5;
 
-    uint256 public NFT_MULTIPLIER = 10; //note: wrangle as pct; differing precision base
-
+    uint256 public NFT_MULTIPLIER = 0.1 * 1e18; // 0.1 * 1e18 = 10%
+    
     //--------------------------------
 
     /** track token distributions
@@ -160,11 +160,13 @@ contract StakingPro is Pausable, Ownable2Step {
             
             vault.startTime = block.timestamp; 
 
-          // fees
+            // fees
             vault.nftFeeFactor = fees.nftFeeFactor;
             vault.creatorFeeFactor = fees.creatorFeeFactor;
             vault.realmPointsFeeFactor = fees.realmPointsFeeFactor;
-
+            
+            // boost factor: Initialize totalBoostFactor to 1e18 (100%)
+            vault.totalBoostFactor = 1e18;  // Base 100%
 
         // update storage
         vaults[vaultId] = vault;
@@ -180,9 +182,8 @@ contract StakingPro is Pausable, Ownable2Step {
         require(amount > 0, "Invalid amount");
         require(vaultId > 0, "Invalid vaultId");
  
-        // get vault + user's vault assets
-        DataTypes.Vault memory vault = vaults[vaultId];
-        DataTypes.User memory userVaultAssets = usersVaultAssets[onBehalfOf][vaultId];
+        // check if vault exists + cache vault & user's vault assets
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
      
         //_updateUserIndexes -> _updateVaultIndex::calc_Rewards -> _updatePoolIndex
         //_updateUserAccounts  -> _updateVaultAccounts::calc_Rewards for each activeDistribution -> _updateDistributionIndexes::_updateDistributionIndex
@@ -230,6 +231,43 @@ contract StakingPro is Pausable, Ownable2Step {
 
         // grab MOCA
         STAKED_TOKEN.safeTransferFrom(onBehalfOf, address(this), amount);
+    }
+
+    // no staking limits on staking assets
+    function stakeNfts(bytes32 vaultId, address onBehalfOf, uint256[] calldata tokenIds) external whenStarted whenNotPaused {
+        uint256 incomingNfts = tokenIds.length;
+
+        require(incomingNfts > 0, "Invalid amount"); 
+        require(vaultId > 0, "Invalid vaultId");
+
+        // check if vault exists + cache vault & user's vault assets
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+
+        // Update all distributions, their respective vault accounts, and user accounts for specified vault
+        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+
+        //if(endTime <= block.timestamp) --> note: what to do when pool has reached endTime and not extended?         
+
+        // update: user's tokenIds
+        userVaultAssets.tokenIds = _concatArrays(userVaultAssets.tokenIds, tokenIds);   //note: what does concat an empty arr do -- on first instance?
+
+        // cache
+        uint256 oldTotalBoostFactor = vault.totalBoostFactor;
+        uint256 oldBoostedRealmPoints = vault.boostedRealmPoints;
+        uint256 oldBoostedStakedTokens = vault.boostedStakedTokens;
+
+        // update: vault's nfts 
+        vault.stakedNfts += incomingNfts;
+               
+        // update boost factor: each NFT adds 0.1 (10%) boost, so for N NFTs, add N * 0.1 to the boost factor
+        uint256 boostFactorDelta = incomingNfts * NFT_MULTIPLIER;
+        vault.totalBoostFactor += boostFactorDelta;     // totalBoostFactor is expressed as 1.XXX
+
+        // Update boosted balances with new boost factor
+        if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / 1e18;            
+        if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / 1e18;
+
+
     }
 
 //-------------------------------internal-------------------------------------------
@@ -563,17 +601,17 @@ contract StakingPro is Pausable, Ownable2Step {
 
 
     ///@dev cache vault and user structs from storage to memory. checks that vault exists, else reverts.
-    function _cache(bytes32 vaultId, address onBehalfOf) internal view returns(DataTypes.User memory, DataTypes.User memory, DataTypes.Vault memory) {
+    function _cache(bytes32 vaultId, address onBehalfOf) internal view returns(/*DataTypes.User memory*/, DataTypes.User memory, DataTypes.Vault memory) {
         
         // ensure vault exists
         DataTypes.Vault memory vault = vaults[vaultId];
         if(vault.creator == address(0)) revert Errors.NonExistentVault(vaultId);
 
         // get global and vault level user data
-        DataTypes.User memory userGlobal = users[onBehalfOf];
+        //DataTypes.User memory userGlobal = users[onBehalfOf];
         DataTypes.User memory userVaultAssets = usersVaultAssets[onBehalfOf][vaultId];
 
-        return (userGlobal, userVaultAssets, vault);
+        return (/*userGlobal*/, userVaultAssets, vault);
     }
 
     ///@dev concat two uint256 arrays: [1,2,3],[4,5] -> [1,2,3,4,5]
