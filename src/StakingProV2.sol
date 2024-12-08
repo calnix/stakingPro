@@ -252,7 +252,6 @@ contract StakingPro is Pausable, Ownable2Step {
         userVaultAssets.tokenIds = _concatArrays(userVaultAssets.tokenIds, tokenIds);   //note: what does concat an empty arr do -- on first instance?
 
         // cache
-        uint256 oldTotalBoostFactor = vault.totalBoostFactor;
         uint256 oldBoostedRealmPoints = vault.boostedRealmPoints;
         uint256 oldBoostedStakedTokens = vault.boostedStakedTokens;
 
@@ -263,11 +262,24 @@ contract StakingPro is Pausable, Ownable2Step {
         uint256 boostFactorDelta = incomingNfts * NFT_MULTIPLIER;
         vault.totalBoostFactor += boostFactorDelta;     // totalBoostFactor is expressed as 1.XXX
 
-        // Update boosted balances with new boost factor
+        // recalc. boosted balances with new boost factor
         if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / 1e18;            
         if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / 1e18;
 
+        // update storage: mappings 
+        vaults[vaultId] = vault;
+        usersVaultAssets[onBehalfOf][vaultId] = userVaultAssets;
 
+        // update storage: variables 
+        totalStakedNfts += incomingNfts;
+        totalBoostedStakedTokens += (vault.boostedStakedTokens - oldBoostedStakedTokens);
+        totalBoostedRealmPoints += (vault.boostedRealmPoints - oldBoostedRealmPoints);
+
+        emit StakedMocaNft(onBehalfOf, vaultId, tokenIds);
+        emit VaultMultiplierUpdated(vaultId, oldMultiplier, vault.multiplier);
+
+        // record stake with registry
+        NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, vaultId);
     }
 
 //-------------------------------internal-------------------------------------------
