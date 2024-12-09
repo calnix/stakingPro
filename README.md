@@ -72,6 +72,7 @@ Eligibility track:
 - For a vault to be eligible for token rewards, it must have staked MOCA
 - For a vault to be eligible for stake power rewards, it must have staked Realm points.
 
+Rewards Calculations: 
 - Token rewards are calculated based on staked MOCA, accounting for NFT boosting effect
 - Staking power rewards are calculated based on staked RP, accounting for NFT boosting effect
 
