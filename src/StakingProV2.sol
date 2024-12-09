@@ -284,6 +284,61 @@ contract StakingPro is Pausable, Ownable2Step {
         NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, vaultId);
     }
 
+    // claim token rewards. not applicable to distributionId:0 
+    // users can only claim all reward types from 1 token type at once. 
+    function claimRewards(bytes32 vaultId, address onBehalfOf, uint256 distributionId) external whenStarted whenNotPaused {
+        require(vaultId > 0, "Invalid vaultId");
+        require(distributionId > 0, "N/A: Staking Power");
+
+        // check if vault exists + cache vault & user's vault assets
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+
+        // Update all distributions, their respective vault accounts, and user accounts for specified vault
+        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+
+        //get accounts for specified distribution
+        DataTypes.VaultAccount memory vaultAccount = vaultAccounts[vaultId][distributionId];
+        DataTypes.UserAccount memory userAccount = userAccounts[onBehalfOf][vaultId][distributionId];
+
+        //note: does he have anything to claim?
+        // - RP, MOCA, NFTs could be staked at diff times       
+
+        //------- calc. and update vault and user accounts --------
+
+        // update balances: staking MOCA rewards
+        uint256 unclaimedRewards = userAccount.accStakingRewards - userAccount.claimedStakingRewards;
+        userAccount.claimedStakingRewards += unclaimedRewards;
+        vaultAccount.totalClaimedRewards += unclaimedRewards;
+
+        // update balances: staking RP rewards
+        uint256 unclaimedRpRewards = userAccount.accRealmPointsRewards - userAccount.claimedRealmPointsRewards;
+        userAccount.claimedRealmPointsRewards += unclaimedRpRewards;
+        vaultAccount.totalClaimedRewards += unclaimedRpRewards;
+
+        // update balances: staking NFT rewards
+        uint256 unclaimedNftRewards = userAccount.accNftStakingRewards - userAccount.claimedNftRewards;
+        userAccount.claimedNftRewards += unclaimedNftRewards;
+        vaultAccount.totalClaimedRewards += unclaimedNftRewards;
+
+        //if creator
+        if(vault.creator == onBehalfOf){
+            uint256 unclaimedCreatorRewards = vaultAccount.accCreatorRewards - userAccount.claimedCreatorRewards;
+            userAccount.claimedCreatorRewards += unclaimedCreatorRewards;
+            vaultAccount.totalClaimedRewards += unclaimedCreatorRewards;
+        }
+
+        //------- ........................................... --------
+
+        //update storage: vault and user accounts
+        vaultAccounts[vaultId][distributionId] = DataTypes.VaultAccount memory vaultAccount;
+        userAccounts[onBehalfOf][vaultId][distributionId] = DataTypes.UserAccount memory userAccount;
+
+        // emit RewardsClaimed(vaultId, onBehalfOf, unclaimedRewards);
+
+        // note: UPDATE fn : transfer rewards to user, from rewardsVault
+        REWARDS_VAULT.payRewards(onBehalfOf, unclaimedRewards);
+    }
+
 //-------------------------------internal-------------------------------------------
 
 /*
