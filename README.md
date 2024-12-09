@@ -116,7 +116,8 @@ Vault creators set a single fee structure that applies to both Staking Power and
 Rules:
 - Total fees must equal 100%
 - MOCA stakers must receive ≥50% of all rewards
-- Creators can only decrease their fee % to benefit other participants
+- Creators can only decrease the creator fee % to benefit other participants
+- I.e. reduce creator fee to increase the other fee components -> this means that moca tokens will receive the same cut.
 
 ## Claiming Rewards
 
