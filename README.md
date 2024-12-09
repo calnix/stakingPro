@@ -68,12 +68,16 @@ All participants ($MOCA stakers, Moca NFT Stakers, RP Stakers, Pool Creator) wil
 
 ### Rewards emissions calculation
 
+Eligibility track:
+- For a vault to be eligible for token rewards, it must have staked MOCA
+- For a vault to be eligible for stake power rewards, it must have staked Realm points.
+
 - Token rewards are calculated based on staked MOCA, accounting for NFT boosting effect
 - Staking power rewards are calculated based on staked RP, accounting for NFT boosting effect
 
 However, there is a single fee structure that is applied to both token and staking power emissions.
-Therefore, RP stakers would also be eligible for token rewards; although their RP contribution does not have weight upon token rewards calculation.
-Vice versa, this applies to MOCA token stakers as well.
+- Therefore, RP stakers would also be eligible for token rewards; although their RP contribution does not have weight upon token rewards calculation.
+- Vice versa, this applies to MOCA token stakers as well.
 
 **We will need to define how much staking power is emitted per second, on deployment**
 

@@ -67,6 +67,10 @@ contract DataTypes {
     //////////////////////////////////////////////////////////////*/
 
     struct User {
+
+        // onboarded RP
+        uint256 realmPoints;
+
         // staked assets
         uint256[] tokenIds;     
         uint256 stakedTokens;   

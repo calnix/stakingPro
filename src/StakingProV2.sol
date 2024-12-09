@@ -339,6 +339,87 @@ contract StakingPro is Pausable, Ownable2Step {
         REWARDS_VAULT.payRewards(onBehalfOf, unclaimedRewards);
     }
 
+    // unstake all: tokens, nfts, rp  | can unstake anytime
+    // refactor to do vault updates at the end, accounting for nft boost delta | else double calcs
+    function unstakeAll(bytes32 vaultId, address onBehalfOf) external whenStarted whenNotPaused {
+        require(vaultId > 0, "Invalid vaultId");
+
+        // check if vault exists + cache vault & user's vault assets
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+
+        // Update all distributions, their respective vault accounts, and user accounts for specified vault
+        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+
+        // get user staked assets: old values for events
+        uint256 stakedTokens = userVaultAssets.stakedTokens;
+        uint256 stakedNfts = userVaultAssets.tokenIds.length;
+        uint256 stakedRealmPoints = userVaultAssets.stakedRealmPoints;
+
+        uint256 oldBoostedRealmPoints = userVaultAssets.boostedRealmPoints;
+        uint256 oldBoostedStakedTokens = userVaultAssets.boostedStakedTokens;
+
+        // check if user has non-zero holdings
+        if(stakedTokens + stakedNfts + stakedRealmPoints == 0) revert Errors.UserHasNothingStaked(vaultId, onBehalfOf);
+        
+        //update token balances: user + vault
+        if(stakedTokens > 0){
+
+            // update stakedTokens
+            vault.stakedTokens -= stakedTokens;
+            vault.boostedStakedTokens -= userVaultAssets.boostedStakedTokens;
+
+            delete userVaultAssets.stakedTokens;
+            delete userVaultAssets.boostedStakedTokens;
+
+            emit UnstakedMoca(onBehalfOf, vaultId, stakedTokens);       
+        }
+
+        //update rp balances: user + vault
+        if(stakedRealmPoints > 0){
+
+            // update stakedTokens
+            vault.stakedRealmPoints -= stakedRealmPoints;
+            vault.boostedRealmPoints -= userVaultAssets.boostedRealmPoints;
+
+            delete userVaultAssets.stakedRealmPoints;
+            delete userVaultAssets.boostedRealmPoints;
+            
+            // record free realm points
+            userVaultAssets.realmPoints += stakedRealmPoints;
+
+            //emit UnstakedMoca(onBehalfOf, vaultId, stakedTokens);       
+        }
+
+        //note: update multiplier/boost for unstaking of nfts
+        if(stakedNfts > 0){
+
+            // record unstake with registry
+            NFT_REGISTRY.recordUnstake(onBehalfOf, userVaultAssets.tokenIds, vaultId);
+            emit UnstakedMocaNft(onBehalfOf, vaultId, userVaultAssets.tokenIds);       
+
+            // update stakedNfts
+            vault.stakedNfts -= stakedNfts;            
+            delete userVaultAssets.tokenIds;
+
+            // recalc. boosted values
+            uint256 boostFactorDelta = stakedNfts * NFT_MULTIPLIER;
+            vault.totalBoostFactor -= boostFactorDelta;
+
+            // recalc. boosted balances with new boost factor 
+            if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / 1e18;            
+            if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / 1e18;
+        }
+
+        // update storage: mappings 
+        vaults[vaultId] = vault;
+        usersVaultAssets[onBehalfOf][vaultId] = userVaultAssets;
+
+        // update storage: global variables 
+        totalStakedNfts -= stakedNfts;
+        totalBoostedRealmPoints -= oldBoostedRealmPoints;
+        totalBoostedStakedTokens -= oldBoostedStakedTokens;
+    }
+
 //-------------------------------internal-------------------------------------------
 
 /*
