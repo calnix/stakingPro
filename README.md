@@ -117,7 +117,7 @@ Rules:
 - Total fees must equal 100%
 - MOCA stakers must receive ≥50% of all rewards
 - Creators can only decrease the creator fee % to benefit other participants
-- I.e. reduce creator fee to increase the other fee components -> this means that moca tokens will receive the same cut.
+- I.e. reduce creator fee to increase the other fee components -> this means that moca token stakers will receive the same cut.
 
 ## Claiming Rewards
 
