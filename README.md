@@ -87,7 +87,7 @@ There is a single fee structure that is applied to both token and staking power 
 
 **Applicable to Moca NFTs Only**
 
-- Staking Moca NFTs boosts all reward types
+- Staking Moca NFTs boosts both staked moca tokens and staked RP
 - Creation NFTs do not provide a boost
 - Each staked NFT provides a flat 10% boost to base rewards
 - Maximum boost is capped at total number of staked NFTs × 10%
