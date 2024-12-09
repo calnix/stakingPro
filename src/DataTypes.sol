@@ -73,8 +73,8 @@ contract DataTypes {
         uint256 stakedRealmPoints;
 
         // boosted balances 
-        uint256 boostedRealmPoints;
-        uint256 boostedStakedTokens;         
+        uint256 boostedRealmPoints; //note: do i really need boosted balances?
+        uint256 boostedStakedTokens; // within a vault, users' split can be calculated on the base, since they all have the same boost effect         
     }
 
     struct UserAccount {

@@ -248,9 +248,6 @@ contract StakingPro is Pausable, Ownable2Step {
 
         //if(endTime <= block.timestamp) --> note: what to do when pool has reached endTime and not extended?         
 
-        // update: user's tokenIds
-        userVaultAssets.tokenIds = _concatArrays(userVaultAssets.tokenIds, tokenIds);   //note: what does concat an empty arr do -- on first instance?
-
         // cache
         uint256 oldBoostedRealmPoints = vault.boostedRealmPoints;
         uint256 oldBoostedStakedTokens = vault.boostedStakedTokens;
@@ -260,20 +257,25 @@ contract StakingPro is Pausable, Ownable2Step {
                
         // update boost factor: each NFT adds 0.1 (10%) boost, so for N NFTs, add N * 0.1 to the boost factor
         uint256 boostFactorDelta = incomingNfts * NFT_MULTIPLIER;
-        vault.totalBoostFactor += boostFactorDelta;     // totalBoostFactor is expressed as 1.XXX
+        vault.totalBoostFactor += boostFactorDelta;     // totalBoostFactor is expressed as 1.XXX; in 1e18 precision
 
-        // recalc. boosted balances with new boost factor
+        // recalc. boosted balances with new boost factor 
         if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / 1e18;            
         if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / 1e18;
+
+        // update: user's tokenIds + boostedBalances
+        userVaultAssets.tokenIds = _concatArrays(userVaultAssets.tokenIds, tokenIds);   //note: what does concat an empty arr do -- on first instance?
+        userVaultAssets.boostedStakedTokens = (userVaultAssets.stakedTokens * vault.totalBoostFactor) / 1e18;  
+        userVaultAssets.boostedRealmPoints = (userVaultAssets.stakedRealmPoints * vault.totalBoostFactor) / 1e18;
 
         // update storage: mappings 
         vaults[vaultId] = vault;
         usersVaultAssets[onBehalfOf][vaultId] = userVaultAssets;
 
-        // update storage: variables 
+        // update storage: global variables 
         totalStakedNfts += incomingNfts;
-        totalBoostedStakedTokens += (vault.boostedStakedTokens - oldBoostedStakedTokens);
         totalBoostedRealmPoints += (vault.boostedRealmPoints - oldBoostedRealmPoints);
+        totalBoostedStakedTokens += (vault.boostedStakedTokens - oldBoostedStakedTokens);
 
         emit StakedMocaNft(onBehalfOf, vaultId, tokenIds);
         emit VaultMultiplierUpdated(vaultId, oldMultiplier, vault.multiplier);
