@@ -405,7 +405,7 @@ contract StakingPro is Pausable, Ownable2Step {
             uint256 boostFactorDelta = stakedNfts * NFT_MULTIPLIER;
             vault.totalBoostFactor -= boostFactorDelta;
 
-            // recalc. boosted balances with new boost factor 
+            // update vault boosted balances w/ new boost factor 
             if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / 1e18;            
             if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / 1e18;
         }
@@ -418,6 +418,39 @@ contract StakingPro is Pausable, Ownable2Step {
         totalStakedNfts -= stakedNfts;
         totalBoostedRealmPoints -= oldBoostedRealmPoints;
         totalBoostedStakedTokens -= oldBoostedStakedTokens;
+    }
+
+    ///@notice Creator only allowed to reduce the creator fee factor, to increase the others 
+    function updateVaultFees(bytes32 vaultId, address onBehalfOf, DataTypes.Fees calldata fees) external whenStarted whenNotPaused {
+        require(vaultId > 0, "Invalid vaultId");
+        
+        // check if vault exists + cache vault & user's vault assets
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+
+        // Update all distributions, their respective vault accounts, and user accounts for specified vault
+        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+
+        // check vault: not ended + user must be creator 
+        if(vault.endTime <= block.timestamp) revert Errors.VaultMatured(vaultId);
+        if(vault.creator != onBehalfOf) revert Errors.UserIsNotVaultCreator(vaultId, onBehalfOf);
+        
+        // incoming creatorFeeFactor must be lower than current
+        if(fees.creatorFeeFactor < vault.creatorFeeFactor) revert Errors.CreatorFeeCanOnlyBeDecreased(vaultId);
+        
+        // new fee compositions must total to 100%
+        uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
+        require(totalFeeFactor == );
+
+        // update fees
+        vault.nftFeeFactor = fees.nftFeeFactor;
+        vault.creatorFeeFactor = fees.creatorFeeFactor;
+        vault.realmPointsFeeFactor = fees.realmPointsFeeFactor;
+        
+        // update storage: mappings 
+        vaults[vaultId] = vault;
+
+        // emit diff event
+        emit CreatorFeeFactorUpdated(vaultId, vault.accounting.creatorFeeFactor, newCreatorFeeFactor);
     }
 
 //-------------------------------internal-------------------------------------------
@@ -540,6 +573,7 @@ contract StakingPro is Pausable, Ownable2Step {
             // prev timestamp, oldIndex, newIndex: emit prev timestamp since you know the currentTimestamp as per txn time
             // emit VaultIndexUpdated(pool_.lastUpdateTimeStamp, pool_.index, nextPoolIndex); note: update event
 
+            // index is expressed in 1e18 precision; emitted rewards are in native token precision
             distribution.index = nextDistributionIndex;
             distribution.totalEmitted += emittedRewards; 
             distribution.lastUpdateTimeStamp = block.timestamp;
@@ -579,13 +613,18 @@ contract StakingPro is Pausable, Ownable2Step {
 
         uint256 timeDelta = currentTimestamp - lastUpdateTimestamp;
         
+        // emissionPerSecond expressed w/ full token precision 
         uint256 emittedRewards = emissionPerSecond * timeDelta;
 
-        //note: totalBalance is expressed 1e18. emittedRewards is variable as per distribution.TOKEN_PRECISION
-        //note: paper the math for this 
-        uint256 nextDistributionIndex = ((emittedRewards * 1E18) / distributionPrecision / totalBalance) + currentDistributionIndex;   
+        //note: totalBalance is expressed 1e18. 
+        //      emittedRewards is variable as per distribution.TOKEN_PRECISION.
+        //      normalize totalBalance to reward token's native precision
+        //      why: paying out rewards token, standardize to that
+        uint256 totalBalanceRebased = (totalBalance * distributionPrecision) / 1E18;  // what if its already 1e18? do we want to bother with an if check?
 
-        //note: here on out the index should be denominated in 1E18 - applicable to MOCA,RP,SP
+        //note: indexes are denominated in the distribution's precision
+        uint256 nextDistributionIndex = (emittedRewards * distributionPrecision / totalBalanceRebased) + currentDistributionIndex; 
+
     
         return (nextDistributionIndex, currentTimestamp, emittedRewards);
     }
@@ -614,7 +653,8 @@ contract StakingPro is Pausable, Ownable2Step {
         uint256 accRealmPointsFee;
 
         // calculate rewards owed to MOCA token stakers
-        totalAccRewards = _calculateRewards(vault.stakedTokens, distribution.index, vaultAccount.index);
+        uint256 balanceRebased = (vault.stakedTokens * distributionPrecision) / 1E18;
+        totalAccRewards = _calculateRewards(balanceRebased, distribution.index, vaultAccount.index);
 
         // calc. creator fees
         if(vault.creatorFeeFactor > 0) {
@@ -671,7 +711,8 @@ contract StakingPro is Pausable, Ownable2Step {
         if(userAccount.index != newUserIndex) { // if this index has not been updated, the subsequent ones would not have. check once here, no need repeat. 
             if(user.stakedTokens > 0) {
                 // users whom staked tokens are eligible for rewards less of fees
-                accruedRewards = _calculateRewards(user.stakedTokens, newUserIndex, userAccount.index);
+                uint256 balanceRebased = (user.stakedTokens * distributionPrecision) / 1E18;
+                accruedRewards = _calculateRewards(balanceRebased, newUserIndex, userAccount.index);
                 userAccount.accStakingRewards += accruedRewards;
 
                 // emit RewardsAccrued(user, accruedRewards);
@@ -744,8 +785,8 @@ contract StakingPro is Pausable, Ownable2Step {
  
     }
 
-    // for calc. rewards from index deltas. assumes tt indexes are rebased to 1E18 precision
-    function _calculateRewards(uint256 balance, uint256 currentIndex, uint256 priorIndex) internal pure returns (uint256) {
+    // for calc. rewards from index deltas. assumes tt indexes are expressed in the distribution's precision. therefore balance must be rebased to the same precision
+    function _calculateRewards(uint256 balanceRebased, uint256 currentIndex, uint256 priorIndex) internal pure returns (uint256) {
         return (balance * (currentIndex - priorIndex)) / 1E18;
     }
 
