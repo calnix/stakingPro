@@ -39,4 +39,22 @@ we must convert the decimal precision of stakedBase
 
 this impacts _calculateDistributionIndex and _calculateRewards
 
+staking base gets rounded down: 
+```solidity
 
+contract PrecisionConversion {
+
+    uint public upper;  // 111
+    uint public lower;  //777
+
+    function cast() public {
+        
+        uint256 base  = 11111;
+        uint256 based = 77777;
+        
+        lower = base / 1E2;
+        upper = based / 1E2;
+    }
+
+}
+```

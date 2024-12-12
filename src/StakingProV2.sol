@@ -43,6 +43,8 @@ contract StakingPro is Pausable, Ownable2Step {
     uint256 public creationNftsRequired = 5;
 
     uint256 public NFT_MULTIPLIER = 0.1 * 1e18; // 0.1 * 1e18 = 10%
+
+    uint256 public PERCENTAGE_BASE = 100;   // fee factors expressed in integer form; no decimals
     
     //--------------------------------
 
@@ -439,7 +441,7 @@ contract StakingPro is Pausable, Ownable2Step {
         
         // new fee compositions must total to 100%
         uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
-        require(totalFeeFactor == );
+        require(totalFeeFactor <= 50, "Total fees cannot exceed 50%");
 
         // update fees
         vault.nftFeeFactor = fees.nftFeeFactor;
@@ -658,14 +660,14 @@ contract StakingPro is Pausable, Ownable2Step {
 
         // calc. creator fees
         if(vault.creatorFeeFactor > 0) {
-            accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / 1E18;
+            accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / PERCENTAGE_BASE;
         }
 
         // nft fees accrued only if there were staked NFTs
         if(vault.stakedNfts > 0) {
             if(vault.nftFeeFactor > 0) {
 
-                accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / 1E18;
+                accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / PERCENTAGE_BASE;
                 vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);              // nftIndex: rewardsAccPerNFT
             }
         }
@@ -673,7 +675,7 @@ contract StakingPro is Pausable, Ownable2Step {
         // rp fees accrued only if there were staked RP 
         if(vault.stakedRealmPoints > 0) {
             if(vault.realmPointsFeeFactor > 0) {
-                accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / 1E18;
+                accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / PERCENTAGE_BASE;
                 vaultAccount.rpIndex += (accRealmPointsFee / vault.stakedRealmPoints);              // rpIndex: rewardsAccPerRP
             }
         } 
@@ -686,7 +688,8 @@ contract StakingPro is Pausable, Ownable2Step {
 
         // reference for moca staker's to calc. rewards net of fees
         // do division at the end again, instead of using the indexes to avoid rounding-down drift
-        vaultAccount.rewardsAccPerUnitStaked += ((totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) * 1E18) / vault.stakedTokens;
+        uint256 rewardsLessFeesRebased = ((totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) * 1E18) / distributionPrecision;
+        vaultAccount.rewardsAccPerUnitStaked += rewardsLessFeesRebased / vault.stakedTokens;  // rebase rewards to 1e18 
 
         // update vaultIndex
         vaultAccount.vaultIndex = distribution.index;
@@ -715,7 +718,7 @@ contract StakingPro is Pausable, Ownable2Step {
                 accruedRewards = _calculateRewards(balanceRebased, newUserIndex, userAccount.index);
                 userAccount.accStakingRewards += accruedRewards;
 
-                // emit RewardsAccrued(user, accruedRewards);
+                // emit RewardsAccrued(user, accruedRewards, distributionPrecision);
             }
         }
 
