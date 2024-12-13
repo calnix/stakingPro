@@ -45,6 +45,8 @@ contract StakingPro is Pausable, Ownable2Step {
     uint256 public NFT_MULTIPLIER = 0.1 * 1e18; // 0.1 * 1e18 = 10%
 
     uint256 public PERCENTAGE_BASE = 100;   // fee factors expressed in integer form; no decimals
+
+    uint256 public COOLDOWN_PERIOD = 7 days;
     
     //--------------------------------
 
@@ -455,6 +457,39 @@ contract StakingPro is Pausable, Ownable2Step {
         emit CreatorFeeFactorUpdated(vaultId, vault.accounting.creatorFeeFactor, newCreatorFeeFactor);
     }
 
+    // cooldown 
+    function endVault(bytes32 vaultId) external whenStarted whenNotPaused {
+        require(vaultId > 0, "Invalid vaultId");
+
+        // check if vault exists + cache vault & user's vault assets
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+
+        // Update all distributions, their respective vault accounts, and user accounts for specified vault
+        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+
+        // is it ended?
+        if(vault.endTime > 0) revert Errors.VaultCooldownInitiated();
+
+        // calc. endTime       
+        vault.endTime = block.timestamp + COOLDOWN_PERIOD;
+
+        // if zero cooldown, remove vault immediately 
+        if(COOLDOWN_PERIOD == 0) {
+            
+            // 
+        }
+
+    }
+
+
+
+    /**
+        add checks:
+        - check if vault has ended
+        - check if vault should stop earning rewards - if so do not update; or update as per last
+
+     */
+
 //-------------------------------internal-------------------------------------------
 
 /*
@@ -649,14 +684,20 @@ contract StakingPro is Pausable, Ownable2Step {
         if(block.timestamp >= vault.endTime) continue;
 
         // update vault rewards + fees
-        uint256 accruedRewards; 
+        uint256 totalAccRewards; 
         uint256 accCreatorFee; 
         uint256 accTotalNftFee;
         uint256 accRealmPointsFee;
 
-        // calculate rewards owed to MOCA token stakers
-        uint256 balanceRebased = (vault.stakedTokens * distributionPrecision) / 1E18;
-        totalAccRewards = _calculateRewards(balanceRebased, distribution.index, vaultAccount.index);
+        // STAKING POWER
+        if(distribution.chainId == 0) {
+
+            totalAccRewards = _calculateRewards(vault.boostedRealmPoints, distribution.index, vaultAccount.index);
+        } 
+        else { // TOKENS
+            
+            totalAccRewards = _calculateRewards(vault.boostedStakedTokens, distribution.index, vaultAccount.index);
+        }
 
         // calc. creator fees
         if(vault.creatorFeeFactor > 0) {

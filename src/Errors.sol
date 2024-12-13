@@ -40,4 +40,6 @@ library Errors {
     error IncorrectCreationNfts();
     error IncorrectNftOwner(uint256 tokenId);
     error NftAlreadyStaked(uint256 tokenId);
+
+    error VaultCooldownInitiated();
 }
