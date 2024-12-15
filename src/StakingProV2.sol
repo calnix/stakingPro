@@ -488,6 +488,9 @@ contract StakingPro is Pausable, Ownable2Step {
         - check if vault has ended
         - check if vault should stop earning rewards - if so do not update; or update as per last
 
+        document
+        - how rewards are calculated: distribution, vault, user
+
      */
 
 //-------------------------------internal-------------------------------------------
@@ -593,24 +596,17 @@ contract StakingPro is Pausable, Ownable2Step {
         uint256 currentTimestamp;
         uint256 emittedRewards;
 
-        // staking power
-        if(distribution.chainId == 0) {
-            
-            // staked RP is the base of Staking power rewards
-            (nextDistributionIndex, currentTimestamp, emittedRewards) = _calculateDistributionIndex(distribution.index, distribution.emissionPerSecond, distribution.lastUpdateTimeStamp, totalBoostedRealmPoints, distribution.TOKEN_PRECISION);
-
-        } else {
-
-            // staked Moca is the base of token rewards
-            (nextDistributionIndex, currentTimestamp, emittedRewards) = _calculateDistributionIndex(distribution.index, distribution.emissionPerSecond, distribution.lastUpdateTimeStamp, totalBoostedStakedTokens, distribution.TOKEN_PRECISION);
-        }
-
+        // select appropriate totalBoostedBalance based on distribution type
+        // staked RP is the base of Staking power rewards | staked Moca is the base of token rewards
+        uint256 totalBoostedBalance = distribution.chainId == 0 ? totalBoostedRealmPoints : totalBoostedStakedTokens;
+        _calculateDistributionIndex(distribution.index, distribution.emissionPerSecond, distribution.lastUpdateTimeStamp, totalBoostedBalance, distribution.TOKEN_PRECISION);
+        
         if(nextDistributionIndex != distribution.index) {
             
             // prev timestamp, oldIndex, newIndex: emit prev timestamp since you know the currentTimestamp as per txn time
             // emit VaultIndexUpdated(pool_.lastUpdateTimeStamp, pool_.index, nextPoolIndex); note: update event
 
-            // index is expressed in 1e18 precision; emitted rewards are in native token precision
+            // index and emitted rewards are in reward token precision
             distribution.index = nextDistributionIndex;
             distribution.totalEmitted += emittedRewards; 
             distribution.lastUpdateTimeStamp = block.timestamp;
@@ -654,7 +650,7 @@ contract StakingPro is Pausable, Ownable2Step {
         uint256 emittedRewards = emissionPerSecond * timeDelta;
 
         //note: totalBalance is expressed 1e18. 
-        //      emittedRewards is variable as per distribution.TOKEN_PRECISION.
+        //      emittedRewards is variable as per distribution.TOKEN_PRECISION
         //      normalize totalBalance to reward token's native precision
         //      why: paying out rewards token, standardize to that
         uint256 totalBalanceRebased = (totalBalance * distributionPrecision) / 1E18;  // what if its already 1e18? do we want to bother with an if check?
@@ -689,15 +685,11 @@ contract StakingPro is Pausable, Ownable2Step {
         uint256 accTotalNftFee;
         uint256 accRealmPointsFee;
 
-        // STAKING POWER
-        if(distribution.chainId == 0) {
-
-            totalAccRewards = _calculateRewards(vault.boostedRealmPoints, distribution.index, vaultAccount.index);
-        } 
-        else { // TOKENS
-            
-            totalAccRewards = _calculateRewards(vault.boostedStakedTokens, distribution.index, vaultAccount.index);
-        }
+        // STAKING POWER: staked realm points | TOKENS: staked moca tokens
+        uint256 boostedBalance = distribution.chainId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
+        uint256 totalBalanceRebased = (boostedBalance * distribution.TOKEN_PRECISION) / 1E18;  
+        // note: rewards calc. in reward token precision
+        totalAccRewards = _calculateRewards(totalBalanceRebased, distribution.index, vaultAccount.index);
 
         // calc. creator fees
         if(vault.creatorFeeFactor > 0) {
@@ -717,20 +709,22 @@ contract StakingPro is Pausable, Ownable2Step {
         if(vault.stakedRealmPoints > 0) {
             if(vault.realmPointsFeeFactor > 0) {
                 accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / PERCENTAGE_BASE;
-                vaultAccount.rpIndex += (accRealmPointsFee / vault.stakedRealmPoints);              // rpIndex: rewardsAccPerRP
+
+                // accRealmPointsFee is in reward token precision
+                uint256 stakedRealmPointsRebased = (vault.stakedRealmPoints * distribution.TOKEN_PRECISION) / 1E18;  
+                vaultAccount.rpIndex += (accRealmPointsFee / stakedRealmPointsRebased);              // rpIndex: rewardsAccPerRP
             }
         } 
         
-        // book rewards: total, Creator, NFT, RealmPoints
+        // book rewards: total, Creator, NFT, RealmPoints | expressed in distri token precision
         vaultAccount.totalAccRewards += totalAccRewards;
         vaultAccount.accCreatorRewards += accCreatorFee;
         vaultAccount.accNftStakingRewards += accTotalNftFee;
         vaultAccount.accRealmPointsRewards += accRealmPointsFee;
 
-        // reference for moca staker's to calc. rewards net of fees
-        // do division at the end again, instead of using the indexes to avoid rounding-down drift
-        uint256 rewardsLessFeesRebased = ((totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) * 1E18) / distributionPrecision;
-        vaultAccount.rewardsAccPerUnitStaked += rewardsLessFeesRebased / vault.stakedTokens;  // rebase rewards to 1e18 
+        // reference for moca stakers to calc. rewards net of fees
+        uint256 totalStakedRebased = (vault.stakedTokens * distributionPrecision) / 1E18;
+        vaultAccount.rewardsAccPerUnitStaked += (totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) / totalStakedRebased;  
 
         // update vaultIndex
         vaultAccount.vaultIndex = distribution.index;
@@ -742,7 +736,7 @@ contract StakingPro is Pausable, Ownable2Step {
 
     function _updateUserAccount(
         DataTypes.User memory user, DataTypes.UserAccount memory userAccount, 
-        DataTypes.Vault memory vault, DataTypes.VaultData memory vaultAccount, DataTypes.Distribution memory distribution) internal returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory)  {
+        DataTypes.Vault memory vault, DataTypes.VaultData memory vaultAccount, DataTypes.Distribution memory distribution) internal returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
         
         // get updated vaultAccount and distribution
         DataTypes.VaultData memory vaultAccount, DataTypes.Distribution memory distribution = _updateVaultAccount(vault, vaultAccount, distribution);
@@ -753,6 +747,7 @@ contract StakingPro is Pausable, Ownable2Step {
 
         uint256 accruedRewards;
         if(userAccount.index != newUserIndex) { // if this index has not been updated, the subsequent ones would not have. check once here, no need repeat. 
+
             if(user.stakedTokens > 0) {
                 // users whom staked tokens are eligible for rewards less of fees
                 uint256 balanceRebased = (user.stakedTokens * distributionPrecision) / 1E18;
@@ -761,26 +756,32 @@ contract StakingPro is Pausable, Ownable2Step {
 
                 // emit RewardsAccrued(user, accruedRewards, distributionPrecision);
             }
+
+
+            uint256 userStakedNfts = user.tokenIds.length;
+            if(userStakedNfts > 0) {
+
+                // total accrued rewards from staking NFTs
+                uint256 accNftStakingRewards = (newUserNftIndex - userAccount.nftIndex) * userStakedNfts;
+                userAccount.accNftStakingRewards += accNftStakingRewards;
+
+                //emit NftRewardsAccrued(user, accNftStakingRewards);
+            }
+
+
+            if(user.stakedRealmPoints > 0){
+                
+                // users whom staked RP are eligible for a portion of RP fees
+                uint256 totalStakedRpRebased = (vault.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
+
+                uint256 accRealmPointsRewards = (newUserRpIndex - userAccount.rpIndex) * totalStakedRpRebased;
+                userAccount.accRealmPointsRewards += accRealmPointsRewards;
+
+                //emit something
+            }
+
         }
 
-        uint256 userStakedNfts = user.tokenIds.length;
-        if(userStakedNfts > 0) {
-
-            // total accrued rewards from staking NFTs
-            uint256 accNftStakingRewards = (newUserNftIndex - userAccount.nftIndex) * userStakedNfts;
-            userAccount.accNftStakingRewards += accNftStakingRewards;
-
-            //emit NftRewardsAccrued(user, accNftStakingRewards);
-        }
-
-        if(user.stakedRealmPoints > 0){
-            
-            // users whom staked RP are eligible for a portion of RP fees
-            uint256 accRealmPointsRewards = (newUserRpIndex - userAccount.rpIndex) * user.stakedRealmPoints;
-            userAccount.accRealmPointsRewards += accRealmPointsRewards;
-
-            //emit something
-        }
 
         // update user indexes
         userAccount.userIndex = newUserIndex;
