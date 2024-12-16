@@ -189,6 +189,9 @@ contract StakingPro is Pausable, Ownable2Step {
         // check if vault exists + cache vault & user's vault assets
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
      
+        // check if vault has ended
+        if(vault.endTime <= block.timestamp) revert Errors.VaultMatured(vaultId);
+
         //_updateUserIndexes -> _updateVaultIndex::calc_Rewards -> _updatePoolIndex
         //_updateUserAccounts  -> _updateVaultAccounts::calc_Rewards for each activeDistribution -> _updateDistributionIndexes::_updateDistributionIndex
 
@@ -243,9 +246,13 @@ contract StakingPro is Pausable, Ownable2Step {
 
         require(incomingNfts > 0, "Invalid amount"); 
         require(vaultId > 0, "Invalid vaultId");
-
+        
         // check if vault exists + cache vault & user's vault assets
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+
+        // check if vault has ended
+        if(vault.endTime <= block.timestamp) revert Errors.VaultMatured(vaultId);
+
 
         // Update all distributions, their respective vault accounts, and user accounts for specified vault
         _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
@@ -470,15 +477,23 @@ contract StakingPro is Pausable, Ownable2Step {
         // is it ended?
         if(vault.endTime > 0) revert Errors.VaultCooldownInitiated();
 
-        // calc. endTime       
+        // set endTime       
         vault.endTime = block.timestamp + COOLDOWN_PERIOD;
 
-        // if zero cooldown, remove vault immediately 
+        // if zero cooldown, remove vault from circulation immediately 
         if(COOLDOWN_PERIOD == 0) {
             
-            // 
+            // decrement state vars
+            
+            uint256 totalStakedNfts -= vault.stakedNfts;
+            uint256 totalStakedTokens -= vault.stakedTokens;
+            uint256 totalStakedRealmPoints -= vault.stakedRealmPoints;
+
+            uint256 totalBoostedRealmPoints -= vault.boostedRealmPoints;
+            uint256 totalBoostedStakedTokens -= vault.boostedStakedTokens;
         }
 
+        // emit
     }
 
 
