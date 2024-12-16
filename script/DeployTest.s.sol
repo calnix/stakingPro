@@ -3,11 +3,10 @@ pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {StakingPro} from "./../src/StakingPro.sol";
 
 
 contract DeployTest is Script {
-    StakingPro public pool;
+    //StakingPro public pool;
 
     function setUp() public {}
 

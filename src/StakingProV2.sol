@@ -19,6 +19,7 @@ import {IRewardsVault} from "./interfaces/IRewardsVault.sol";
 contract StakingPro is Pausable, Ownable2Step {
     using SafeERC20 for IERC20;
 
+    IERC20 public immutable STAKED_TOKEN;  
     INftRegistry public immutable NFT_REGISTRY;
     IRewardsVault public immutable REWARDS_VAULT;
 
@@ -78,10 +79,10 @@ contract StakingPro is Pausable, Ownable2Step {
     mapping(uint256 distributionId => DataTypes.Distribution distribution) public distributions;
 
     // global tracking of user assets
-    mapping(address user => DataTypes.User user) public users;
+    mapping(address user => DataTypes.User userGlobalAssets) public usersGlobal;
 
     // user's assets per vault
-    mapping(address user => mapping(bytes32 vaultId => DataTypes.User user)) public usersVaultAssets;
+    mapping(address user => mapping(bytes32 vaultId => DataTypes.User userVaultAssets)) public usersVaultAssets;
 
     // for independent reward distribution tracking              
     mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) public vaultAccounts;
@@ -106,20 +107,20 @@ contract StakingPro is Pausable, Ownable2Step {
         startTime = startTime_;
 
         // setup staking power
-        DataTypes.TokenData memory vault = vaults[0]; 
+        DataTypes.Distribution memory distribution = distributions[0]; 
             // tokenAddr and chainId are intentionally left 0
-            vault.precision = 1e18;
+            distribution.TOKEN_PRECISION = 1e18;
 
-            vault.startTime = startTime_;
-            vault.emissionPerSecond = emissionPerSecond;
+            distribution.startTime = startTime_;
+            distribution.emissionPerSecond = emissionPerSecond;
             
-            vault.lastUpdateTimeStamp = startTime_;
+            distribution.lastUpdateTimeStamp = startTime_;
 
-        vaults[0] = vault;
+        distributions[0] = distribution;
 
         // update vault tracking
-        activeVaults.push();
-        ++ totalVaults;
+        activeDistributions.push();
+        ++ totalDistributions;
 
         emit DistributionUpdated(emissionPerSecond, startTime);
     }
@@ -157,7 +158,7 @@ contract StakingPro is Pausable, Ownable2Step {
             while (vaults[vaultId].vaultId != bytes32(0)) vaultId = _generateVaultId(--salt, onBehalfOf);      // If poolId exists, generate new random Id
         }
         // build vault
-        DataTypes.Pool memory vault; 
+        DataTypes.Vault memory vault; 
             vault.vaultId = vaultId;
             vault.creator = onBehalfOf;
             vault.creationTokenIds = tokenIds;  
@@ -178,7 +179,7 @@ contract StakingPro is Pausable, Ownable2Step {
         //update: emit VaultCreated(onBehalfOf, poolId); //emit totaLAllocPoints updated?
 
         // record NFT commitment on registry contract
-        NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, poolId);
+        NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, vaultId);
     }  
 
     // no staking limits on staking assets
@@ -190,7 +191,7 @@ contract StakingPro is Pausable, Ownable2Step {
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
      
         // check if vault has ended
-        if(vault.endTime <= block.timestamp) revert Errors.VaultMatured(vaultId);
+        if(vault.endTime <= block.timestamp) revert Errors.VaultEnded(vaultId, vault.endTime);
 
         //_updateUserIndexes -> _updateVaultIndex::calc_Rewards -> _updatePoolIndex
         //_updateUserAccounts  -> _updateVaultAccounts::calc_Rewards for each activeDistribution -> _updateDistributionIndexes::_updateDistributionIndex
@@ -251,7 +252,7 @@ contract StakingPro is Pausable, Ownable2Step {
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
 
         // check if vault has ended
-        if(vault.endTime <= block.timestamp) revert Errors.VaultMatured(vaultId);
+        if(vault.endTime <= block.timestamp) revert Errors.VaultEnded(vaultId, vault.endTime);
 
 
         // Update all distributions, their respective vault accounts, and user accounts for specified vault
@@ -289,7 +290,7 @@ contract StakingPro is Pausable, Ownable2Step {
         totalBoostedStakedTokens += (vault.boostedStakedTokens - oldBoostedStakedTokens);
 
         emit StakedMocaNft(onBehalfOf, vaultId, tokenIds);
-        emit VaultMultiplierUpdated(vaultId, oldMultiplier, vault.multiplier);
+        //emit VaultMultiplierUpdated(vaultId, oldMultiplier, vault.multiplier);
 
         // record stake with registry
         NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, vaultId);
@@ -341,8 +342,8 @@ contract StakingPro is Pausable, Ownable2Step {
         //------- ........................................... --------
 
         //update storage: vault and user accounts
-        vaultAccounts[vaultId][distributionId] = DataTypes.VaultAccount memory vaultAccount;
-        userAccounts[onBehalfOf][vaultId][distributionId] = DataTypes.UserAccount memory userAccount;
+        vaultAccounts[vaultId][distributionId] = vaultAccount;
+        userAccounts[onBehalfOf][vaultId][distributionId] = userAccount;
 
         // emit RewardsClaimed(vaultId, onBehalfOf, unclaimedRewards);
 
@@ -442,7 +443,7 @@ contract StakingPro is Pausable, Ownable2Step {
         _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
 
         // check vault: not ended + user must be creator 
-        if(vault.endTime <= block.timestamp) revert Errors.VaultMatured(vaultId);
+        if(vault.endTime <= block.timestamp) revert Errors.VaultEnded(vaultId, vault.endTime);
         if(vault.creator != onBehalfOf) revert Errors.UserIsNotVaultCreator(vaultId, onBehalfOf);
         
         // incoming creatorFeeFactor must be lower than current
@@ -461,7 +462,7 @@ contract StakingPro is Pausable, Ownable2Step {
         vaults[vaultId] = vault;
 
         // emit diff event
-        emit CreatorFeeFactorUpdated(vaultId, vault.accounting.creatorFeeFactor, newCreatorFeeFactor);
+        //emit CreatorFeeFactorUpdated(vaultId, vault.accounting.creatorFeeFactor, newCreatorFeeFactor);
     }
 
     // cooldown 
@@ -469,10 +470,10 @@ contract StakingPro is Pausable, Ownable2Step {
         require(vaultId > 0, "Invalid vaultId");
 
         // check if vault exists + cache vault & user's vault assets
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
         // Update all distributions, their respective vault accounts, and user accounts for specified vault
-        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+        _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
 
         // is it ended?
         if(vault.endTime > 0) revert Errors.VaultCooldownInitiated();
@@ -485,12 +486,12 @@ contract StakingPro is Pausable, Ownable2Step {
             
             // decrement state vars
             
-            uint256 totalStakedNfts -= vault.stakedNfts;
-            uint256 totalStakedTokens -= vault.stakedTokens;
-            uint256 totalStakedRealmPoints -= vault.stakedRealmPoints;
+            totalStakedNfts -= vault.stakedNfts;
+            totalStakedTokens -= vault.stakedTokens;
+            totalStakedRealmPoints -= vault.stakedRealmPoints;
 
-            uint256 totalBoostedRealmPoints -= vault.boostedRealmPoints;
-            uint256 totalBoostedStakedTokens -= vault.boostedStakedTokens;
+            totalBoostedRealmPoints -= vault.boostedRealmPoints;
+            totalBoostedStakedTokens -= vault.boostedStakedTokens;
         }
 
         // emit
@@ -502,46 +503,46 @@ contract StakingPro is Pausable, Ownable2Step {
 
         // check if new vault ended/exists
         DataTypes.Vault memory newVault = vaults[newVaultId];
-        if(vault.endTime <= block.timestamp) revert Errors.VaultMatured(vaultId);
-        if(vault.creator == address(0)) revert Errors.NonExistentVault(newVaultId);
+        if(newVault.endTime <= block.timestamp) revert Errors.VaultEnded(newVaultId, newVault.endTime);
+        if(newVault.creator == address(0)) revert Errors.NonExistentVault(newVaultId);
 
         // check if vault exists + cache vault & user's vault assets
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory oldVault) = _cache(oldVaultId, onBehalfOf);
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory oldVault) = _cache(oldVaultId, msg.sender);
 
         // Update all distributions, their respective vault accounts, and user accounts for the old vault
-        _updateUserAccounts(onBehalfOf, oldVaultId, oldVault, userVaultAssets);
+        _updateUserAccounts(msg.sender, oldVaultId, oldVault, userVaultAssets);
         
         //note: user may or may not have assets already staked in the new vault
         // Update all distributions, their respective vault accounts, and user accounts for the new vault
-        _updateUserAccounts(onBehalfOf, newVaultId, newVault, userVaultAssets);
+        _updateUserAccounts(msg.sender, newVaultId, newVault, userVaultAssets);
 
         // increment new vault: base assets
-        newVault.stakedNfts += userVaultAssets.stakedNfts;
+        newVault.stakedNfts += userVaultAssets.tokenIds.length;
         newVault.stakedTokens += userVaultAssets.stakedTokens;
         newVault.stakedRealmPoints += userVaultAssets.stakedRealmPoints;
         // update boost
-        newVault.totalBoostFactor += userVaultAssets.stakedNfts * NFT_MULTIPLIER;
+        newVault.totalBoostFactor += userVaultAssets.tokenIds.length * NFT_MULTIPLIER;
         newVault.boostedStakedTokens = (newVault.stakedTokens * newVault.totalBoostFactor) / 1e18; 
         newVault.boostedRealmPoints = (newVault.stakedRealmPoints * newVault.totalBoostFactor) / 1e18; 
 
 
         // decrement oldVault
-        oldVault.stakedNfts -= userVaultAssets.stakedNfts;
+        oldVault.stakedNfts -= userVaultAssets.tokenIds.length;
         oldVault.stakedTokens -= userVaultAssets.stakedTokens;
         oldVault.stakedRealmPoints -= userVaultAssets.stakedRealmPoints;
         // update boost
-        oldVault.totalBoostFactor -= userVaultAssets.stakedNfts * NFT_MULTIPLIER;
+        oldVault.totalBoostFactor -= userVaultAssets.tokenIds.length * NFT_MULTIPLIER;
         oldVault.boostedStakedTokens = (oldVault.stakedTokens * oldVault.totalBoostFactor) / 1e18; 
         oldVault.boostedRealmPoints = (oldVault.stakedRealmPoints * oldVault.totalBoostFactor) / 1e18; 
 
         // NFT management
             // record unstake with registry
-            NFT_REGISTRY.recordUnstake(onBehalfOf, userVaultAssets.tokenIds, oldVaultId);
-            emit UnstakedMocaNft(onBehalfOf, oldVaultId, userVaultAssets.tokenIds);       
+            NFT_REGISTRY.recordUnstake(msg.sender, userVaultAssets.tokenIds, oldVaultId);
+            emit UnstakedMocaNft(msg.sender, oldVaultId, userVaultAssets.tokenIds);       
 
             // record stake with registry
-            NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, newVaultId);
-            emit StakedMocaNft(onBehalfOf, newVaultId, tokenIds);
+            NFT_REGISTRY.recordStake(msg.sender, userVaultAssets.tokenIds, newVaultId);
+            emit StakedMocaNft(msg.sender, newVaultId, userVaultAssets.tokenIds);
 
         // emit something
     }
@@ -551,19 +552,19 @@ contract StakingPro is Pausable, Ownable2Step {
         require(vaultId > 0, "Invalid vaultId");
         
         // check if vault exists + cache vault & user's vault assets
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
         // check if vault has ended
-        if(vault.endTime <= block.timestamp) revert Errors.VaultMatured(vaultId);
+        if(vault.endTime <= block.timestamp) revert Errors.VaultEnded(vaultId, vault.endTime);
 
         // Update all distributions, their respective vault accounts, and user accounts for specified vault
-        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+        _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
 
 
 
     }
 
-    function stakeRP(vaultId, amount, expiry, signature) external whenStarted whenNotPaused {}
+    //function stakeRP(vaultId, amount, expiry, signature) external whenStarted whenNotPaused {}
 
 
     /**
@@ -670,19 +671,19 @@ contract StakingPro is Pausable, Ownable2Step {
     }
 */
     //
-    function _updateDistributionIndex(DataTypes.Distribution memory distribution) internal return(DataTypes.Distribution memory) {
+    function _updateDistributionIndex(DataTypes.Distribution memory distribution) internal returns (DataTypes.Distribution memory) {
         
         // already updated: return
         if(distribution.lastUpdateTimeStamp == block.timestamp) return distribution;
         
-        uint256 nextVaultIndex;
+        uint256 nextDistributionIndex;
         uint256 currentTimestamp;
         uint256 emittedRewards;
 
         // select appropriate totalBoostedBalance based on distribution type
         // staked RP is the base of Staking power rewards | staked Moca is the base of token rewards
         uint256 totalBoostedBalance = distribution.chainId == 0 ? totalBoostedRealmPoints : totalBoostedStakedTokens;
-        _calculateDistributionIndex(distribution.index, distribution.emissionPerSecond, distribution.lastUpdateTimeStamp, totalBoostedBalance, distribution.TOKEN_PRECISION);
+        (nextDistributionIndex, currentTimestamp, emittedRewards) = _calculateDistributionIndex(distribution.index, distribution.emissionPerSecond, distribution.lastUpdateTimeStamp, totalBoostedBalance, distribution.TOKEN_PRECISION);
         
         if(nextDistributionIndex != distribution.index) {
             
@@ -692,7 +693,7 @@ contract StakingPro is Pausable, Ownable2Step {
             // index and emitted rewards are in reward token precision
             distribution.index = nextDistributionIndex;
             distribution.totalEmitted += emittedRewards; 
-            distribution.lastUpdateTimeStamp = block.timestamp;
+            distribution.lastUpdateTimeStamp = currentTimestamp;
         }
 
         return distribution;
@@ -750,17 +751,17 @@ contract StakingPro is Pausable, Ownable2Step {
     // returns updated vault account and updated distribution structs 
     function _updateVaultAccount(
         DataTypes.Vault memory vault, 
-        DataTypes.VaultData memory vaultAccount, 
-        DataTypes.Distribution memory distribution_) internal return(DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
+        DataTypes.VaultAccount memory vaultAccount, 
+        DataTypes.Distribution memory distribution_) internal returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
 
         // get latest distributionIndex
         DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_);
         
         // vault already been updated by a prior txn; skip updating
-        if(distribution.index == vaultAccount.index) continue;
+        if(distribution.index == vaultAccount.index) return (vaultAccount, distribution_);
 
         // If vault has ended, vaultIndex should not be updated, beyond the final update.
-        if(block.timestamp >= vault.endTime) continue;
+        if(block.timestamp >= vault.endTime) return (vaultAccount, distribution_);
 
         // update vault rewards + fees
         uint256 totalAccRewards; 
@@ -806,11 +807,11 @@ contract StakingPro is Pausable, Ownable2Step {
         vaultAccount.accRealmPointsRewards += accRealmPointsFee;
 
         // reference for moca stakers to calc. rewards net of fees
-        uint256 totalStakedRebased = (vault.stakedTokens * distributionPrecision) / 1E18;
+        uint256 totalStakedRebased = (vault.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
         vaultAccount.rewardsAccPerUnitStaked += (totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) / totalStakedRebased;  
 
         // update vaultIndex
-        vaultAccount.vaultIndex = distribution.index;
+        vaultAccount.index = distribution.index;
 
         // emit VaultIndexUpdated    
 
@@ -819,22 +820,20 @@ contract StakingPro is Pausable, Ownable2Step {
 
     function _updateUserAccount(
         DataTypes.User memory user, DataTypes.UserAccount memory userAccount, 
-        DataTypes.Vault memory vault, DataTypes.VaultData memory vaultAccount, DataTypes.Distribution memory distribution) internal returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
+        DataTypes.Vault memory vault, DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution_) internal returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
         
         // get updated vaultAccount and distribution
-        DataTypes.VaultData memory vaultAccount, DataTypes.Distribution memory distribution = _updateVaultAccount(vault, vaultAccount, distribution);
+        (DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateVaultAccount(vault, vaultAccount, distribution_);
+        
+        uint256 newUserIndex = vaultAccount.rewardsAccPerUnitStaked;
 
-        uint256 newUserIndex = vaultAccount.rewardsAccPerUnitStaked;    // less of fees
-        uint256 newUserNftIndex = vaultAccount.nftIndex;
-        uint256 newUserRpIndex = vaultAccount.rpIndex;
-
-        uint256 accruedRewards;
-        if(userAccount.index != newUserIndex) { // if this index has not been updated, the subsequent ones would not have. check once here, no need repeat. 
+        // if this index has not been updated, the subsequent ones would not have. check once here, no need repeat
+        if(userAccount.index != newUserIndex) { 
 
             if(user.stakedTokens > 0) {
                 // users whom staked tokens are eligible for rewards less of fees
-                uint256 balanceRebased = (user.stakedTokens * distributionPrecision) / 1E18;
-                accruedRewards = _calculateRewards(balanceRebased, newUserIndex, userAccount.index);
+                uint256 balanceRebased = (user.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
+                uint256 accruedRewards = _calculateRewards(balanceRebased, newUserIndex, userAccount.index);
                 userAccount.accStakingRewards += accruedRewards;
 
                 // emit RewardsAccrued(user, accruedRewards, distributionPrecision);
@@ -845,7 +844,7 @@ contract StakingPro is Pausable, Ownable2Step {
             if(userStakedNfts > 0) {
 
                 // total accrued rewards from staking NFTs
-                uint256 accNftStakingRewards = (newUserNftIndex - userAccount.nftIndex) * userStakedNfts;
+                uint256 accNftStakingRewards = (vaultAccount.nftIndex - userAccount.nftIndex) * userStakedNfts;
                 userAccount.accNftStakingRewards += accNftStakingRewards;
 
                 //emit NftRewardsAccrued(user, accNftStakingRewards);
@@ -855,9 +854,9 @@ contract StakingPro is Pausable, Ownable2Step {
             if(user.stakedRealmPoints > 0){
                 
                 // users whom staked RP are eligible for a portion of RP fees
-                uint256 totalStakedRpRebased = (vault.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
+                uint256 totalStakedRpRebased = (vault.stakedRealmPoints * distribution.TOKEN_PRECISION) / 1E18;
 
-                uint256 accRealmPointsRewards = (newUserRpIndex - userAccount.rpIndex) * totalStakedRpRebased;
+                uint256 accRealmPointsRewards = (vaultAccount.rpIndex - userAccount.rpIndex) * totalStakedRpRebased;
                 userAccount.accRealmPointsRewards += accRealmPointsRewards;
 
                 //emit something
@@ -867,9 +866,9 @@ contract StakingPro is Pausable, Ownable2Step {
 
 
         // update user indexes
-        userAccount.userIndex = newUserIndex;
-        userAccount.userNftIndex = newUserNftIndex;
-        userAccount.rpIndex = newUserRpIndex;
+        userAccount.index = vaultAccount.rewardsAccPerUnitStaked;   // less of fees
+        userAccount.nftIndex = vaultAccount.nftIndex;
+        userAccount.rpIndex = vaultAccount.rpIndex;
 
         // emit UserIndexesUpdated(user, vault.vaultId, newUserIndex, newUserNftIndex, userInfo.accStakingRewards);
 
@@ -898,12 +897,12 @@ contract StakingPro is Pausable, Ownable2Step {
             uint256 distributionId = activeDistributions[i];   
 
             // get corresponding user+vault account for this active distribution 
-            DataTypes.Distribution memory distribution = distributions[distributionId];
-            DataTypes.VaultData memory vaultAccount = vaultAccounts[vaultId][distributionId];
-            DataTypes.UserAccount memory userAccount = userAccounts[user][vaultId][distributionId];
+            DataTypes.Distribution memory distribution_ = distributions[distributionId];
+            DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
+            DataTypes.UserAccount memory userAccount_ = userAccounts[user][vaultId][distributionId];
 
             
-            (DataTypes.UserAccount memory userAccount, DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateUserAccount(userVaultAssets, userAccount, vault, vaultAccount, distribution);
+            (DataTypes.UserAccount memory userAccount, DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateUserAccount(userVaultAssets, userAccount_, vault, vaultAccount_, distribution_);
 
             //update storage: accounts and distributions
             distributions[distributionId] = distribution;     
@@ -915,12 +914,12 @@ contract StakingPro is Pausable, Ownable2Step {
 
     // for calc. rewards from index deltas. assumes tt indexes are expressed in the distribution's precision. therefore balance must be rebased to the same precision
     function _calculateRewards(uint256 balanceRebased, uint256 currentIndex, uint256 priorIndex) internal pure returns (uint256) {
-        return (balance * (currentIndex - priorIndex)) / 1E18;
+        return (balanceRebased * (currentIndex - priorIndex)) / 1E18;
     }
 
 
     ///@dev cache vault and user structs from storage to memory. checks that vault exists, else reverts.
-    function _cache(bytes32 vaultId, address onBehalfOf) internal view returns(/*DataTypes.User memory*/, DataTypes.User memory, DataTypes.Vault memory) {
+    function _cache(bytes32 vaultId, address onBehalfOf) internal view returns(/*DataTypes.User memory*/ DataTypes.User memory, DataTypes.Vault memory) {
         
         // ensure vault exists
         DataTypes.Vault memory vault = vaults[vaultId];
@@ -930,7 +929,7 @@ contract StakingPro is Pausable, Ownable2Step {
         //DataTypes.User memory userGlobal = users[onBehalfOf];
         DataTypes.User memory userVaultAssets = usersVaultAssets[onBehalfOf][vaultId];
 
-        return (/*userGlobal*/, userVaultAssets, vault);
+        return (/*userGlobal*/ userVaultAssets, vault);
     }
 
     ///@dev concat two uint256 arrays: [1,2,3],[4,5] -> [1,2,3,4,5]
@@ -978,32 +977,32 @@ contract StakingPro is Pausable, Ownable2Step {
         if(amount == 0 && duration == 0) revert Errors.InvalidEmissionParameters();
 
         // ensure staking has not ended
-        uint256 endTime_ = endTime;
-        require(block.timestamp < endTime_, "Staking ended");
+        //uint256 endTime_ = endTime;
+        //require(block.timestamp < endTime_, "Staking ended");
 
         // close the books
-        (DataTypes.PoolAccounting memory pool_, ) = _updatePoolIndex();
+        //note: fill in the blanks
 
         // updated values: amount could be 0 
-        uint256 unemittedRewards = pool_.totalStakingRewards - pool_.rewardsEmitted;
-        unemittedRewards += amount;
-        require(unemittedRewards > 0, "Updated rewards: 0");
+        //uint256 unemittedRewards = pool_.totalStakingRewards - pool_.rewardsEmitted;
+        //unemittedRewards += amount;
+        //require(unemittedRewards > 0, "Updated rewards: 0");
         
         // updated values: duration could be 0
-        uint256 newDurationLeft = endTime_ + duration - block.timestamp;
-        require(newDurationLeft > 0, "Updated duration: 0");
+        //uint256 newDurationLeft = endTime_ + duration - block.timestamp;
+        //require(newDurationLeft > 0, "Updated duration: 0");
         
         // recalc: eps, endTime
-        pool_.emissisonPerSecond = unemittedRewards / newDurationLeft;
-        require(pool_.emissisonPerSecond > 0, "Updated EPS: 0");
+        //pool_.emissisonPerSecond = unemittedRewards / newDurationLeft;
+        //require(pool_.emissisonPerSecond > 0, "Updated EPS: 0");
         
-        uint256 newEndTime = endTime_ + duration;
+        //uint256 newEndTime = endTime_ + duration;
 
         // update storage
-        pool = pool_;
-        endTime = newEndTime;
+        //note: fill in the blanks
 
-        emit DistributionUpdated(pool_.emissisonPerSecond, newEndTime);
+
+        //emit DistributionUpdated(pool_.emissisonPerSecond, newEndTime);
     }
 
 
@@ -1047,6 +1046,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @param onBehalfOf Recepient of tokens
      */
     function emergencyExit(bytes32 vaultId, address onBehalfOf) external whenStarted whenPaused onlyOwner {
+    /*  
         require(isFrozen, "Pool not frozen");
         require(vaultId > 0, "Invalid vaultId");
 
@@ -1092,11 +1092,12 @@ contract StakingPro is Pausable, Ownable2Step {
          */
 
         // update storage 
-        vaults[vaultId] = vault;
-        users[onBehalfOf][vaultId] = userInfo;
+        //vaults[vaultId] = vault;
+        //users[onBehalfOf][vaultId] = userInfo;
 
         // return principal stake
-        if(stakedTokens > 0) STAKED_TOKEN.safeTransfer(onBehalfOf, stakedTokens); 
+        //if(stakedTokens > 0) STAKED_TOKEN.safeTransfer(onBehalfOf, stakedTokens); 
+    
     }
 
 
@@ -1108,7 +1109,6 @@ contract StakingPro is Pausable, Ownable2Step {
      */
     function recoverERC20(address tokenAddress, address receiver, uint256 amount) external onlyOwner {
         require(tokenAddress != address(STAKED_TOKEN), "StakedToken: Not allowed");
-        require(tokenAddress != address(REWARD_TOKEN), "RewardToken: Not allowed");
 
         emit RecoveredTokens(tokenAddress, receiver, amount);
 

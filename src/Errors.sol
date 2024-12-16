@@ -42,4 +42,5 @@ library Errors {
     error NftAlreadyStaked(uint256 tokenId);
 
     error VaultCooldownInitiated();
+    error VaultEnded(bytes32 vaultId, uint256 endTime);
 }
