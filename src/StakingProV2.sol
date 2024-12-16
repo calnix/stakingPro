@@ -546,6 +546,25 @@ contract StakingPro is Pausable, Ownable2Step {
         // emit something
     }
 
+    function stakeRP(bytes32 vaultId, uint256 amount) external whenStarted whenNotPaused {
+        require(amount > 0, "Invalid amount"); 
+        require(vaultId > 0, "Invalid vaultId");
+        
+        // check if vault exists + cache vault & user's vault assets
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+
+        // check if vault has ended
+        if(vault.endTime <= block.timestamp) revert Errors.VaultMatured(vaultId);
+
+        // Update all distributions, their respective vault accounts, and user accounts for specified vault
+        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+
+
+
+    }
+
+    function stakeRP(vaultId, amount, expiry, signature) external whenStarted whenNotPaused {}
+
 
     /**
         add checks:
@@ -938,6 +957,162 @@ contract StakingPro is Pausable, Ownable2Step {
     ///@dev Generate a vaultId. keccak256 is cheaper than using a counter with a SSTORE, even accounting for eventual collision retries.
     function _generateVaultId(uint256 salt, address onBehalfOf) internal view returns (bytes32) {
         return bytes32(keccak256(abi.encode(onBehalfOf, block.timestamp, salt)));
+    }
+
+
+//-------------------------------pool management-------------------------------------------
+
+    /*//////////////////////////////////////////////////////////////
+                            POOL MANAGEMENT
+    //////////////////////////////////////////////////////////////*/
+
+
+    /**
+     * @notice To increase the duration of staking period and/or the rewards emitted
+     * @dev Can increase rewards, duration MAY be extended. cannot reduce.
+     * @param amount Amount of tokens by which to increase rewards. Accepts 0 value.
+     * @param duration Amount of seconds by which to increase duration. Accepts 0 value.
+     */
+    function updateEmission(uint256 amount, uint256 duration) external onlyOwner {
+        // either amount or duration could be 0; but not both
+        if(amount == 0 && duration == 0) revert Errors.InvalidEmissionParameters();
+
+        // ensure staking has not ended
+        uint256 endTime_ = endTime;
+        require(block.timestamp < endTime_, "Staking ended");
+
+        // close the books
+        (DataTypes.PoolAccounting memory pool_, ) = _updatePoolIndex();
+
+        // updated values: amount could be 0 
+        uint256 unemittedRewards = pool_.totalStakingRewards - pool_.rewardsEmitted;
+        unemittedRewards += amount;
+        require(unemittedRewards > 0, "Updated rewards: 0");
+        
+        // updated values: duration could be 0
+        uint256 newDurationLeft = endTime_ + duration - block.timestamp;
+        require(newDurationLeft > 0, "Updated duration: 0");
+        
+        // recalc: eps, endTime
+        pool_.emissisonPerSecond = unemittedRewards / newDurationLeft;
+        require(pool_.emissisonPerSecond > 0, "Updated EPS: 0");
+        
+        uint256 newEndTime = endTime_ + duration;
+
+        // update storage
+        pool = pool_;
+        endTime = newEndTime;
+
+        emit DistributionUpdated(pool_.emissisonPerSecond, newEndTime);
+    }
+
+
+    /**
+     * @notice Pause pool
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @notice Unpause pool
+     */
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
+    /**
+     * @notice To freeze the pool in the event of something untoward occuring
+     * @dev Only callable from a paused state, affirming that staking should not resume
+     *      Nothing to be updated. Freeze as is.
+            Enables emergencyExit() to be called.
+     */
+    function freeze() external whenPaused onlyOwner {
+        require(isFrozen == false, "Pool is frozen");
+        
+        isFrozen = true;
+
+        emit PoolFrozen(block.timestamp);
+    }  
+
+
+    /*//////////////////////////////////////////////////////////////
+                                RECOVER
+    //////////////////////////////////////////////////////////////*/
+    
+    /**
+     * @notice For users to recover their principal assets in a black swan event
+     * @dev Rewards and fees are not withdrawn; indexes are not updated
+     * @param vaultId Address of token contract
+     * @param onBehalfOf Recepient of tokens
+     */
+    function emergencyExit(bytes32 vaultId, address onBehalfOf) external whenStarted whenPaused onlyOwner {
+        require(isFrozen, "Pool not frozen");
+        require(vaultId > 0, "Invalid vaultId");
+
+        // get vault + check if has been created
+       (DataTypes.UserInfo memory userInfo, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+
+        // check user has non-zero holdings
+        uint256 stakedNfts = userInfo.tokenIds.length;
+        uint256 stakedTokens = userInfo.stakedTokens;       
+        if(stakedNfts == 0 && stakedTokens == 0) revert Errors.UserHasNothingStaked(vaultId, onBehalfOf);
+       
+        // update balances: user + vault
+        if(stakedNfts > 0){
+
+            // record unstake with registry, else users cannot switch nfts to the new pool
+            NFT_REGISTRY.recordUnstake(onBehalfOf, userInfo.tokenIds, vaultId);
+            emit UnstakedMocaNft(onBehalfOf, vaultId, userInfo.tokenIds);       
+
+            // update vault and user
+            vault.stakedNfts -= stakedNfts;
+            delete userInfo.tokenIds;
+        }
+
+        if(stakedTokens > 0){
+
+            vault.stakedTokens -= stakedTokens;
+            delete userInfo.stakedTokens;
+            
+            // burn stkMOCA
+            //_burn(onBehalfOf, stakedTokens);
+
+            emit UnstakedMoca(onBehalfOf, vaultId, stakedTokens);       
+        }
+
+        /**
+            Note:
+            we do not zero out or decrement the following values: 
+                1. vault.allocPoints 
+                2. vault.multiplier
+                3. pool.totalAllocPoints
+            These values are retained to preserve state history at time of failure.
+            This can serve as useful reference during post-mortem and potentially assist with any remediative actions.
+         */
+
+        // update storage 
+        vaults[vaultId] = vault;
+        users[onBehalfOf][vaultId] = userInfo;
+
+        // return principal stake
+        if(stakedTokens > 0) STAKED_TOKEN.safeTransfer(onBehalfOf, stakedTokens); 
+    }
+
+
+    /**  NOTE: Consider dropping to avoid admin abuse
+     * @notice Recover random tokens accidentally sent to the vault
+     * @param tokenAddress Address of token contract
+     * @param receiver Recepient of tokens
+     * @param amount Amount to retrieve
+     */
+    function recoverERC20(address tokenAddress, address receiver, uint256 amount) external onlyOwner {
+        require(tokenAddress != address(STAKED_TOKEN), "StakedToken: Not allowed");
+        require(tokenAddress != address(REWARD_TOKEN), "RewardToken: Not allowed");
+
+        emit RecoveredTokens(tokenAddress, receiver, amount);
+
+        IERC20(tokenAddress).safeTransfer(receiver, amount);
     }
 
 
