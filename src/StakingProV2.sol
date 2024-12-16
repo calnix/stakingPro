@@ -496,6 +496,55 @@ contract StakingPro is Pausable, Ownable2Step {
         // emit
     }
 
+    function migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStarted whenNotPaused {
+        require(oldVaultId > 0, "Invalid vaultId");
+        require(newVaultId > 0, "Invalid vaultId");
+
+        // check if new vault ended/exists
+        DataTypes.Vault memory newVault = vaults[newVaultId];
+        if(vault.endTime <= block.timestamp) revert Errors.VaultMatured(vaultId);
+        if(vault.creator == address(0)) revert Errors.NonExistentVault(newVaultId);
+
+        // check if vault exists + cache vault & user's vault assets
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory oldVault) = _cache(oldVaultId, onBehalfOf);
+
+        // Update all distributions, their respective vault accounts, and user accounts for the old vault
+        _updateUserAccounts(onBehalfOf, oldVaultId, oldVault, userVaultAssets);
+        
+        //note: user may or may not have assets already staked in the new vault
+        // Update all distributions, their respective vault accounts, and user accounts for the new vault
+        _updateUserAccounts(onBehalfOf, newVaultId, newVault, userVaultAssets);
+
+        // increment new vault: base assets
+        newVault.stakedNfts += userVaultAssets.stakedNfts;
+        newVault.stakedTokens += userVaultAssets.stakedTokens;
+        newVault.stakedRealmPoints += userVaultAssets.stakedRealmPoints;
+        // update boost
+        newVault.totalBoostFactor += userVaultAssets.stakedNfts * NFT_MULTIPLIER;
+        newVault.boostedStakedTokens = (newVault.stakedTokens * newVault.totalBoostFactor) / 1e18; 
+        newVault.boostedRealmPoints = (newVault.stakedRealmPoints * newVault.totalBoostFactor) / 1e18; 
+
+
+        // decrement oldVault
+        oldVault.stakedNfts -= userVaultAssets.stakedNfts;
+        oldVault.stakedTokens -= userVaultAssets.stakedTokens;
+        oldVault.stakedRealmPoints -= userVaultAssets.stakedRealmPoints;
+        // update boost
+        oldVault.totalBoostFactor -= userVaultAssets.stakedNfts * NFT_MULTIPLIER;
+        oldVault.boostedStakedTokens = (oldVault.stakedTokens * oldVault.totalBoostFactor) / 1e18; 
+        oldVault.boostedRealmPoints = (oldVault.stakedRealmPoints * oldVault.totalBoostFactor) / 1e18; 
+
+        // NFT management
+            // record unstake with registry
+            NFT_REGISTRY.recordUnstake(onBehalfOf, userVaultAssets.tokenIds, oldVaultId);
+            emit UnstakedMocaNft(onBehalfOf, oldVaultId, userVaultAssets.tokenIds);       
+
+            // record stake with registry
+            NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, newVaultId);
+            emit StakedMocaNft(onBehalfOf, newVaultId, tokenIds);
+
+        // emit something
+    }
 
 
     /**
