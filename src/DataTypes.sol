@@ -9,12 +9,13 @@ contract DataTypes {
 
 
     struct Vault {
-        bytes32 vaultId;   // do i need?
+        //uint256 vaultId;   // do i need?
         address creator;
         uint256[] creationTokenIds;     // nfts staked for creation
 
         uint256 startTime;              // uint40
         uint256 endTime;                // cooldown ends at this time
+        uint256 removed;
 
         // fees: pct values, sum <= 50%
         // fee factors are expressed as w/ 1e18 precision

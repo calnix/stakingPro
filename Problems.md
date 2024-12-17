@@ -71,3 +71,38 @@ on 2dp base
 - 0.25%: 25
 - 0.05%: 5
 - 0.01%: 1
+
+3. explain the process of updating each vaultAccount and userAccount for a specific user's vault.
+
+```solidity
+        /**
+            user to stake in a specific vault
+            that vault must be updated and booked first
+            - update all active distributions
+            - update all vault accounts for specified vault [per distribution]
+            - update all user accounts for specified vault  [per distribution]
+            - book stake and update vault assets
+            - book stake 
+         */
+
+
+        // update all vault accounts for specified vault [per distribution]
+        // - update all active distributions: book prior rewards, based on prior alloc points
+        // - update all vault accounts for each active distribution 
+        // - update user's account
+
+```
+
+4. vaultId bytes32 -> uint256
+
+changed `vaultId` to uint256, to allow sequential looping
+
+this is to enable `updateNftMultiplier`.
+
+if we cannot loop through all the vaults in existence,
+revert to using vaultId as bytes32.
+
+5. endVaults and updateNftMultiplier
+
+both have odd internal fns requirements that don't fit with the rest.
+consider separate ones.
