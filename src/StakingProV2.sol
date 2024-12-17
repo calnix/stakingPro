@@ -43,9 +43,8 @@ contract StakingPro is Pausable, Ownable2Step {
     // creation nft requirement
     uint256 public creationNftsRequired = 5;
 
-    uint256 public NFT_MULTIPLIER = 0.1 * 1e18; // 0.1 * 1e18 = 10%
-
-    uint256 public PERCENTAGE_BASE = 100;   // fee factors expressed in integer form; no decimals
+    uint256 public NFT_MULTIPLIER;             // 10% = 1000/10_000 = 1000/PERCENTAGE_BASE 
+    uint256 public constant PRECISION_BASE = 10_000;   // feeFactors & nft multiplier expressed in 2dp precision (XX.yy%)
 
     uint256 public COOLDOWN_PERIOD = 7 days;
     
@@ -148,15 +147,16 @@ contract StakingPro is Pausable, Ownable2Step {
 
         //note: MOCA stakers must receive ≥50% of all rewards
         uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
-        require(totalFeeFactor <= 50, "Cannot exceed 50%");
+        if(totalFeeFactor > 5000) revert Errors.TotalFeeFactorExceeded();     // 50% = 5000/10_000 = 5000/PRECISION_BASE
 
         // vaultId generation
         bytes32 vaultId;
         {
             uint256 salt = block.number - 1;
             vaultId = _generateVaultId(salt, onBehalfOf);
-            while (vaults[vaultId].vaultId != bytes32(0)) vaultId = _generateVaultId(--salt, onBehalfOf);      // If poolId exists, generate new random Id
+            while (vaults[vaultId].vaultId != bytes32(0)) vaultId = _generateVaultId(--salt, onBehalfOf);      // If vaultId exists, generate new random Id
         }
+
         // build vault
         DataTypes.Vault memory vault; 
             vault.vaultId = vaultId;
@@ -170,8 +170,8 @@ contract StakingPro is Pausable, Ownable2Step {
             vault.creatorFeeFactor = fees.creatorFeeFactor;
             vault.realmPointsFeeFactor = fees.realmPointsFeeFactor;
             
-            // boost factor: Initialize totalBoostFactor to 1e18 (100%)
-            vault.totalBoostFactor = 1e18;  // Base 100%
+            // boost factor: Initialize to 100%, "1"
+            vault.totalBoostFactor = PRECISION_BASE; 
 
         // update storage
         vaults[vaultId] = vault;
@@ -214,7 +214,7 @@ contract StakingPro is Pausable, Ownable2Step {
         _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
 
         // calc. boostedStakedTokens
-        uint256 incomingBoostedStakedTokens = (amount * vault.totalBoostFactor);
+        uint256 incomingBoostedStakedTokens = (amount * vault.totalBoostFactor) / PRECISION_BASE;
         
         // increment: vault
         vault.stakedTokens += amount;
@@ -267,18 +267,18 @@ contract StakingPro is Pausable, Ownable2Step {
         // update: vault's nfts 
         vault.stakedNfts += incomingNfts;
                
-        // update boost factor: each NFT adds 0.1 (10%) boost, so for N NFTs, add N * 0.1 to the boost factor
+        // update boost factor: 
         uint256 boostFactorDelta = incomingNfts * NFT_MULTIPLIER;
-        vault.totalBoostFactor += boostFactorDelta;     // totalBoostFactor is expressed as 1.XXX; in 1e18 precision
+        vault.totalBoostFactor += boostFactorDelta;     // totalBoostFactor begins frm PRECISION_BASE -> expressed as 1.XXX; 
 
         // recalc. boosted balances with new boost factor 
-        if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / 1e18;            
-        if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / 1e18;
+        if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;            
+        if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;
 
         // update: user's tokenIds + boostedBalances
         userVaultAssets.tokenIds = _concatArrays(userVaultAssets.tokenIds, tokenIds);   //note: what does concat an empty arr do -- on first instance?
-        userVaultAssets.boostedStakedTokens = (userVaultAssets.stakedTokens * vault.totalBoostFactor) / 1e18;  
-        userVaultAssets.boostedRealmPoints = (userVaultAssets.stakedRealmPoints * vault.totalBoostFactor) / 1e18;
+        userVaultAssets.boostedStakedTokens = (userVaultAssets.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;  
+        userVaultAssets.boostedRealmPoints = (userVaultAssets.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;
 
         // update storage: mappings 
         vaults[vaultId] = vault;
@@ -418,8 +418,8 @@ contract StakingPro is Pausable, Ownable2Step {
             vault.totalBoostFactor -= boostFactorDelta;
 
             // update vault boosted balances w/ new boost factor 
-            if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / 1e18;            
-            if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / 1e18;
+            if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;            
+            if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;
         }
 
         // update storage: mappings 
@@ -447,11 +447,11 @@ contract StakingPro is Pausable, Ownable2Step {
         if(vault.creator != onBehalfOf) revert Errors.UserIsNotVaultCreator(vaultId, onBehalfOf);
         
         // incoming creatorFeeFactor must be lower than current
-        if(fees.creatorFeeFactor < vault.creatorFeeFactor) revert Errors.CreatorFeeCanOnlyBeDecreased(vaultId);
+        if(fees.creatorFeeFactor > vault.creatorFeeFactor) revert Errors.CreatorFeeCanOnlyBeDecreased(vaultId);
         
         // new fee compositions must total to 100%
         uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
-        require(totalFeeFactor <= 50, "Total fees cannot exceed 50%");
+        if(totalFeeFactor > 5000) revert Errors.TotalFeeFactorExceeded();     // 50% = 5000/10_000 = 5000/PRECISION_BASE
 
         // update fees
         vault.nftFeeFactor = fees.nftFeeFactor;
@@ -522,8 +522,8 @@ contract StakingPro is Pausable, Ownable2Step {
         newVault.stakedRealmPoints += userVaultAssets.stakedRealmPoints;
         // update boost
         newVault.totalBoostFactor += userVaultAssets.tokenIds.length * NFT_MULTIPLIER;
-        newVault.boostedStakedTokens = (newVault.stakedTokens * newVault.totalBoostFactor) / 1e18; 
-        newVault.boostedRealmPoints = (newVault.stakedRealmPoints * newVault.totalBoostFactor) / 1e18; 
+        newVault.boostedStakedTokens = (newVault.stakedTokens * newVault.totalBoostFactor) / PRECISION_BASE; 
+        newVault.boostedRealmPoints = (newVault.stakedRealmPoints * newVault.totalBoostFactor) / PRECISION_BASE; 
 
 
         // decrement oldVault
@@ -532,8 +532,8 @@ contract StakingPro is Pausable, Ownable2Step {
         oldVault.stakedRealmPoints -= userVaultAssets.stakedRealmPoints;
         // update boost
         oldVault.totalBoostFactor -= userVaultAssets.tokenIds.length * NFT_MULTIPLIER;
-        oldVault.boostedStakedTokens = (oldVault.stakedTokens * oldVault.totalBoostFactor) / 1e18; 
-        oldVault.boostedRealmPoints = (oldVault.stakedRealmPoints * oldVault.totalBoostFactor) / 1e18; 
+        oldVault.boostedStakedTokens = (oldVault.stakedTokens * oldVault.totalBoostFactor) / PRECISION_BASE; 
+        oldVault.boostedRealmPoints = (oldVault.stakedRealmPoints * oldVault.totalBoostFactor) / PRECISION_BASE; 
 
         // NFT management
             // record unstake with registry
@@ -777,14 +777,14 @@ contract StakingPro is Pausable, Ownable2Step {
 
         // calc. creator fees
         if(vault.creatorFeeFactor > 0) {
-            accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / PERCENTAGE_BASE;
+            accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / PRECISION_BASE;
         }
 
         // nft fees accrued only if there were staked NFTs
         if(vault.stakedNfts > 0) {
             if(vault.nftFeeFactor > 0) {
 
-                accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / PERCENTAGE_BASE;
+                accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / PRECISION_BASE;
                 vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);              // nftIndex: rewardsAccPerNFT
             }
         }
@@ -792,7 +792,7 @@ contract StakingPro is Pausable, Ownable2Step {
         // rp fees accrued only if there were staked RP 
         if(vault.stakedRealmPoints > 0) {
             if(vault.realmPointsFeeFactor > 0) {
-                accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / PERCENTAGE_BASE;
+                accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / PRECISION_BASE;
 
                 // accRealmPointsFee is in reward token precision
                 uint256 stakedRealmPointsRebased = (vault.stakedRealmPoints * distribution.TOKEN_PRECISION) / 1E18;  

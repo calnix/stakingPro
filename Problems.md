@@ -15,7 +15,6 @@
 
 ----
 
-
 # Design considerations
 
 1. Decimal Precision
@@ -58,3 +57,17 @@ contract PrecisionConversion {
 
 }
 ```
+
+2. Decimal Precision for feeFactors and NFT multiplier [PRECISION_BASE]
+
+integer: 100
+2 dp   : 10000
+
+on 2dp base
+- 100% : 10_000
+- 50%  : 5000
+- 1%   : 100
+- 0.5% : 50
+- 0.25%: 25
+- 0.05%: 5
+- 0.01%: 1
