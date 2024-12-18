@@ -52,4 +52,6 @@ library Errors {
     error InvalidNewEndTime();
 
     error VaultHasNotYetEnded();
+
+    error InvalidSignature();
 }

@@ -11,18 +11,21 @@ import {SafeERC20, IERC20} from "openzeppelin-contracts/contracts/token/ERC20/ut
 import {Pausable} from "openzeppelin-contracts/contracts/utils/Pausable.sol";
 import {Ownable2Step, Ownable} from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
+import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
+
 // interfaces
 import {INftRegistry} from "./interfaces/INftRegistry.sol";
 import {IRewardsVault} from "./interfaces/IRewardsVault.sol";
 
-
-contract StakingPro is Pausable, Ownable2Step {
+contract StakingPro is EIP712, Pausable, Ownable2Step {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable STAKED_TOKEN;  
     INftRegistry public immutable NFT_REGISTRY;
     IRewardsVault public immutable REWARDS_VAULT;
-    
+    address public immutable STORED_SIGNER; // can this be immutable? 
+
     // period
     uint256 public immutable startTime; // can start arbitrarily after deployment
     uint256 public endTime;             // if we need to end 
@@ -66,6 +69,13 @@ contract StakingPro is Pausable, Ownable2Step {
     uint256 public totalDistributions;
     uint256 public completedDistributions;  // note: when does this get updated?
 
+    struct StakeRp {
+        address user;
+        uint256 vaultId;
+        uint256 amount;
+        uint256 expiry;
+    }
+
 //-------------------------------mappings--------------------------------------------
 
     /**
@@ -92,9 +102,13 @@ contract StakingPro is Pausable, Ownable2Step {
     // rewards accrued per user, per distribution
     mapping(address user => mapping(uint256 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) public userAccounts;
 
+    // replay attack: 1 is true, 0 is false
+    mapping(bytes32 sig => uint256 executed) public executedSignatures;
+
+
 //-------------------------------constructor------------------------------------------
 
-    constructor(address registry, address rewardsVault, uint256 startTime_, uint256 emissionPerSecond, address owner) payable Ownable(owner) {
+    constructor(address registry, address rewardsVault, uint256 startTime_, uint256 emissionPerSecond, address owner, string memory name, string memory version) payable EIP712(name, version) Ownable(owner) {
 
         // sanity check input data: time, period, rewards
         require(owner > address(0), "Zero address");
@@ -570,21 +584,52 @@ contract StakingPro is Pausable, Ownable2Step {
         // emit something
     }
 
-    function stakeRP(uint256 vaultId, uint256 amount) external whenStarted whenNotPaused {
+    // onboard RP
+    function stakeRP(uint256 vaultId, uint256 amount, uint256 expiry, bytes calldata signature) external whenStarted whenNotPaused {
         require(amount > 0, "Invalid amount"); 
-        require(vaultId > 0, "Invalid vaultId");
-        
-        // check if vault exists + cache vault & user's vault assets
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
+     
+        address onBehalfOf = msg.sender;
 
+        // check if vault exists + cache vault & user's vault assets
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
         // check if vault has ended
         if(vault.endTime <= block.timestamp) revert Errors.VaultEnded(vaultId, vault.endTime);
 
+
+        // verify signature
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(keccak256("StakeRp(address user,uint256 vaultId,uint256 amount,uint256 expiry)"), onBehalfOf, vaultId, amount, expiry)));
+        
+        address signer = ECDSA.recover(digest, signature);
+        if(signer != STORED_SIGNER) revert Errors.InvalidSignature(); 
+
+
         // Update all distributions, their respective vault accounts, and user accounts for specified vault
-        _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
+        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
 
+        // calc. boostedStakedRealmPoints
+        uint256 incomingBoostedStakedRealmPoints = (amount * vault.totalBoostFactor) / PRECISION_BASE;
 
+        // increment: vault
+        vault.stakedRealmPoints += amount;
+        vault.boostedRealmPoints += incomingBoostedStakedRealmPoints;
 
+        //increment: userVaultAssets
+        userVaultAssets.stakedRealmPoints += amount;
+        userVaultAssets.boostedRealmPoints += incomingBoostedStakedRealmPoints;
+
+        //increment: user global
+        //......
+        
+        
+        // update storage: mappings 
+        vaults[vaultId] = vault;
+        users[onBehalfOf][vaultId] = userVaultAssets;
+
+        // update storage: variables
+        totalStakedRealmPoints += amount;
+        totalBoostedRealmPoints += incomingBoostedStakedRealmPoints;
+
+        // emit StakedMoca(onBehalfOf, vaultId, amount);
     }
 
     //function stakeRP(vaultId, amount, expiry, signature) external whenStarted whenNotPaused {}
