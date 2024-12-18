@@ -347,7 +347,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // emit RewardsClaimed(vaultId, onBehalfOf, unclaimedRewards);
 
         // note: UPDATE fn : transfer rewards to user, from rewardsVault
-        REWARDS_VAULT.payRewards(onBehalfOf, unclaimedRewards);
+        REWARDS_VAULT.payRewards(distributionId, onBehalfOf, unclaimedRewards);
     }
 
     // unstake all: tokens, nfts, rp  | can unstake anytime

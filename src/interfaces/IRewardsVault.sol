@@ -7,7 +7,7 @@ interface IRewardsVault {
     function totalPaidRewards() external view returns(uint256);
     function totalVaultRewards() external view returns(uint256);
 
-    function payRewards(address to, uint256 amount) external;
+    function payRewards(uint256 distributionId, address to, uint256 amount) external;
 
     // onlyRole(MONEY_MANAGER_ROLE)
     function withdraw(address to, uint256 amount) external;
