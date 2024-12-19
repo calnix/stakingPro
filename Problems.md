@@ -9,7 +9,7 @@
     - staking power earned -> rp stakers get a fee; as per fee schedule
     - what about the component that is meant to go to moca token stakers
 
-4. Minimum of 50 RP for onboarding to contract
+4. Minimum of 100 RP for onboarding to contract
 
 5. Special NFTS
 

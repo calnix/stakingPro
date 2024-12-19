@@ -23,8 +23,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     IERC20 public immutable STAKED_TOKEN;  
     INftRegistry public immutable NFT_REGISTRY;
-    IRewardsVault public immutable REWARDS_VAULT;
     address public immutable STORED_SIGNER; // can this be immutable? 
+    
+    IRewardsVault public REWARDS_VAULT;
 
     // period
     uint256 public immutable startTime; // can start arbitrarily after deployment
@@ -39,13 +40,11 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     uint256 public totalBoostedRealmPoints;
     uint256 public totalBoostedStakedTokens;
 
-    // vaultCounter for Id
-    uint256 public numberOfVaults; // starts from 0
+    // vaultCounter for Id: starts from 0
+    uint256 public numberOfVaults;
 
     // pool emergency state
     bool public isFrozen;
-
-    //------- modifiables -------------
 
     uint256 public NFT_MULTIPLIER;                     // 10% = 1000/10_000 = 1000/PERCENTAGE_BASE 
     uint256 public constant PRECISION_BASE = 10_000;   // feeFactors & nft multiplier expressed in 2dp precision (XX.yy%)
@@ -108,38 +107,23 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
 //-------------------------------constructor------------------------------------------
 
-    constructor(address registry, address rewardsVault, uint256 startTime_, uint256 emissionPerSecond, address owner, string memory name, string memory version) payable EIP712(name, version) Ownable(owner) {
+    constructor(address registry, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
+        address owner, string memory name, string memory version) payable EIP712(name, version) Ownable(owner) {
 
         // sanity check input data: time, period, rewards
         require(owner > address(0), "Zero address");
-        require(emissionPerSecond > 0, "emissionPerSecond = 0");
         require(startTime_ > block.timestamp, "Invalid startTime");
 
         // interfaces: supporting contracts
         NFT_REGISTRY = INftRegistry(registry);              
-        REWARDS_VAULT = IRewardsVault(rewardsVault);    
 
-        // set startTime 
+        // set stakingPro startTime 
         startTime = startTime_;
 
-        // setup staking power
-        DataTypes.Distribution memory distribution = distributions[0]; 
-            // tokenAddr and chainId are intentionally left 0
-            distribution.TOKEN_PRECISION = 1e18;
-
-            distribution.startTime = startTime_;
-            distribution.endTime = type(uint256).max;
-            distribution.emissionPerSecond = emissionPerSecond;
-            
-            distribution.lastUpdateTimeStamp = startTime_;
-
-        distributions[0] = distribution;
-
-        // update vault tracking
-        activeDistributions.push();
-        ++ totalDistributions;
-
-        emit DistributionUpdated(0, distribution.startTime, distribution.endTime, distribution.emissionPerSecond);
+        // storage vars
+        NFT_MULTIPLIER = nftMultiplier;
+        CREATION_NFTS_REQUIRED = creationNftsRequired;
+        VAULT_COOLDOWN_DURATION = vaultCoolDownDuration;
     }
 
 
@@ -586,7 +570,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     // onboard RP
     function stakeRP(uint256 vaultId, uint256 amount, uint256 expiry, bytes calldata signature) external whenStarted whenNotPaused {
-        require(amount > 0, "Invalid amount"); 
+        if(amount < 100 ether) revert Errors.MinimumRpRequired();
+        if(expiry < block.timestamp) revert Errors.SignatureExpired();
      
         address onBehalfOf = msg.sender;
 
@@ -1033,60 +1018,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         emit CreationNftRequirementUpdated(oldAmount, newAmount);
     }
 
-    /** 
-     * @notice Updates the parameters of a distribution
-     * @dev Can modify startTime (if not started), endTime and emission rate
-     * @param distributionId ID of the distribution to update
-     * @param newStartTime New start time for the distribution. Must be > 0 and can only be modified if distribution hasn't started
-     * @param newEndTime New end time for the distribution. Must be > 0 and in the future
-     * @param newEmissionPerSecond New emission rate per second. Must be > 0
-     */
-    function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external onlyOwner {
-        // check if pool is frozen/paused/ended
-
-        // no non-zero inputs
-        if(newStartTime == 0 || newEndTime == 0 || newEmissionPerSecond == 0) revert Errors.InvalidEmissionParameters();
-
-        // get distribution
-        DataTypes.Distribution memory distribution = distributions[distributionId];
-
-        // is distribution ended? || okay if not started or started || staking Power: distribution.endTime = type(uint256).max;
-        if(distribution.endTime >= block.timestamp) revert Errors.DistributionEnded();
-        
-        // close the books: update distribution
-        _updateDistributionIndex(distribution);
-
-        // ---------------- modifications -------------------------
-
-        // startTime modification
-        if(newStartTime > 0) {
-            
-            // cannot update startTime once distribution has started
-            if(distribution.startTime >= block.timestamp) revert Errors.DistributionStarted();
-
-            distribution.startTime = newStartTime;
-        }
-        
-        // endTime modification
-        if(newEndTime > 0) {
-            
-            // cannot be in the past: wbt using < instead?
-            if(newEndTime <= block.timestamp) revert Errors.InvalidNewEndTime();
-
-            // can end earlier or later
-            distribution.endTime = newEndTime;
-        }
-
-        // emissionPerSecond modification 
-        if(newEmissionPerSecond > 0) distribution.emissionPerSecond = newEmissionPerSecond;
-
-        // ---------------- ------------- -------------------------
-
-        // update storage
-        distributions[distributionId] = distribution;
-
-        emit DistributionUpdated(distributionId, distribution.startTime, distribution.endTime, distribution.emissionPerSecond);
-    }
 
     //note: endVaults follows the same pattern. maybe make separate internal fns for these 2.
     function updateNftMultiplier(uint256 newMultiplier) external onlyOwner {
@@ -1136,9 +1067,130 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         VAULT_COOLDOWN_DURATION = newDuration;
     }
 
-    function setupDistribution() external onlyOwner {}
 
-    function stopDistribution() external onlyOwner {}
+    /**
+     * @notice Sets up a new token distribution schedule
+     * @dev Can only be called by contract owner. Distribution must not already exist.
+     * @param distributionId Unique identifier for this distribution
+     * @param startTime Timestamp when distribution begins, must be in the future
+     * @param endTime Timestamp when distribution ends
+     * @param emissionPerSecond Rate of token emissions per second
+     * @param tokenPrecision Decimal precision for the distributed token
+     * @custom:throws Errors.DistributionAlreadySetup if distribution with ID already exists
+     * @custom:emits DistributionUpdated when distribution is created
+     */
+    function setupDistribution(uint256 distributionId, uint256 startTime, uint256 endTime, uint256 emissionPerSecond, uint256 tokenPrecision) external onlyOwner {
+        require(emissionPerSecond > 0, "emissionPerSecond = 0");
+        require(tokenPrecision > 0, "tokenPrecision = 0");
+
+        require(startTime > block.timestamp, "Invalid startTime");
+        require(endTime > startTime, "Invalid endtime");
+
+        // only staking power can have indefinite endTime
+        if(distributionId > 0 && endTime == 0) revert Errors.InvalidEndTime();
+
+        DataTypes.Distribution memory distribution = distributions[distributionId]; 
+        
+        // check if fresh id
+        if(distribution.startTime > 0) revert Errors.DistributionAlreadySetup();
+            
+            distribution.distributionId = distributionId;
+            distribution.TOKEN_PRECISION = tokenPrecision;
+            
+            distribution.endTime = endTime;
+            distribution.startTime = startTime;
+            distribution.emissionPerSecond = emissionPerSecond;
+            
+            distribution.lastUpdateTimeStamp = startTime;
+
+        // update storage
+        distributions[distributionId] = distribution;
+
+        // update distribution tracking
+        activeDistributions.push(distributionId);
+        ++ totalDistributions;
+
+        emit DistributionCreated(distributionId, startTime, endTime, emissionPerSecond, tokenPrecision);
+    }
+
+    /** 
+     * @notice Updates the parameters of an existing distribution
+     * @dev Can modify:
+     *      - startTime (only if distribution hasn't started)
+     *      - endTime (can extend or shorten, must be >= block.timestamp)
+     *      - emission rate (can be modified at any time)
+     * @dev At least one parameter must be modified (non-zero)
+     * @param distributionId ID of the distribution to update
+     * @param newStartTime New start time for the distribution. Must be > block.timestamp if modified
+     * @param newEndTime New end time for the distribution. Must be >= block.timestamp if modified
+     * @param newEmissionPerSecond New emission rate per second. Must be > 0 if modified
+     * @custom:throws Errors.InvalidDistributionParameters if all parameters are 0
+     * @custom:throws Errors.DistributionEnded if distribution has already ended
+     * @custom:throws Errors.DistributionStarted if trying to modify start time after distribution started
+     * @custom:throws Errors.InvalidStartTime if new start time is not in the future
+     * @custom:throws Errors.InvalidEndTime if new end time is not in the future
+     * @custom:throws "Pool is frozen" if pool is in frozen state
+     * @custom:emits DistributionUpdated when distribution parameters are modified
+     */
+    function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external onlyOwner {
+        // check if pool is frozen/ended
+        require(!isFrozen, "Pool is frozen");
+
+        if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert Errors.InvalidDistributionParameters(); 
+
+        // get distribution
+        DataTypes.Distribution memory distribution = distributions[distributionId];
+
+        // is distribution ended? | okay if not started or started 
+        if(block.timestamp >= distribution.endTime) revert Errors.DistributionEnded();
+        
+        // close the books: update distribution
+        _updateDistributionIndex(distribution);
+
+        // ---------------- modifications -------------------------
+
+        // startTime modification
+        if(newStartTime > 0) {
+            
+            // cannot update startTime once distribution has started
+            if(distribution.startTime >= block.timestamp) revert Errors.DistributionStarted();
+            
+            // newStartTime must be a future time
+            if(newStartTime > block.timestamp) revert Errors.InvalidStartTime();
+
+            distribution.startTime = newStartTime;
+        }
+        
+        // endTime modification
+        if(newEndTime > 0) {
+            
+            // cannot be in the past
+            if(newEndTime < block.timestamp) revert Errors.InvalidEndTime();
+
+            // can modify to shorten or extend a distribution
+            // set endTime to block.timestamp to end it immediately
+            distribution.endTime = newEndTime;
+        }
+
+        // emissionPerSecond modification 
+        if(newEmissionPerSecond > 0) distribution.emissionPerSecond = newEmissionPerSecond;
+
+        // ---------------- ------------- -------------------------
+
+        // update storage
+        distributions[distributionId] = distribution;
+
+        emit DistributionUpdated(distributionId, distribution.startTime, distribution.endTime, distribution.emissionPerSecond);
+    }
+
+
+    function setRewardsVault(address newRewardsVault) external onlyOwner {
+        require(newRewardsVault != address(0), "Invalid address");
+
+        emit RewardsVaultSet(address(REWARDS_VAULT), newRewardsVault);
+        REWARDS_VAULT = IRewardsVault(newRewardsVault);    
+    }
+
 
 
 //------------------------------- risk ----------------------------------------------------

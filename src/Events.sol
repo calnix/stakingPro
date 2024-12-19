@@ -35,9 +35,13 @@ event RecoveredTokens(address indexed token, address indexed target, uint256 ind
 event PoolFrozen(uint256 indexed timestamp);
 
 event VaultStakingLimitIncreased(uint256 indexed vaultId, uint256 oldStakingLimit, uint256 indexed newStakingLimit);
+event VaultCooldownDurationUpdated(uint256 oldDuration, uint256 newDuration);
 
 event CreationNftRequirementUpdated(uint256 oldRequirement, uint256 newRequirement);
 
+event DistributionCreated(uint256 indexed distributionId, uint256 startTime, uint256 endTime, uint256 emissionPerSecond, uint256 tokenPrecision);
+event DistributionEnded(uint256 indexed distributionId, uint256 startTime, uint256 oriendTime);
 event DistributionUpdated(uint256 indexed distributionId, uint256 startTime, uint256 endTime, uint256 emissionPerSecond);
 
-event VaultCooldownDurationUpdated(uint256 oldDuration, uint256 newDuration);
+
+event RewardsVaultSet(address oldRewardsVault, address newRewardsVault);

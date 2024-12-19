@@ -30,7 +30,6 @@ library Errors {
     
     error NftStakingLimitExceeded(uint256 vaultId, uint256 currentNftAmount);
 
-    error InvalidEmissionParameters();
 
     error InsufficientRealmPoints(uint256 currentRealmPoints, uint256 requiredRealmPoints);
 
@@ -53,5 +52,17 @@ library Errors {
 
     error VaultHasNotYetEnded();
 
+    
+    // stakeRP
+    error MinimumRpRequired();
     error InvalidSignature();
+    error SignatureExpired();
+
+    // setupDistribution
+    error DistributionAlreadySetup();
+    error InvalidEndTime();
+    //update distribution
+    error InvalidStartTime();
+    error InvalidDistributionParameters();
+
 }

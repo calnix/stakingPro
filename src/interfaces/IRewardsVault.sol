@@ -2,6 +2,7 @@
 pragma solidity 0.8.24;
 
 interface IRewardsVault {
+    
     // state vars
     function pool() external view returns(address);
     function totalPaidRewards() external view returns(uint256);
