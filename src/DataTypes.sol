@@ -110,10 +110,8 @@ contract DataTypes {
     //////////////////////////////////////////////////////////////*/
         
     struct Distribution {
-        //uint256 poolId;
+        uint256 distributionId; //0 for staking power
 
-        uint256 chainId;    // dist. moca on base and on eth independently 
-        bytes32 tokenAddr;  // LZ: to account for non-evm addr
         uint256 TOKEN_PRECISION;
         
         uint256 endTime;
@@ -123,12 +121,6 @@ contract DataTypes {
         uint256 index;
         uint256 totalEmitted;
         uint256 lastUpdateTimeStamp;  
-
-        // for updating emissions: denominated in reward tokens
-        uint256 totalDeposited;       
-        uint256 totalWithdrawn;
-
-        //...claimed?
     }
 
 }

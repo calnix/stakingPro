@@ -747,7 +747,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         // select appropriate totalBoostedBalance based on distribution type
         // staked RP is the base of Staking power rewards | staked Moca is the base of token rewards
-        uint256 totalBoostedBalance = distribution.chainId == 0 ? totalBoostedRealmPoints : totalBoostedStakedTokens;
+        uint256 totalBoostedBalance = distribution.distributionId == 0 ? totalBoostedRealmPoints : totalBoostedStakedTokens;
         (nextDistributionIndex, currentTimestamp, emittedRewards) = _calculateDistributionIndex(distribution.index, distribution.emissionPerSecond, distribution.lastUpdateTimeStamp, totalBoostedBalance, distribution.TOKEN_PRECISION);
         
         if(nextDistributionIndex != distribution.index) {
@@ -835,7 +835,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         uint256 accRealmPointsFee;
 
         // STAKING POWER: staked realm points | TOKENS: staked moca tokens
-        uint256 boostedBalance = distribution.chainId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
+        uint256 boostedBalance = distribution.distributionId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
         uint256 totalBalanceRebased = (boostedBalance * distribution.TOKEN_PRECISION) / 1E18;  
         // note: rewards calc. in reward token precision
         totalAccRewards = _calculateRewards(totalBalanceRebased, distribution.index, vaultAccount.index);

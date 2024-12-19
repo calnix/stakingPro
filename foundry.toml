@@ -3,6 +3,11 @@ src = "src"
 out = "out"
 libs = ["lib"]
 
+remappings = [
+    '@layerzerolabs/oapp-evm/=lib/devtools/packages/oapp-evm/',
+    '@layerzerolabs/lz-evm-protocol-v2/=lib/layerzero-v2/packages/layerzero-v2/evm/protocol',
+]
+
 [rpc_endpoints]
     sepolia = "https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
     arbitrum_sepolia = "https://arb-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
