@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 import './Events.sol';
-import {Errors} from './Errors.sol';
+import './Errors.sol';
 import {DataTypes} from './DataTypes.sol';
 
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
@@ -23,7 +23,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     IERC20 public immutable STAKED_TOKEN;  
     INftRegistry public immutable NFT_REGISTRY;
-    address public immutable STORED_SIGNER; // can this be immutable? 
+    address public immutable STORED_SIGNER;                 // can this be immutable? 
     
     IRewardsVault public REWARDS_VAULT;
 
@@ -49,6 +49,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     // creation nft requirement
     uint256 public CREATION_NFTS_REQUIRED;
     uint256 public VAULT_COOLDOWN_DURATION;
+    uint256 public MINIMUM_REALMPOINTS_REQUIRED;
     
     //--------------------------------
 
@@ -67,7 +68,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     struct StakeRp {
         address user;
-        uint256 vaultId;
+        bytes32 vaultId;
         uint256 amount;
         uint256 expiry;
     }
@@ -86,9 +87,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     // just stick staking power as distributionId:0 => tokenData{uint256 chainId:0, bytes32 tokenAddr: 0,...}
     mapping(uint256 distributionId => DataTypes.Distribution distribution) public distributions;
 
-    // global tracking of user assets note:consider removal
-    //mapping(address user => DataTypes.User userGlobalAssets) public usersGlobal;
-
     // user's assets per vault
     mapping(address user => mapping(bytes32 vaultId => DataTypes.User userVaultAssets)) public users;
 
@@ -99,12 +97,12 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) public userAccounts;
 
     // replay attack: 1 is true, 0 is false
-    mapping(bytes32 sig => uint256 executed) public executedSignatures;
+    mapping(bytes32 signature => uint256 executed) public executedSignatures;
 
 
 //-------------------------------constructor------------------------------------------
 
-    constructor(address registry, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
+    constructor(address registry, IERC20 stakedToken, address storedSigner, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
         address owner, string memory name, string memory version) payable EIP712(name, version) Ownable(owner) {
 
         // sanity check input data: time, period, rewards
@@ -112,45 +110,57 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         require(startTime_ > block.timestamp, "Invalid startTime");
 
         // interfaces: supporting contracts
-        NFT_REGISTRY = INftRegistry(registry);              
+        NFT_REGISTRY = INftRegistry(registry);       
+        STAKED_TOKEN = stakedToken;
 
         // set stakingPro startTime 
         startTime = startTime_;
 
         // storage vars
+        STORED_SIGNER = storedSigner;
         NFT_MULTIPLIER = nftMultiplier;
         CREATION_NFTS_REQUIRED = creationNftsRequired;
         VAULT_COOLDOWN_DURATION = vaultCoolDownDuration;
+        MINIMUM_REALMPOINTS_REQUIRED = 100 ether;
     }
 
 
 //-------------------------------external---------------------------------------------
 
     /**
-      * @notice Creates empty vault
-      * @dev Nfts must be committed to create vault. Creation NFTs are locked to create vault
+     * @notice Creates a new vault for staking assets
+     * @dev NFTs must be committed to create a vault.
+     * @param tokenIds Array of NFT token IDs to commit for vault creation
+     * @param fees Fee configuration for the vault containing:
+     *            - nftFeeFactor: Percentage of rewards allocated to NFT stakers
+     *            - creatorFeeFactor: Percentage of rewards allocated to vault creator
+     *            - realmPointsFeeFactor: Percentage of rewards allocated to realm points
+     * @custom:requirements
+     * - Caller must own all NFTs being committed
+     * - NFTs must not be already staked in another vault
+     * - Number of NFTs must match CREATION_NFTS_REQUIRED
+     * - Total fee factors must not exceed 50% (5000/10000)
+     * - Contract must not be paused and staking must have started
+     * @custom:emits VaultCreated event with creator address and vault ID
      */
     function createVault(uint256[] calldata tokenIds, DataTypes.Fees calldata fees) external whenStarted whenNotPaused {
         address onBehalfOf = msg.sender;
 
-        // update poolIndex: book prior rewards, based on prior alloc points 
-        // _updateDistributionIndexes(); note: empty container. need to update?
-
         // must commit unstaked NFTs to create vaults: these do not count towards stakedNFTs
         uint256 incomingNfts = tokenIds.length;
-        if(incomingNfts != CREATION_NFTS_REQUIRED) revert Errors.IncorrectCreationNfts();
+        if(incomingNfts != CREATION_NFTS_REQUIRED) revert IncorrectCreationNfts();
         
         for (uint256 i; i < CREATION_NFTS_REQUIRED; i++) {
 
             (address owner, bytes32 nftVaultId) = NFT_REGISTRY.nfts(tokenIds[i]);   // note: add batch fn to registry to check ownership
             
-            if(owner != onBehalfOf) revert Errors.IncorrectNftOwner(tokenIds[i]);
-            if(nftVaultId != bytes32(0)) revert Errors.NftAlreadyStaked(tokenIds[i]);
+            if(owner != onBehalfOf) revert IncorrectNftOwner(tokenIds[i]);
+            if(nftVaultId != bytes32(0)) revert NftAlreadyStaked(tokenIds[i]);
         }
 
-        //note: MOCA stakers must receive ≥50% of all rewards
+        //note: MOCA stakers must receive at least 50% of rewards
         uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
-        if(totalFeeFactor > 5000) revert Errors.TotalFeeFactorExceeded();     // 50% = 5000/10_000 = 5000/PRECISION_BASE
+        if(totalFeeFactor > 5000) revert TotalFeeFactorExceeded();
 
         // vaultId generation
         bytes32 vaultId;
@@ -179,25 +189,31 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // update storage
         vaults[vaultId] = vault;
 
-        //emit VaultCreated(onBehalfOf, vaultId); 
+        emit VaultCreated(vaultId, onBehalfOf, fees.nftFeeFactor, fees.creatorFeeFactor, fees.realmPointsFeeFactor);
 
         // record NFT commitment on registry contract
-        //NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, vaultId);
+        NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, vaultId);
     }  
 
-    // no staking limits on staking assets
+    /**
+     * @notice Stakes tokens into a vault
+     * @dev No staking limits on staking assets
+     * @param vaultId The ID of the vault to stake into
+     * @param amount The amount of tokens to stake
+     * @custom:throws InvalidAmount if amount is 0
+     * @custom:throws InvalidVaultId if vaultId is 0
+     * @custom:emits StakedMoca when tokens are staked successfully
+     */
     function stakeTokens(bytes32 vaultId, uint256 amount) external whenStarted whenNotPaused {
-        require(amount > 0, "Invalid amount");
-        require(vaultId > 0, "Invalid vaultId");
+        if(amount == 0) revert InvalidAmount();
+        if(vaultId == 0) revert InvalidVaultId();
  
         address onBehalfOf = msg.sender;
 
-        // check if vault exists + cache vault & user's vault assets
+        // cache vault and user data, reverts if vault ended or does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
-     
-        // check if vault has ended
-        if(vault.endTime <= block.timestamp) revert Errors.VaultEnded(vaultId, vault.endTime);
-
+        
+        // Update vault and user accounting across all active reward distributions
         _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
 
         // calc. boostedStakedTokens
@@ -209,43 +225,42 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         //increment: userVaultAssets
         userVaultAssets.stakedTokens += amount;
-        userVaultAssets.boostedStakedTokens += incomingBoostedStakedTokens;
-
-        //increment: user global
-        //......
 
         // update storage: mappings 
         vaults[vaultId] = vault;
         users[onBehalfOf][vaultId] = userVaultAssets;
-
         // update storage: variables
         totalStakedTokens += amount;
         totalBoostedStakedTokens += incomingBoostedStakedTokens;
         
-        // emit StakedMoca(onBehalfOf, vaultId, amount);
+        emit StakedTokens(onBehalfOf, vaultId, amount);
 
         // grab MOCA
         STAKED_TOKEN.safeTransferFrom(onBehalfOf, address(this), amount);
     }
 
-    // no staking limits on staking assets
+    /**
+     * @notice Stakes NFTs into a vault
+     * @dev No staking limits on NFT assets. NFTs increase the boost factor for staked tokens and realm points.
+     * @param vaultId The ID of the vault to stake NFTs into
+     * @param onBehalfOf The address to stake NFTs on behalf of
+     * @param tokenIds Array of NFT token IDs to stake
+     * @custom:throws InvalidVaultId if vaultId is 0
+     * @custom:throws InvalidAmount if tokenIds array is empty
+     * @custom:emits StakedNfts when NFTs are staked successfully
+     * @custom:emits VaultMultiplierUpdated when vault's boosted balances are updated
+     */
     function stakeNfts(bytes32 vaultId, address onBehalfOf, uint256[] calldata tokenIds) external whenStarted whenNotPaused {
         uint256 incomingNfts = tokenIds.length;
 
-        require(incomingNfts > 0, "Invalid amount"); 
-        require(vaultId > 0, "Invalid vaultId");
+        if(vaultId == 0) revert InvalidVaultId();
+        if(incomingNfts == 0) revert InvalidAmount();
         
-        // check if vault exists + cache vault & user's vault assets
+        // cache vault and user data, reverts if vault ended or does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
 
-        // check if vault has ended
-        if(vault.endTime <= block.timestamp) revert Errors.VaultEnded(vaultId, vault.endTime);
-
-
-        // Update all distributions, their respective vault accounts, and user accounts for specified vault
+        // Update vault and user accounting across all active reward distributions
         _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
-
-        //if(endTime <= block.timestamp) --> note: what to do when pool has reached endTime and not extended?         
 
         // cache
         uint256 oldBoostedRealmPoints = vault.boostedRealmPoints;
@@ -264,8 +279,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         // update: user's tokenIds + boostedBalances
         userVaultAssets.tokenIds = _concatArrays(userVaultAssets.tokenIds, tokenIds);   //note: what does concat an empty arr do -- on first instance?
-        userVaultAssets.boostedStakedTokens = (userVaultAssets.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;  
-        userVaultAssets.boostedRealmPoints = (userVaultAssets.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;
 
         // update storage: mappings 
         vaults[vaultId] = vault;
@@ -276,194 +289,244 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         totalBoostedRealmPoints += (vault.boostedRealmPoints - oldBoostedRealmPoints);
         totalBoostedStakedTokens += (vault.boostedStakedTokens - oldBoostedStakedTokens);
 
-        emit StakedMocaNft(onBehalfOf, vaultId, tokenIds);
-        //emit VaultMultiplierUpdated(vaultId, oldMultiplier, vault.multiplier);
+        emit StakedNfts(onBehalfOf, vaultId, tokenIds);
+        emit VaultMultiplierUpdated(vaultId, oldBoostedStakedTokens, vault.boostedStakedTokens);
 
         // record stake with registry
-        //NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, vaultId);
+        NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, vaultId);
     }
 
-    // claim token rewards. not applicable to distributionId:0 
-    // users can only claim all reward types from 1 token type at once. 
-    function claimRewards(bytes32 vaultId, address onBehalfOf, uint256 distributionId) external whenStarted whenNotPaused {
-        require(vaultId > 0, "Invalid vaultId");
-        require(distributionId > 0, "N/A: Staking Power");
+    /**
+     * @notice Claims all pending rewards for a user from a specific vault and distribution
+     * @param vaultId The ID of the vault to claim rewards from
+     * @param distributionId The ID of the reward distribution to claim from
+     * @dev Updates vault and user accounting across all active distributions before claiming
+     * @dev Calculates and claims 4 types of rewards:
+     *      1. MOCA staking rewards
+     *      2. Realm Points staking rewards 
+     *      3. NFT staking rewards
+     *      4. Creator rewards (if caller is vault creator)
+     * @dev Not applicable to distributionId:0 which is the staking power distribution
+     * @custom:throws InvalidVaultId if vaultId is 0
+     * @custom:throws StakingPowerDistribution if distributionId is 0
+     * @custom:emits RewardsClaimed when rewards are successfully claimed
+     */
+    function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted whenNotPaused {
+        if(vaultId == 0) revert InvalidVaultId();
+        if(distributionId == 0) revert StakingPowerDistribution();
 
-        // check if vault exists + cache vault & user's vault assets
+        address onBehalfOf = msg.sender;
+
+        // cache vault and user data, reverts if vault ended or does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
 
-        // Update all distributions, their respective vault accounts, and user accounts for specified vault
+        // Update vault and user accounting across all active reward distributions
         _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
 
         //get accounts for specified distribution
         DataTypes.VaultAccount memory vaultAccount = vaultAccounts[vaultId][distributionId];
         DataTypes.UserAccount memory userAccount = userAccounts[onBehalfOf][vaultId][distributionId];
 
-        //note: does he have anything to claim?
-        // - RP, MOCA, NFTs could be staked at diff times       
 
         //------- calc. and update vault and user accounts --------
-
+        uint256 totalUnclaimedRewards;
+        
         // update balances: staking MOCA rewards
-        uint256 unclaimedRewards = userAccount.accStakingRewards - userAccount.claimedStakingRewards;
-        userAccount.claimedStakingRewards += unclaimedRewards;
-        vaultAccount.totalClaimedRewards += unclaimedRewards;
+        if (userAccount.accStakingRewards > userAccount.claimedStakingRewards) {
 
-        // update balances: staking RP rewards
-        uint256 unclaimedRpRewards = userAccount.accRealmPointsRewards - userAccount.claimedRealmPointsRewards;
-        userAccount.claimedRealmPointsRewards += unclaimedRpRewards;
-        vaultAccount.totalClaimedRewards += unclaimedRpRewards;
+            uint256 unclaimedRewards = userAccount.accStakingRewards - userAccount.claimedStakingRewards;
+            userAccount.claimedStakingRewards += unclaimedRewards;
+            vaultAccount.totalClaimedRewards += unclaimedRewards;
+
+            totalUnclaimedRewards += unclaimedRewards;
+        }
+
+        // update balances: staking RP rewards 
+        if (userAccount.accRealmPointsRewards > userAccount.claimedRealmPointsRewards) {
+
+            uint256 unclaimedRpRewards = userAccount.accRealmPointsRewards - userAccount.claimedRealmPointsRewards;
+            userAccount.claimedRealmPointsRewards += unclaimedRpRewards;
+            vaultAccount.totalClaimedRewards += unclaimedRpRewards;
+
+            totalUnclaimedRewards += unclaimedRpRewards;
+        }
 
         // update balances: staking NFT rewards
-        uint256 unclaimedNftRewards = userAccount.accNftStakingRewards - userAccount.claimedNftRewards;
-        userAccount.claimedNftRewards += unclaimedNftRewards;
-        vaultAccount.totalClaimedRewards += unclaimedNftRewards;
+        if (userAccount.accNftStakingRewards > userAccount.claimedNftRewards) {
 
-        //if creator
-        if(vault.creator == onBehalfOf){
+            uint256 unclaimedNftRewards = userAccount.accNftStakingRewards - userAccount.claimedNftRewards;
+            userAccount.claimedNftRewards += unclaimedNftRewards;
+            vaultAccount.totalClaimedRewards += unclaimedNftRewards;
+
+            totalUnclaimedRewards += unclaimedNftRewards;
+        }
+
+        // if creator
+        if (vault.creator == onBehalfOf) {
+
             uint256 unclaimedCreatorRewards = vaultAccount.accCreatorRewards - userAccount.claimedCreatorRewards;
             userAccount.claimedCreatorRewards += unclaimedCreatorRewards;
             vaultAccount.totalClaimedRewards += unclaimedCreatorRewards;
+            
+            totalUnclaimedRewards += unclaimedCreatorRewards;
         }
 
-        //------- ........................................... --------
+        // ---------------------------------------------------------------
 
-        //update storage: vault and user accounts
+        // update storage: vault and user accounts
         vaultAccounts[vaultId][distributionId] = vaultAccount;
         userAccounts[onBehalfOf][vaultId][distributionId] = userAccount;
 
-        // emit RewardsClaimed(vaultId, onBehalfOf, unclaimedRewards);
+        emit RewardsClaimed(vaultId, onBehalfOf, totalUnclaimedRewards);
 
-        // note: UPDATE fn : transfer rewards to user, from rewardsVault
-        REWARDS_VAULT.payRewards(distributionId, onBehalfOf, unclaimedRewards);
+        // transfer rewards to user, from rewardsVault
+        REWARDS_VAULT.payRewards(distributionId, onBehalfOf, totalUnclaimedRewards);
     }
 
-    // unstake all: tokens, nfts, rp  | can unstake anytime
-    // refactor to do vault updates at the end, accounting for nft boost delta | else double calcs
-    function unstakeAll(bytes32 vaultId, address onBehalfOf) external whenStarted whenNotPaused {
-        require(vaultId > 0, "Invalid vaultId");
+    /**
+     * @notice Unstakes all tokens and NFTs from a vault
+     * @dev Updates accounting, transfers tokens, and records NFT unstaking
+     * @param vaultId The ID of the vault to unstake from
+     * @custom:emits UnstakedTokens, UnstakedNfts
+     */
+    function unstakeAll(bytes32 vaultId) external whenStarted whenNotPaused {
+        if(vaultId == 0) revert InvalidVaultId();
 
-        // check if vault exists + cache vault & user's vault assets
+        address onBehalfOf = msg.sender;
+        
+        // cache vault and user data, reverts if vault ended or does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
 
-        // Update all distributions, their respective vault accounts, and user accounts for specified vault
+        // Update vault and user accounting across all active reward distributions
         _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
 
         // get user staked assets: old values for events
-        uint256 stakedTokens = userVaultAssets.stakedTokens;
-        uint256 stakedNfts = userVaultAssets.tokenIds.length;
-        uint256 stakedRealmPoints = userVaultAssets.stakedRealmPoints;
-
-        uint256 oldBoostedRealmPoints = userVaultAssets.boostedRealmPoints;
-        uint256 oldBoostedStakedTokens = userVaultAssets.boostedStakedTokens;
+        uint256 numOfNfts = userVaultAssets.tokenIds.length;
+        uint256 stakedTokens = userVaultAssets.stakedTokens;        
 
         // check if user has non-zero holdings
-        if(stakedTokens + stakedNfts + stakedRealmPoints == 0) revert Errors.UserHasNothingStaked(vaultId, onBehalfOf);
+        if(stakedTokens + numOfNfts == 0) revert UserHasNothingStaked(vaultId, onBehalfOf);
         
-        //update token balances: user + vault
+        // update tokens
         if(stakedTokens > 0){
 
-            // update stakedTokens
+            // calc. boosted values
+            uint256 userBoostedStakedTokens = (stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;
+
+            // update vault
             vault.stakedTokens -= stakedTokens;
-            vault.boostedStakedTokens -= userVaultAssets.boostedStakedTokens;
-
-            delete userVaultAssets.stakedTokens;
-            delete userVaultAssets.boostedStakedTokens;
-
-            emit UnstakedMoca(onBehalfOf, vaultId, stakedTokens);       
-        }
-
-        //update rp balances: user + vault
-        if(stakedRealmPoints > 0){
-
-            // update stakedTokens
-            vault.stakedRealmPoints -= stakedRealmPoints;
-            vault.boostedRealmPoints -= userVaultAssets.boostedRealmPoints;
-
-            delete userVaultAssets.stakedRealmPoints;
-            delete userVaultAssets.boostedRealmPoints;
+            vault.boostedStakedTokens -= userBoostedStakedTokens;
             
-            // record free realm points
-            userVaultAssets.realmPoints += stakedRealmPoints;
+            // update user
+            delete userVaultAssets.stakedTokens;
 
-            //emit UnstakedMoca(onBehalfOf, vaultId, stakedTokens);       
+            // update global
+            totalStakedTokens -= stakedTokens;
+            totalBoostedStakedTokens -= userBoostedStakedTokens;
+
+            emit UnstakedTokens(onBehalfOf, vaultId, stakedTokens);       
+
+            // return MOCA
+            STAKED_TOKEN.safeTransfer(onBehalfOf, stakedTokens);
         }
 
-        //note: update multiplier/boost for unstaking of nfts
-        if(stakedNfts > 0){
+        // update nfts
+        if(numOfNfts > 0){
 
             // record unstake with registry
-            //NFT_REGISTRY.recordUnstake(onBehalfOf, userVaultAssets.tokenIds, vaultId);
-            emit UnstakedMocaNft(onBehalfOf, vaultId, userVaultAssets.tokenIds);       
+            NFT_REGISTRY.recordUnstake(onBehalfOf, userVaultAssets.tokenIds, vaultId);
+            emit UnstakedNfts(onBehalfOf, vaultId, userVaultAssets.tokenIds);       
 
-            // update stakedNfts
-            vault.stakedNfts -= stakedNfts;            
+            // update user
             delete userVaultAssets.tokenIds;
 
-            // recalc. boosted values
-            uint256 boostFactorDelta = stakedNfts * NFT_MULTIPLIER;
-            vault.totalBoostFactor -= boostFactorDelta;
+            // update vault
+            vault.stakedNfts -= numOfNfts;            
+            vault.totalBoostFactor = vault.stakedNfts * NFT_MULTIPLIER;
 
-            // update vault boosted balances w/ new boost factor 
+            // recalc vault's boosted balances, based on remaining staked assets
             if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;            
             if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;
+
+            // update global
+            totalStakedNfts -= numOfNfts;
         }
 
         // update storage: mappings 
         vaults[vaultId] = vault;
         users[onBehalfOf][vaultId] = userVaultAssets;
-
-        // update storage: global variables 
-        totalStakedNfts -= stakedNfts;
-        totalBoostedRealmPoints -= oldBoostedRealmPoints;
-        totalBoostedStakedTokens -= oldBoostedStakedTokens;
     }
 
-    ///@notice Creator only allowed to reduce the creator fee factor, to increase the others 
-    function updateVaultFees(bytes32 vaultId, address onBehalfOf, DataTypes.Fees calldata fees) external whenStarted whenNotPaused {
-        require(vaultId > 0, "Invalid vaultId");
+    /**
+     * @notice Updates the fee structure for a vault
+     * @dev Only the vault creator can update fees
+     * @dev Creator can only decrease their creator fee factor
+     * @dev Total of all fees cannot exceed 50%
+     * @param vaultId The ID of the vault to update fees for
+     * @param fees The new fee structure to apply
+     * @custom:throws InvalidVaultId if vaultId is 0
+     * @custom:throws UserIsNotVaultCreator if caller is not the vault creator
+     * @custom:throws CreatorFeeCanOnlyBeDecreased if new creator fee is higher than current
+     * @custom:throws TotalFeeFactorExceeded if total of all fees exceeds 50%
+     * @custom:emits CreatorFeeFactorUpdated when creator fee is updated
+     * @custom:emits NftFeeFactorUpdated when NFT fee is updated
+     * @custom:emits RealmPointsFeeFactorUpdated when realm points fee is updated
+     */
+    function updateVaultFees(bytes32 vaultId, DataTypes.Fees calldata fees) external whenStarted whenNotPaused {
+        if(vaultId == 0) revert InvalidVaultId();
         
-        // check if vault exists + cache vault & user's vault assets
+        address onBehalfOf = msg.sender;
+
+        // cache vault and user data, reverts if vault ended or does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
 
-        // Update all distributions, their respective vault accounts, and user accounts for specified vault
-        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
-
-        // check vault: not ended + user must be creator 
-        if(vault.endTime <= block.timestamp) revert Errors.VaultEnded(vaultId, vault.endTime);
-        if(vault.creator != onBehalfOf) revert Errors.UserIsNotVaultCreator(vaultId, onBehalfOf);
+        // sanity check: user must be creator + incoming creatorFeeFactor must be lower than current
+        if(vault.creator != onBehalfOf) revert UserIsNotVaultCreator(vaultId, onBehalfOf);
+        if(fees.creatorFeeFactor > vault.creatorFeeFactor) revert CreatorFeeCanOnlyBeDecreased(vaultId);
         
-        // incoming creatorFeeFactor must be lower than current
-        if(fees.creatorFeeFactor > vault.creatorFeeFactor) revert Errors.CreatorFeeCanOnlyBeDecreased(vaultId);
-        
-        // new fee compositions must total to 100%
+        // sanity check: new fee compositions cannot exceed 50%
         uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
-        if(totalFeeFactor > 5000) revert Errors.TotalFeeFactorExceeded();     // 50% = 5000/10_000 = 5000/PRECISION_BASE
+        if(totalFeeFactor > 5000) revert TotalFeeFactorExceeded();     // 50% = 5000/10_000 = 5000/PRECISION_BASE
+
+        // Update vault and user accounting across all active reward distributions
+        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+                
+        // cache old fees for events
+        uint256 oldCreatorFeeFactor = vault.creatorFeeFactor;
+        uint256 oldNftFeeFactor = vault.nftFeeFactor;
+        uint256 oldRealmPointsFeeFactor = vault.realmPointsFeeFactor;
 
         // update fees
         vault.nftFeeFactor = fees.nftFeeFactor;
         vault.creatorFeeFactor = fees.creatorFeeFactor;
         vault.realmPointsFeeFactor = fees.realmPointsFeeFactor;
         
-        // update storage: mappings 
+        // update storage 
         vaults[vaultId] = vault;
 
-        // emit diff event
-        //emit CreatorFeeFactorUpdated(vaultId, vault.accounting.creatorFeeFactor, newCreatorFeeFactor);
+        // emit events for fee changes
+        emit CreatorFeeFactorUpdated(vaultId, oldCreatorFeeFactor, fees.creatorFeeFactor);
+        emit NftFeeFactorUpdated(vaultId, oldNftFeeFactor, fees.nftFeeFactor);
+        emit RealmPointsFeeFactorUpdated(vaultId, oldRealmPointsFeeFactor, fees.realmPointsFeeFactor);
     }
 
-    // cooldown 
+    /**
+     * @notice Activates the cooldown period for a vault
+     * @dev If VAULT_COOLDOWN_DURATION is 0, vault is immediately removed from circulation
+     * @dev When removed, all vault's staked assets are deducted from global totals
+     * @param vaultId The ID of the vault to activate cooldown for
+     * @custom:throws InvalidVaultId if vaultId is 0
+     * @custom:emits VaultRemoved when vault is immediately removed (zero cooldown)
+     * @custom:emits VaultCooldownInitiated when cooldown period begins
+     */
     function activateCooldown(bytes32 vaultId) external whenStarted whenNotPaused {
-        require(vaultId > 0, "Invalid vaultId");
+        if(vaultId == 0) revert InvalidVaultId();
 
-        // check if vault exists + cache vault & user's vault assets
+        // cache vault and user data, reverts if vault ended or does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
-        // Update all distributions, their respective vault accounts, and user accounts for specified vault
+        // Update vault and user accounting across all active reward distributions
         _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
-
-        // is it ended?
-        if(vault.endTime > 0) revert Errors.VaultCooldownInitiated();
 
         // set endTime       
         vault.endTime = block.timestamp + VAULT_COOLDOWN_DURATION;
@@ -471,126 +534,202 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // if zero cooldown, remove vault from circulation immediately 
         if(VAULT_COOLDOWN_DURATION == 0) {
             
+            vault.removed = 1;
+
             // decrement state vars
-            
             totalStakedNfts -= vault.stakedNfts;
             totalStakedTokens -= vault.stakedTokens;
             totalStakedRealmPoints -= vault.stakedRealmPoints;
 
             totalBoostedRealmPoints -= vault.boostedRealmPoints;
             totalBoostedStakedTokens -= vault.boostedStakedTokens;
+
+            emit VaultRemoved(vaultId);
+
+        } else {
+            emit VaultCooldownInitiated(vaultId);
         }
 
-        // emit
+        // update storage
+        vaults[vaultId] = vault;
     }
 
-    // cooldown. note: may want to flip the loop order
-    // ch
+    // note: may want to flip the loop order
+    // REVIEW AFTER FINALIZING ALL INTERNAL FUNCTIONS
     function endVaults(bytes32[] calldata vaultIds) external whenStarted whenNotPaused {
         uint256 numOfVaults = vaultIds.length;
-        require(numOfVaults > 0, "Invalid array");
+        if(numOfVaults == 0) revert InvalidArray();
 
-        uint256 numOfDistributions = activeDistributions.length; // always >= 1; staking power
+        uint256 numOfDistributions = activeDistributions.length;
 
-        for(uint256 i; i < numOfVaults; ++i) {
+        // Track total assets to remove from global state
+        uint256 totalNftsToRemove;
+        uint256 totalTokensToRemove; 
+        uint256 totalRealmPointsToRemove;
+        uint256 totalBoostedTokensToRemove;
+        uint256 totalBoostedRealmPointsToRemove;
 
-            bytes32 vaultId = vaultIds[i];
-            DataTypes.Vault memory vault = vaults[vaultId];
+        // For each distribution
+        for(uint256 i; i < numOfDistributions; ++i) {
+            uint256 distributionId = activeDistributions[i];
+            DataTypes.Distribution memory distribution_ = distributions[distributionId];
 
-            // Update vault account for each active distribution
-            for(uint256 j; j < numOfDistributions; ++j) {
+            // Update distribution index first
+            DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_);
 
-                uint256 distributionId = activeDistributions[j];
-
-                DataTypes.Distribution memory distribution_ = distributions[distributionId];
+            // Then update all vault accounts for this distribution
+            for(uint256 j; j < numOfVaults; ++j) {
+                bytes32 vaultId = vaultIds[j];
+                DataTypes.Vault memory vault = vaults[vaultId];
                 DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
 
-                // returns memory structs
-                (DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateVaultAccount(vault, vaultAccount_, distribution_);
-
-                // Update storage
+                // Update vault account
+                (DataTypes.VaultAccount memory vaultAccount,) = _updateVaultAccount(vault, vaultAccount_, distribution);
                 vaultAccounts[vaultId][distributionId] = vaultAccount;
-                if(distribution.lastUpdateTimeStamp < distribution_.lastUpdateTimeStamp){
-                    distributions[distributionId] = distribution;
+
+                // Track assets to remove (only need to do this once per vault)
+                if(i == 0) {
+                    totalNftsToRemove += vault.stakedNfts;
+                    totalTokensToRemove += vault.stakedTokens;
+                    totalRealmPointsToRemove += vault.stakedRealmPoints;
+                    totalBoostedTokensToRemove += vault.boostedStakedTokens;
+                    totalBoostedRealmPointsToRemove += vault.boostedRealmPoints;
+
+                    // Mark vault as removed
+                    vault.removed = 1;
+                    vaults[vaultId] = vault;
                 }
+            }
+
+            // Update distribution storage if changed
+            if(distribution.lastUpdateTimeStamp > distribution_.lastUpdateTimeStamp) {
+                distributions[distributionId] = distribution;
             }
         }
 
-        // emit
+        // Update global state
+        totalStakedNfts -= totalNftsToRemove;
+        totalStakedTokens -= totalTokensToRemove;
+        totalStakedRealmPoints -= totalRealmPointsToRemove;
+        totalBoostedStakedTokens -= totalBoostedTokensToRemove;
+        totalBoostedRealmPoints -= totalBoostedRealmPointsToRemove;
 
+        // Emit event for each removed vault
+        for(uint256 i; i < numOfVaults; ++i) {
+            emit VaultRemoved(vaultIds[i]);
+        }
     }
 
+    /**
+     * @notice Migrates user's assets from one vault to another
+     * @dev Updates accounting for both vaults and user's assets, including NFT boost factors
+     * @param oldVaultId ID of the vault to migrate assets from
+     * @param newVaultId ID of the vault to migrate assets to
+     * @custom:throws InvalidVaultId if either vault ID is 0
+     * @custom:emits UnstakedNfts when NFTs are unstaked from old vault
+     * @custom:emits StakedNfts when NFTs are staked in new vault
+     * @custom:emits VaultMigrated when migration is complete
+     */
     function migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStarted whenNotPaused {
-        require(oldVaultId > 0, "Invalid vaultId");
-        require(newVaultId > 0, "Invalid vaultId");
+        if(oldVaultId == 0) revert InvalidVaultId();
+        if(newVaultId == 0) revert InvalidVaultId();
 
-        // check if new vault ended/exists
-        DataTypes.Vault memory newVault = vaults[newVaultId];
-        if(newVault.endTime <= block.timestamp) revert Errors.VaultEnded(newVaultId, newVault.endTime);
-        if(newVault.creator == address(0)) revert Errors.NonExistentVault(newVaultId);
+        // cache vault and user data for both vaults, reverts if either vault ended or does not exist
+        (DataTypes.User memory oldUserVaultAssets, DataTypes.Vault memory oldVault) = _cache(oldVaultId, msg.sender);
+        (DataTypes.User memory newUserVaultAssets, DataTypes.Vault memory newVault) = _cache(newVaultId, msg.sender);
 
-        // check if vault exists + cache vault & user's vault assets
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory oldVault) = _cache(oldVaultId, msg.sender);
-
-        // Update all distributions, their respective vault accounts, and user accounts for the old vault
-        _updateUserAccounts(msg.sender, oldVaultId, oldVault, userVaultAssets);
+        // oldVault: Update vault and user accounting across all active reward distributions
+        _updateUserAccounts(msg.sender, oldVaultId, oldVault, oldUserVaultAssets);
         
-        //note: user may or may not have assets already staked in the new vault
-        // Update all distributions, their respective vault accounts, and user accounts for the new vault
-        _updateUserAccounts(msg.sender, newVaultId, newVault, userVaultAssets);
+        // note: user may have assets already staked in the new vault
+        // newVault: Update vault and user accounting across all active reward distributions
+        _updateUserAccounts(msg.sender, newVaultId, newVault, newUserVaultAssets);
 
-        // increment new vault: base assets
-        newVault.stakedNfts += userVaultAssets.tokenIds.length;
-        newVault.stakedTokens += userVaultAssets.stakedTokens;
-        newVault.stakedRealmPoints += userVaultAssets.stakedRealmPoints;
+        // increment new vault: base assets (including existing assets)
+        newVault.stakedNfts += oldUserVaultAssets.tokenIds.length;
+        newVault.stakedTokens += oldUserVaultAssets.stakedTokens;
+        newVault.stakedRealmPoints += oldUserVaultAssets.stakedRealmPoints;
+        
         // update boost
-        newVault.totalBoostFactor += userVaultAssets.tokenIds.length * NFT_MULTIPLIER;
+        newVault.totalBoostFactor += oldUserVaultAssets.tokenIds.length * NFT_MULTIPLIER;
         newVault.boostedStakedTokens = (newVault.stakedTokens * newVault.totalBoostFactor) / PRECISION_BASE; 
         newVault.boostedRealmPoints = (newVault.stakedRealmPoints * newVault.totalBoostFactor) / PRECISION_BASE; 
 
-
         // decrement oldVault
-        oldVault.stakedNfts -= userVaultAssets.tokenIds.length;
-        oldVault.stakedTokens -= userVaultAssets.stakedTokens;
-        oldVault.stakedRealmPoints -= userVaultAssets.stakedRealmPoints;
+        oldVault.stakedNfts -= oldUserVaultAssets.tokenIds.length;
+        oldVault.stakedTokens -= oldUserVaultAssets.stakedTokens;
+        oldVault.stakedRealmPoints -= oldUserVaultAssets.stakedRealmPoints;
+        
         // update boost
-        oldVault.totalBoostFactor -= userVaultAssets.tokenIds.length * NFT_MULTIPLIER;
+        oldVault.totalBoostFactor -= oldUserVaultAssets.tokenIds.length * NFT_MULTIPLIER;
         oldVault.boostedStakedTokens = (oldVault.stakedTokens * oldVault.totalBoostFactor) / PRECISION_BASE; 
         oldVault.boostedRealmPoints = (oldVault.stakedRealmPoints * oldVault.totalBoostFactor) / PRECISION_BASE; 
 
         // NFT management
-            // record unstake with registry
-            //NFT_REGISTRY.recordUnstake(msg.sender, userVaultAssets.tokenIds, oldVaultId);
-            emit UnstakedMocaNft(msg.sender, oldVaultId, userVaultAssets.tokenIds);       
+        NFT_REGISTRY.recordUnstake(msg.sender, oldUserVaultAssets.tokenIds, oldVaultId);
+        emit UnstakedNfts(msg.sender, oldVaultId, oldUserVaultAssets.tokenIds);       
 
-            // record stake with registry
-            //NFT_REGISTRY.recordStake(msg.sender, userVaultAssets.tokenIds, newVaultId);
-            emit StakedMocaNft(msg.sender, newVaultId, userVaultAssets.tokenIds);
+        NFT_REGISTRY.recordStake(msg.sender, oldUserVaultAssets.tokenIds, newVaultId);
+        emit StakedNfts(msg.sender, newVaultId, oldUserVaultAssets.tokenIds);
 
-        // emit something
+        // Update new user assets: combine NFTs and add migrated assets
+        newUserVaultAssets.tokenIds = _concatArrays(newUserVaultAssets.tokenIds, oldUserVaultAssets.tokenIds);
+        newUserVaultAssets.stakedTokens += oldUserVaultAssets.stakedTokens;
+        newUserVaultAssets.stakedRealmPoints += oldUserVaultAssets.stakedRealmPoints;
+
+        // Update storage for both vaults
+        vaults[oldVaultId] = oldVault;
+        vaults[newVaultId] = newVault;
+
+        // Clear old user assets and update new user assets
+        delete users[msg.sender][oldVaultId];
+        users[msg.sender][newVaultId] = newUserVaultAssets;
+
+        // Update global boosted totals
+        totalBoostedStakedTokens = totalBoostedStakedTokens - oldVault.boostedStakedTokens + newVault.boostedStakedTokens;
+        totalBoostedRealmPoints = totalBoostedRealmPoints - oldVault.boostedRealmPoints + newVault.boostedRealmPoints;
+
+        // Emit migrated assets only (not including existing assets in new vault)
+        emit VaultMigrated(
+            msg.sender, 
+            oldVaultId, 
+            newVaultId,
+            oldUserVaultAssets.stakedTokens,  // Only migrated tokens
+            oldUserVaultAssets.stakedRealmPoints,  // Only migrated realm points
+            oldUserVaultAssets.tokenIds.length  // Only migrated NFTs
+        );
     }
 
-    // onboard RP
+    /**
+     * @notice Stakes realm points into a vault
+     * @dev Requires a valid signature from the stored signer to authorize the staking
+     * @param vaultId The ID of the vault to stake realm points into
+     * @param amount The amount of realm points to stake
+     * @param expiry The expiry timestamp for the signature
+     * @param signature The EIP712 signature authorizing the staking
+     * @custom:throws SignatureExpired if signature has expired
+     * @custom:throws MinimumRpRequired if amount is below MINIMUM_REALMPOINTS_REQUIRED
+     * @custom:throws InvalidSignature if signature is not from STORED_SIGNER
+     * @custom:emits StakedRealmPoints when realm points are successfully staked
+     */
     function stakeRP(bytes32 vaultId, uint256 amount, uint256 expiry, bytes calldata signature) external whenStarted whenNotPaused {
-        if(amount < 100 ether) revert Errors.MinimumRpRequired();
-        if(expiry < block.timestamp) revert Errors.SignatureExpired();
+        if(expiry < block.timestamp) revert SignatureExpired();
+        if(amount < MINIMUM_REALMPOINTS_REQUIRED) revert MinimumRpRequired();
      
         address onBehalfOf = msg.sender;
 
-        // check if vault exists + cache vault & user's vault assets
+        // cache vault and user data, reverts if vault ended or does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
-        // check if vault has ended
-        if(vault.endTime <= block.timestamp) revert Errors.VaultEnded(vaultId, vault.endTime);
-
 
         // verify signature
-        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(keccak256("StakeRp(address user,uint256 vaultId,uint256 amount,uint256 expiry)"), onBehalfOf, vaultId, amount, expiry)));
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
+            keccak256("StakeRp(address user,bytes32 vaultId,uint256 amount,uint256 expiry)"), 
+            onBehalfOf, vaultId, amount, expiry)));
         
         address signer = ECDSA.recover(digest, signature);
-        if(signer != STORED_SIGNER) revert Errors.InvalidSignature(); 
+        if(signer != STORED_SIGNER) revert InvalidSignature(); 
 
-
-        // Update all distributions, their respective vault accounts, and user accounts for specified vault
+        // Update vault and user accounting across all active reward distributions
         _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
 
         // calc. boostedStakedRealmPoints
@@ -602,11 +741,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         //increment: userVaultAssets
         userVaultAssets.stakedRealmPoints += amount;
-        userVaultAssets.boostedRealmPoints += incomingBoostedStakedRealmPoints;
-
-        //increment: user global
-        //......
-        
         
         // update storage: mappings 
         vaults[vaultId] = vault;
@@ -616,11 +750,11 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         totalStakedRealmPoints += amount;
         totalBoostedRealmPoints += incomingBoostedStakedRealmPoints;
 
-        // emit StakedMoca(onBehalfOf, vaultId, amount);
+        // Mark signature as used
+        executedSignatures[digest] = 1;
+
+        emit StakedRealmPoints(onBehalfOf, vaultId, amount, incomingBoostedStakedRealmPoints);
     }
-
-    //function stakeRP(vaultId, amount, expiry, signature) external whenStarted whenNotPaused {}
-
 
     /**
         add checks:
@@ -637,7 +771,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     // update all active distributions: book prior rewards, based on prior alloc points 
     function _updateDistributionIndexes() internal {
-        if(activeDistributions.length == 0) revert Errors.NoActiveDistributions(); // at least staking power should have been setup on deployment
+        if(activeDistributions.length == 0) revert NoActiveDistributions(); // at least staking power should have been setup on deployment
 
         uint256 numOfDistributions = activeDistributions.length;
 
@@ -968,18 +1102,20 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
 
-    ///@dev cache vault and user structs from storage to memory. checks that vault exists, else reverts.
+    ///@dev cache vault and user structs from storage to memory. checks that vault exists and hasn't ended, else reverts.
     function _cache(bytes32 vaultId, address onBehalfOf) internal view returns(DataTypes.User memory, DataTypes.Vault memory) {
         
         // ensure vault exists
         DataTypes.Vault memory vault = vaults[vaultId];
-        if(vault.creator == address(0)) revert Errors.NonExistentVault(vaultId);
+        if(vault.creator == address(0)) revert NonExistentVault(vaultId);
 
-        // get global and vault level user data
-        //DataTypes.User memory userGlobal = users[onBehalfOf];
+        // check if vault has ended
+        if(vault.endTime <= block.timestamp) revert VaultEnded(vaultId, vault.endTime);
+
+        // get vault level user data
         DataTypes.User memory userVaultAssets = users[onBehalfOf][vaultId];
 
-        return (/*userGlobal*/ userVaultAssets, vault);
+        return (userVaultAssets, vault);
     }
 
     ///@dev concat two uint256 arrays: [1,2,3],[4,5] -> [1,2,3,4,5]
@@ -1043,7 +1179,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         uint256 numOfVaults = vaultIds.length;
         require(numOfVaults > 0, "Invalid array");
 
-        if(numOfVaults != userAddresses.length) revert();
+        if(numOfVaults != userAddresses.length) revert InvalidArray();
 
         // for each vault
         for(uint256 i; i < numOfVaults; ++i) {
@@ -1052,7 +1188,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
             // get vault + ensure it exists
             DataTypes.Vault memory vault = vaults[vaultId];
-            if(vault.creator == address(0)) revert Errors.NonExistentVault(vaultId);
+            if(vault.creator == address(0)) revert NonExistentVault(vaultId);
 
             // decrement global totals before updating vault
             totalBoostedRealmPoints -= vault.boostedRealmPoints;
@@ -1072,8 +1208,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
                 // Fixed: Access the mapping correctly using the user's address and vaultId
                 DataTypes.User memory userVaultAssets = users[userAddress][vaultId];
 
-                userVaultAssets.boostedRealmPoints = (userVaultAssets.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;
-                userVaultAssets.boostedStakedTokens = (userVaultAssets.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;
+                //userVaultAssets.boostedRealmPoints = (userVaultAssets.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;
+                //userVaultAssets.boostedStakedTokens = (userVaultAssets.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;
 
                 // Don't forget to write back to storage
                 users[userAddress][vaultId] = userVaultAssets;
@@ -1133,6 +1269,22 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         emit CreationNftRequirementUpdated(oldAmount, newAmount);
     }
+    
+    /**
+     * @notice Updates the minimum realm points required for staking
+     * @dev Zero values are not accepted to prevent dust attacks
+     * @param newAmount The new minimum realm points required
+     * @custom:throws InvalidAmount if newAmount is zero
+     * @custom:emits MinimumRealmPointsUpdated when requirement is changed
+     */
+    function updateMinimumRealmPoints(uint256 newAmount) external onlyOwner {
+        if(newAmount == 0) revert InvalidAmount();
+        
+        uint256 oldAmount = MINIMUM_REALMPOINTS_REQUIRED;
+        MINIMUM_REALMPOINTS_REQUIRED = newAmount;
+
+        emit MinimumRealmPointsUpdated(oldAmount, newAmount);
+    }
 
     /**
      * @notice Updates the cooldown duration for vaults
@@ -1140,8 +1292,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @param newDuration The new cooldown duration to set
      */
     function updateVaultCooldown(uint256 newDuration) external onlyOwner {
-        // require contract not paused/ended
-
+        
         emit VaultCooldownDurationUpdated(VAULT_COOLDOWN_DURATION, newDuration);
         
         VAULT_COOLDOWN_DURATION = newDuration;
@@ -1151,37 +1302,47 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     /**
      * @notice Sets up a new token distribution schedule
      * @dev Can only be called by contract owner. Distribution must not already exist.
-     * @param distributionId Unique identifier for this distribution
-     * @param startTime Timestamp when distribution begins, must be in the future
-     * @param endTime Timestamp when distribution ends
-     * @param emissionPerSecond Rate of token emissions per second
-     * @param tokenPrecision Decimal precision for the distributed token
-     * @custom:throws Errors.DistributionAlreadySetup if distribution with ID already exists
-     * @custom:emits DistributionUpdated when distribution is created
+     * @dev Distribution ID 0 is reserved for staking power and is the only ID allowed to have indefinite endTime
+     * @param distributionId Unique identifier for this distribution (0 reserved for staking power)
+     * @param distributionStartTime Timestamp when distribution begins, must be in the future
+     * @param distributionEndTime Timestamp when distribution ends (0 allowed only for ID 0)
+     * @param emissionPerSecond Rate of token emissions per second (must be > 0)
+     * @param tokenPrecision Decimal precision for the distributed token (must be > 0)
+     * @custom:throws ZeroEmissionRate if emission rate is 0
+     * @custom:throws ZeroTokenPrecision if token precision is 0
+     * @custom:throws InvalidStartTime if start time is not in the future
+     * @custom:throws InvalidDistributionEndTime if end time is not after start time
+     * @custom:throws InvalidEndTime if non-zero ID has indefinite end time
+     * @custom:throws DistributionAlreadySetup if distribution with ID already exists
+     * @custom:emits DistributionCreated when distribution is successfully created
      */
-    function setupDistribution(uint256 distributionId, uint256 startTime, uint256 endTime, uint256 emissionPerSecond, uint256 tokenPrecision) external onlyOwner {
-        require(emissionPerSecond > 0, "emissionPerSecond = 0");
-        require(tokenPrecision > 0, "tokenPrecision = 0");
+    function setupDistribution(uint256 distributionId, uint256 distributionStartTime, uint256 distributionEndTime, uint256 emissionPerSecond, uint256 tokenPrecision) external onlyOwner {
+        if (emissionPerSecond == 0) revert ZeroEmissionRate();
+        if (tokenPrecision == 0) revert ZeroTokenPrecision();
 
-        require(startTime > block.timestamp, "Invalid startTime");
-        require(endTime > startTime, "Invalid endtime");
+        if (distributionStartTime <= block.timestamp) revert InvalidStartTime();
+        if (distributionEndTime <= distributionStartTime) revert InvalidDistributionEndTime();
 
         // only staking power can have indefinite endTime
-        if(distributionId > 0 && endTime == 0) revert Errors.InvalidEndTime();
+        if(distributionId > 0 && distributionEndTime == 0) revert InvalidEndTime();
 
-        DataTypes.Distribution memory distribution = distributions[distributionId]; 
+        // lazy load startTime, instead of entire struct
+        DataTypes.Distribution storage distributionPointer = distributions[distributionId]; 
         
         // check if fresh id
-        if(distribution.startTime > 0) revert Errors.DistributionAlreadySetup();
+        if(distributionPointer.startTime > 0) revert DistributionAlreadySetup();
             
-            distribution.distributionId = distributionId;
-            distribution.TOKEN_PRECISION = tokenPrecision;
-            
-            distribution.endTime = endTime;
-            distribution.startTime = startTime;
-            distribution.emissionPerSecond = emissionPerSecond;
-            
-            distribution.lastUpdateTimeStamp = startTime;
+        // Initialize struct
+        DataTypes.Distribution memory distribution = DataTypes.Distribution({
+            distributionId: distributionId,
+            TOKEN_PRECISION: tokenPrecision,
+            endTime: distributionEndTime,
+            startTime: distributionStartTime,
+            emissionPerSecond: emissionPerSecond,
+            index: 0,                    // Initialize explicitly
+            totalEmitted: 0,            // Initialize explicitly
+            lastUpdateTimeStamp: distributionStartTime
+        });
 
         // update storage
         distributions[distributionId] = distribution;
@@ -1190,74 +1351,72 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         activeDistributions.push(distributionId);
         ++ totalDistributions;
 
-        emit DistributionCreated(distributionId, startTime, endTime, emissionPerSecond, tokenPrecision);
+        emit DistributionCreated(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision);
     }
 
     /** 
      * @notice Updates the parameters of an existing distribution
      * @dev Can modify:
      *      - startTime (only if distribution hasn't started)
-     *      - endTime (can extend or shorten, must be >= block.timestamp)
+     *      - endTime (can extend or shorten, must be > block.timestamp)
      *      - emission rate (can be modified at any time)
      * @dev At least one parameter must be modified (non-zero)
      * @param distributionId ID of the distribution to update
      * @param newStartTime New start time for the distribution. Must be > block.timestamp if modified
-     * @param newEndTime New end time for the distribution. Must be >= block.timestamp if modified
+     * @param newEndTime New end time for the distribution. Must be > block.timestamp if modified
      * @param newEmissionPerSecond New emission rate per second. Must be > 0 if modified
-     * @custom:throws Errors.InvalidDistributionParameters if all parameters are 0
-     * @custom:throws Errors.DistributionEnded if distribution has already ended
-     * @custom:throws Errors.DistributionStarted if trying to modify start time after distribution started
-     * @custom:throws Errors.InvalidStartTime if new start time is not in the future
-     * @custom:throws Errors.InvalidEndTime if new end time is not in the future
-     * @custom:throws "Pool is frozen" if pool is in frozen state
+     * @custom:throws InvalidDistributionParameters if all parameters are 0
+     * @custom:throws NonExistentDistribution if distribution doesn't exist
+     * @custom:throws DistributionEnded if distribution has already ended
+     * @custom:throws DistributionStarted if trying to modify start time after distribution started
+     * @custom:throws InvalidStartTime if new start time is not in the future
+     * @custom:throws InvalidEndTime if new end time is not in the future
+     * @custom:throws InvalidDistributionEndTime if new end time is not after start time
      * @custom:emits DistributionUpdated when distribution parameters are modified
      */
-    function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external onlyOwner {
-        // check if pool is frozen/ended
-        require(!isFrozen, "Pool is frozen");
+    function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external onlyOwner whenNotPaused {
 
-        if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert Errors.InvalidDistributionParameters(); 
+        if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert InvalidDistributionParameters(); 
 
-        // get distribution
         DataTypes.Distribution memory distribution = distributions[distributionId];
-
-        // is distribution ended? | okay if not started or started 
-        if(block.timestamp >= distribution.endTime) revert Errors.DistributionEnded();
         
-        // close the books: update distribution
-        _updateDistributionIndex(distribution);
+        // Check distribution exists
+        if(distribution.startTime == 0) revert NonExistentDistribution();
 
-        // ---------------- modifications -------------------------
+        if(block.timestamp >= distribution.endTime) revert DistributionEnded();
+        
+        _updateDistributionIndex(distribution);
 
         // startTime modification
         if(newStartTime > 0) {
-            
-            // cannot update startTime once distribution has started
-            if(distribution.startTime >= block.timestamp) revert Errors.DistributionStarted();
+            // Cannot update if distribution has already started
+            if(block.timestamp >= distribution.startTime) revert DistributionStarted();
             
             // newStartTime must be a future time
-            if(newStartTime > block.timestamp) revert Errors.InvalidStartTime();
+            if(newStartTime <= block.timestamp) revert InvalidStartTime();
 
             distribution.startTime = newStartTime;
         }
         
         // endTime modification
         if(newEndTime > 0) {
-            
-            // cannot be in the past
-            if(newEndTime < block.timestamp) revert Errors.InvalidEndTime();
 
-            // can modify to shorten or extend a distribution
-            // set endTime to block.timestamp to end it immediately
+            // cannot be in the past
+            if(newEndTime < block.timestamp) revert InvalidEndTime();
+
+            // If only endTime is being updated, ensure it's after existing startTime
+            if(newStartTime == 0 && newEndTime <= distribution.startTime) revert InvalidDistributionEndTime();
+            
+            // If both times are being updated, ensure end is after start
+            if(newStartTime > 0 && newEndTime <= newStartTime) revert InvalidDistributionEndTime();
+
+            // update endTime
             distribution.endTime = newEndTime;
         }
 
         // emissionPerSecond modification 
         if(newEmissionPerSecond > 0) distribution.emissionPerSecond = newEmissionPerSecond;
 
-        // ---------------- ------------- -------------------------
-
-        // update storage
         distributions[distributionId] = distribution;
 
         emit DistributionUpdated(distributionId, distribution.startTime, distribution.endTime, distribution.emissionPerSecond);
@@ -1265,14 +1424,35 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
 
     /**
-     * @notice Updates the rewards vault address
-     * @dev Only callable by owner
-     * @param newRewardsVault The address of the new rewards vault contract
-     * @custom:throws If newRewardsVault is zero address
-     * @custom:emits RewardsVaultSet event with old and new vault addresses
+     * @notice Immediately ends a distribution
+     * @param distributionId ID of the distribution to end
+     * @custom:throws NonExistentDistribution if distribution doesn't exist
+     * @custom:throws DistributionEnded if distribution has already ended
+     * @custom:emits DistributionUpdated when distribution is ended
      */
-    function setRewardsVault(address newRewardsVault) external onlyOwner {
-        require(newRewardsVault != address(0), "Invalid address");
+    function endDistributionImmediately(uint256 distributionId) external onlyOwner whenNotPaused {
+        DataTypes.Distribution memory distribution = distributions[distributionId];
+        
+        if(distribution.startTime == 0) revert NonExistentDistribution();
+        if(block.timestamp >= distribution.endTime) revert DistributionEnded();
+        
+        _updateDistributionIndex(distribution);
+        
+        distribution.endTime = block.timestamp;
+        distributions[distributionId] = distribution;
+
+        emit DistributionUpdated(distributionId, distribution.startTime, distribution.endTime, distribution.emissionPerSecond);
+    }
+
+    /**
+     * @notice Updates the rewards vault address
+     * @dev Only callable by owner when contract is not paused
+     * @param newRewardsVault The address of the new rewards vault contract
+     * @custom:throws InvalidAddress if newRewardsVault is zero address
+     * @custom:emits RewardsVaultSet when vault address is updated
+     */
+    function setRewardsVault(address newRewardsVault) external onlyOwner whenNotPaused {
+        if(newRewardsVault == address(0)) revert InvalidAddress();       //note: what about setting to 0 to disable the rewards vault?
 
         emit RewardsVaultSet(address(REWARDS_VAULT), newRewardsVault);
         REWARDS_VAULT = IRewardsVault(newRewardsVault);    
@@ -1333,7 +1513,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // check user has non-zero holdings
         uint256 stakedNfts = userInfo.tokenIds.length;
         uint256 stakedTokens = userInfo.stakedTokens;       
-        if(stakedNfts == 0 && stakedTokens == 0) revert Errors.UserHasNothingStaked(vaultId, onBehalfOf);
+        if(stakedNfts == 0 && stakedTokens == 0) revert UserHasNothingStaked(vaultId, onBehalfOf);
        
         // update balances: user + vault
         if(stakedNfts > 0){

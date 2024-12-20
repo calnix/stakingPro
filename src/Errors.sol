@@ -1,68 +1,55 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/**
- * @title Errors library
- * @author Calnix
- * @notice Defines the error messages emitted by the different contracts of the Moca protocol
- */
+// generic (used across multiple functions)
+error InvalidVaultId();
+error InvalidAmount();
+error InvalidAddress();
+error InvalidArray();
 
-library Errors {
+// _cache
+error NonExistentVault(bytes32 vaultId);
+error VaultEnded(bytes32 vaultId, uint256 endTime);
 
-    error Test(uint256 counter);
-    
-    error InvalidVaultPeriod();
-    error InvalidStakingPeriod();
-    //error InsufficientTimeLeft();
+// createVault
+error IncorrectCreationNfts();
+error IncorrectNftOwner(uint256 tokenId);
+error NftAlreadyStaked(uint256 tokenId);
+error TotalFeeFactorExceeded();
 
-    error NonExistentVault(bytes32 vaultId);
-    error UserIsNotVaultCreator(bytes32 vaultId, address user) ;
+// updateDistribution
+error InvalidDistributionParameters();
+error NonExistentDistribution();
+error DistributionEnded();
+error DistributionStarted();
+error InvalidStartTime();
+error InvalidEndTime();
+error InvalidDistributionEndTime();
 
-    error VaultNotMatured(bytes32 vaultId);
-    
-    error UserHasNoNftStaked(bytes32 vaultId, address user);
-    error UserHasNoTokenStaked(bytes32 vaultId, address user);
-    error UserHasNothingStaked(bytes32 vaultId, address user);
+// setupDistribution
+error ZeroEmissionRate();
+error ZeroTokenPrecision();
+error DistributionAlreadySetup();
 
-    error TotalFeeFactorExceeded();
-    error NftFeeCanOnlyBeIncreased(bytes32 vaultId);
-    error CreatorFeeCanOnlyBeDecreased(bytes32 vaultId);
-    
-    error NftStakingLimitExceeded(bytes32 vaultId, uint256 currentNftAmount);
+// claimRewards
+error StakingPowerDistribution();
 
+// unstakeAll
+error UserHasNothingStaked(bytes32 vaultId, address user);
 
-    error InsufficientRealmPoints(uint256 currentRealmPoints, uint256 requiredRealmPoints);
+// updateVaultFees
+error UserIsNotVaultCreator(bytes32 vaultId, address user);
+error NftFeeCanOnlyBeIncreased(bytes32 vaultId);
+error CreatorFeeCanOnlyBeDecreased(bytes32 vaultId);
 
-    error VaultHasZeroStakedTokens();
-    error VaultHasZeroStakedNfts();
+// stakeRealmPoints
+error MinimumRpRequired();
+error SignatureExpired();
+error InvalidSignature();
+error InsufficientRealmPoints(uint256 currentRealmPoints, uint256 requiredRealmPoints);
 
-    error IncorrectCreationNfts();
-    error IncorrectNftOwner(uint256 tokenId);
-    error NftAlreadyStaked(uint256 tokenId);
-
-    error VaultCooldownInitiated();
-    error VaultEnded(bytes32 vaultId, uint256 endTime);
-
-    error NoActiveDistributions();
-
-    // updateDistribution
-    error DistributionEnded();
-    error DistributionStarted();
-    error InvalidNewEndTime();
-
-    error VaultHasNotYetEnded();
-
-    
-    // stakeRP
-    error MinimumRpRequired();
-    error InvalidSignature();
-    error SignatureExpired();
-
-    // setupDistribution
-    error DistributionAlreadySetup();
-    error InvalidEndTime();
-    //update distribution
-    error InvalidStartTime();
-    error InvalidDistributionParameters();
-
-}
+// cooldown
+error VaultNotMatured(bytes32 vaultId);
+ 
+// updateBoostedBalances
+error NoActiveDistributions();

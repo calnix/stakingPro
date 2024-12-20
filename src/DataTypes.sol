@@ -15,7 +15,7 @@ contract DataTypes {
 
         uint256 startTime;              // uint40
         uint256 endTime;                // cooldown ends at this time
-        uint256 removed;
+        uint256 removed;                // flag to indicate if vault has been removed
 
         // fees: pct values, sum <= 50%
         // fee factors are expressed as w/ 1e18 precision
@@ -78,8 +78,10 @@ contract DataTypes {
         uint256 stakedRealmPoints;
 
         // boosted balances 
-        uint256 boostedRealmPoints; //note: do i really need boosted balances?
-        uint256 boostedStakedTokens; // within a vault, users' split can be calculated on the base, since they all have the same boost effect         
+        //uint256 boostedRealmPoints; 
+        //uint256 boostedStakedTokens; // within a vault, users' split can be calculated on the base, since they all have the same boost effect         
+        //note: do i really need boosted balances?
+        // - if i do, i need to update each user's boosted balances when someone unstakes an nft from the vault
     }
 
     struct UserAccount {

@@ -1,47 +1,61 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-import {DataTypes} from './DataTypes.sol';
+// generic
+event PoolFrozen(uint256 timestamp);
+event RecoveredTokens(address indexed token, address indexed receiver, uint256 amount);
 
-event VaultCreated(address indexed creator, bytes32 indexed vaultId);
+// createVault
+event VaultCreated(
+    bytes32 indexed vaultId,
+    address indexed creator,
+    uint256 creatorFeeFactor,
+    uint256 nftFeeFactor,
+    uint256 realmPointsFeeFactor
+);
 
+// stakeTokens
+event StakedTokens(address indexed user, bytes32 indexed vaultId, uint256 amount);
 
-event VaultIndexUpdated(bytes32 indexed vaultId, uint256 indexed vaultIndex, uint256 indexed vaultAccruedRewards);
+// stakeNfts
+event StakedNfts(address indexed user, bytes32 indexed vaultId, uint256[] tokenIds);
+event VaultMultiplierUpdated(bytes32 indexed vaultId, uint256 oldBoostedStakedTokens, uint256 newBoostedStakedTokens);
+// stakeRP
+event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 amount, uint256 boostedAmount);
 
+// unstakeAll
+event UnstakedTokens(address indexed user, bytes32 indexed vaultId, uint256 amount);
+event UnstakedNfts(address indexed user, bytes32 indexed vaultId, uint256[] tokenIds);
 
-
-
-event PoolIndexUpdated(uint256 indexed lastUpdateTimestamp, uint256 indexed oldIndex, uint256 indexed newIndex);
-event VaultMultiplierUpdated(uint256 indexed vaultId, uint256 indexed oldMultiplier, uint256 indexed newMultiplier);
-
-event UserIndexesUpdated(address indexed user, uint256 indexed vaultId, uint256 userIndex, uint256 userNftIndex, uint256 userAccruedRewards);
-
-event StakedMoca(address indexed onBehalfOf, bytes32 indexed vaultId, uint256 amount);
-event StakedMocaNft(address indexed onBehalfOf, bytes32 indexed vaultId, uint256[] indexed tokenIds);
-event UnstakedMoca(address indexed onBehalfOf, bytes32 indexed vaultId, uint256 amount);
-event UnstakedMocaNft(address indexed onBehalfOf, bytes32 indexed vaultId, uint256[] indexed tokenIds);
-
-event RewardsAccrued(address indexed user, uint256 amount);
-event NftRewardsAccrued(address indexed user, uint256 amount);
-
+// claimRewards
 event RewardsClaimed(bytes32 indexed vaultId, address indexed user, uint256 amount);
-event NftRewardsClaimed(bytes32 indexed vaultId, address indexed creator, uint256 amount);
-event CreatorRewardsClaimed(bytes32 indexed vaultId, address indexed creator, uint256 amount);
 
-event CreatorFeeFactorUpdated(bytes32 indexed vaultId, uint256 indexed oldCreatorFeeFactor, uint256 indexed newCreatorFeeFactor);
-event NftFeeFactorUpdated(bytes32 indexed vaultId, uint256 indexed oldCreatorFeeFactor, uint256 indexed newCreatorFeeFactor);
+// updateFees
+event CreatorFeeFactorUpdated(bytes32 indexed vaultId, uint256 oldFactor, uint256 newFactor);
+event NftFeeFactorUpdated(bytes32 indexed vaultId, uint256 oldFactor, uint256 newFactor);
+event RealmPointsFeeFactorUpdated(bytes32 indexed vaultId, uint256 oldFactor, uint256 newFactor);
 
-event RecoveredTokens(address indexed token, address indexed target, uint256 indexed amount);
-event PoolFrozen(uint256 indexed timestamp);
+// vault management
+event VaultRemoved(bytes32 indexed vaultId);
+event VaultCooldownInitiated(bytes32 indexed vaultId);
 
-event VaultStakingLimitIncreased(bytes32 indexed vaultId, uint256 oldStakingLimit, uint256 indexed newStakingLimit);
-event VaultCooldownDurationUpdated(uint256 oldDuration, uint256 newDuration);
+// migrateVaults
+event VaultMigrated(
+    address indexed user,
+    bytes32 indexed oldVaultId,
+    bytes32 indexed newVaultId,
+    uint256 stakedTokens,
+    uint256 stakedRealmPoints,
+    uint256 numOfNfts
+);
 
-event CreationNftRequirementUpdated(uint256 oldRequirement, uint256 newRequirement);
-
+// distribution management
 event DistributionCreated(uint256 indexed distributionId, uint256 startTime, uint256 endTime, uint256 emissionPerSecond, uint256 tokenPrecision);
-event DistributionEnded(uint256 indexed distributionId, uint256 startTime, uint256 oriendTime);
 event DistributionUpdated(uint256 indexed distributionId, uint256 startTime, uint256 endTime, uint256 emissionPerSecond);
 
+// admin configuration
+event RewardsVaultSet(address indexed oldVault, address indexed newVault);
+event CreationNftRequirementUpdated(uint256 oldAmount, uint256 newAmount);
+event MinimumRealmPointsUpdated(uint256 oldAmount, uint256 newAmount);
+event VaultCooldownDurationUpdated(uint256 oldDuration, uint256 newDuration);
 
-event RewardsVaultSet(address oldRewardsVault, address newRewardsVault);
