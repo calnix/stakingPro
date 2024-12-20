@@ -38,7 +38,28 @@ This applied similarly to fee factors.
 
 # Owner functions
 
-## SetUp Distribution
+## updateNftMultiplier
+
+When all the vaults have been updated to use the latest `NFT_MULTIPLIER` value, totalBoostedStakedTokens and totalBoostedRealmPoints should match up.
+
+1. pause contract
+2. close all the books: distributions, vaultAccounts [updateAllVaultsAndAccounts]
+3. change multiplier
+4. totalBoosted values and vault boosted values are now different: update all vault and user Structs. [updateBoostedBalances]
+5. unpause
+
+## updateCreationNfts
+
+     * @notice Updates the number of NFTs required to create a vault
+     * @dev Zero values are accepted, allowing vault creation without NFT requirements
+
+## updateVaultCooldown
+
+     * @notice Updates the cooldown duration for vaults
+     * @dev Zero values are accepted. New duration can be less or more than current value
+
+
+## setupDistribution
 
 `setupDistribution(uint256 distributionId, uint256 startTime, uint256 endTime, uint256 emissionPerSecond, uint256 tokenPrecision)`
 
@@ -89,3 +110,7 @@ staking power will be identified by its distribution id as 0, throughout the con
 - can shorten/length distribution by modifying startTime and endTime
 - change emission per second of a distribution (increase, decrease, cannot make 0)
 
+## setRewardsVault
+
+- update the rewards vault address
+- allows us to deploy a new rewards vault contract w/ additional functionality, without affecting staking pro

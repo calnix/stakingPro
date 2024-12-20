@@ -15,20 +15,20 @@ library Errors {
     error InvalidStakingPeriod();
     //error InsufficientTimeLeft();
 
-    error NonExistentVault(uint256 vaultId);
-    error UserIsNotVaultCreator(uint256 vaultId, address user) ;
+    error NonExistentVault(bytes32 vaultId);
+    error UserIsNotVaultCreator(bytes32 vaultId, address user) ;
 
-    error VaultNotMatured(uint256 vaultId);
+    error VaultNotMatured(bytes32 vaultId);
     
-    error UserHasNoNftStaked(uint256 vaultId, address user);
-    error UserHasNoTokenStaked(uint256 vaultId, address user);
-    error UserHasNothingStaked(uint256 vaultId, address user);
+    error UserHasNoNftStaked(bytes32 vaultId, address user);
+    error UserHasNoTokenStaked(bytes32 vaultId, address user);
+    error UserHasNothingStaked(bytes32 vaultId, address user);
 
     error TotalFeeFactorExceeded();
-    error NftFeeCanOnlyBeIncreased(uint256 vaultId);
-    error CreatorFeeCanOnlyBeDecreased(uint256 vaultId);
+    error NftFeeCanOnlyBeIncreased(bytes32 vaultId);
+    error CreatorFeeCanOnlyBeDecreased(bytes32 vaultId);
     
-    error NftStakingLimitExceeded(uint256 vaultId, uint256 currentNftAmount);
+    error NftStakingLimitExceeded(bytes32 vaultId, uint256 currentNftAmount);
 
 
     error InsufficientRealmPoints(uint256 currentRealmPoints, uint256 requiredRealmPoints);
@@ -41,7 +41,7 @@ library Errors {
     error NftAlreadyStaked(uint256 tokenId);
 
     error VaultCooldownInitiated();
-    error VaultEnded(uint256 vaultId, uint256 endTime);
+    error VaultEnded(bytes32 vaultId, uint256 endTime);
 
     error NoActiveDistributions();
 

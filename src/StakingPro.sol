@@ -40,9 +40,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     uint256 public totalBoostedRealmPoints;
     uint256 public totalBoostedStakedTokens;
 
-    // vaultCounter for Id: starts from 0
-    uint256 public numberOfVaults;
-
     // pool emergency state
     bool public isFrozen;
 
@@ -84,7 +81,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      */
 
     // vault base attributes
-    mapping(uint256 vaultId => DataTypes.Vault vault) public vaults;
+    mapping(bytes32 vaultId => DataTypes.Vault vault) public vaults;
 
     // just stick staking power as distributionId:0 => tokenData{uint256 chainId:0, bytes32 tokenAddr: 0,...}
     mapping(uint256 distributionId => DataTypes.Distribution distribution) public distributions;
@@ -93,13 +90,13 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     //mapping(address user => DataTypes.User userGlobalAssets) public usersGlobal;
 
     // user's assets per vault
-    mapping(address user => mapping(uint256 vaultId => DataTypes.User userVaultAssets)) public users;
+    mapping(address user => mapping(bytes32 vaultId => DataTypes.User userVaultAssets)) public users;
 
     // for independent reward distribution tracking              
-    mapping(uint256 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) public vaultAccounts;
+    mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) public vaultAccounts;
 
     // rewards accrued per user, per distribution
-    mapping(address user => mapping(uint256 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) public userAccounts;
+    mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) public userAccounts;
 
     // replay attack: 1 is true, 0 is false
     mapping(bytes32 sig => uint256 executed) public executedSignatures;
@@ -155,9 +152,17 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
         if(totalFeeFactor > 5000) revert Errors.TotalFeeFactorExceeded();     // 50% = 5000/10_000 = 5000/PRECISION_BASE
 
+        // vaultId generation
+        bytes32 vaultId;
+        {
+            uint256 salt = block.number - 1;
+            vaultId = _generateVaultId(salt, onBehalfOf);
+            while (vaults[vaultId].creator != address(0)) vaultId = _generateVaultId(--salt, onBehalfOf);      // If vaultId exists, generate new random Id
+        }
+
         // build vault
         DataTypes.Vault memory vault; 
-            //vault.vaultId = numberOfVaults; 
+            //vault.vaultId = vaultId;
             vault.creator = onBehalfOf;
             vault.creationTokenIds = tokenIds;  
             
@@ -172,8 +177,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             vault.totalBoostFactor = PRECISION_BASE; 
 
         // update storage
-        vaults[numberOfVaults] = vault;
-        ++numberOfVaults;
+        vaults[vaultId] = vault;
 
         //emit VaultCreated(onBehalfOf, vaultId); 
 
@@ -182,7 +186,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }  
 
     // no staking limits on staking assets
-    function stakeTokens(uint256 vaultId, uint256 amount) external whenStarted whenNotPaused {
+    function stakeTokens(bytes32 vaultId, uint256 amount) external whenStarted whenNotPaused {
         require(amount > 0, "Invalid amount");
         require(vaultId > 0, "Invalid vaultId");
  
@@ -225,7 +229,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
     // no staking limits on staking assets
-    function stakeNfts(uint256 vaultId, address onBehalfOf, uint256[] calldata tokenIds) external whenStarted whenNotPaused {
+    function stakeNfts(bytes32 vaultId, address onBehalfOf, uint256[] calldata tokenIds) external whenStarted whenNotPaused {
         uint256 incomingNfts = tokenIds.length;
 
         require(incomingNfts > 0, "Invalid amount"); 
@@ -281,7 +285,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     // claim token rewards. not applicable to distributionId:0 
     // users can only claim all reward types from 1 token type at once. 
-    function claimRewards(uint256 vaultId, address onBehalfOf, uint256 distributionId) external whenStarted whenNotPaused {
+    function claimRewards(bytes32 vaultId, address onBehalfOf, uint256 distributionId) external whenStarted whenNotPaused {
         require(vaultId > 0, "Invalid vaultId");
         require(distributionId > 0, "N/A: Staking Power");
 
@@ -336,7 +340,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     // unstake all: tokens, nfts, rp  | can unstake anytime
     // refactor to do vault updates at the end, accounting for nft boost delta | else double calcs
-    function unstakeAll(uint256 vaultId, address onBehalfOf) external whenStarted whenNotPaused {
+    function unstakeAll(bytes32 vaultId, address onBehalfOf) external whenStarted whenNotPaused {
         require(vaultId > 0, "Invalid vaultId");
 
         // check if vault exists + cache vault & user's vault assets
@@ -416,7 +420,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
     ///@notice Creator only allowed to reduce the creator fee factor, to increase the others 
-    function updateVaultFees(uint256 vaultId, address onBehalfOf, DataTypes.Fees calldata fees) external whenStarted whenNotPaused {
+    function updateVaultFees(bytes32 vaultId, address onBehalfOf, DataTypes.Fees calldata fees) external whenStarted whenNotPaused {
         require(vaultId > 0, "Invalid vaultId");
         
         // check if vault exists + cache vault & user's vault assets
@@ -449,7 +453,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
     // cooldown 
-    function activateCooldown(uint256 vaultId) external whenStarted whenNotPaused {
+    function activateCooldown(bytes32 vaultId) external whenStarted whenNotPaused {
         require(vaultId > 0, "Invalid vaultId");
 
         // check if vault exists + cache vault & user's vault assets
@@ -481,7 +485,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
     // cooldown. note: may want to flip the loop order
-    function endVaults(uint256[] calldata vaultIds) external whenStarted whenNotPaused {
+    // ch
+    function endVaults(bytes32[] calldata vaultIds) external whenStarted whenNotPaused {
         uint256 numOfVaults = vaultIds.length;
         require(numOfVaults > 0, "Invalid array");
 
@@ -489,7 +494,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         for(uint256 i; i < numOfVaults; ++i) {
 
-            uint256 vaultId = vaultIds[i];
+            bytes32 vaultId = vaultIds[i];
             DataTypes.Vault memory vault = vaults[vaultId];
 
             // Update vault account for each active distribution
@@ -511,14 +516,11 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             }
         }
 
-        // update storage
-        numberOfVaults = numberOfVaults - numOfVaults;
-
         // emit
 
     }
 
-    function migrateVaults(uint256 oldVaultId, uint256 newVaultId) external whenStarted whenNotPaused {
+    function migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStarted whenNotPaused {
         require(oldVaultId > 0, "Invalid vaultId");
         require(newVaultId > 0, "Invalid vaultId");
 
@@ -569,7 +571,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
     // onboard RP
-    function stakeRP(uint256 vaultId, uint256 amount, uint256 expiry, bytes calldata signature) external whenStarted whenNotPaused {
+    function stakeRP(bytes32 vaultId, uint256 amount, uint256 expiry, bytes calldata signature) external whenStarted whenNotPaused {
         if(amount < 100 ether) revert Errors.MinimumRpRequired();
         if(expiry < block.timestamp) revert Errors.SignatureExpired();
      
@@ -645,11 +647,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             distributions[activeDistributions[i]] = _updateDistributionIndex(distributions[activeDistributions[i]]);
         }
     }
-
-
 /*
     // update all vault accounts per active distribution, for specified vault
-    function _updateVaultAccounts(bytes32 vaultId) internal {
+    function _updateVaultAllAccounts(bytes32 vaultId) internal {
 
         DataTypes.Vault memory vault = vaults[vaultId];
 
@@ -927,7 +927,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     /// called prior to affecting any state change to a user
     /// applies fees onto the vaultIndex to return the userIndex
-    function _updateUserAccounts(address user, uint256 vaultId, DataTypes.Vault memory vault, DataTypes.User memory userVaultAssets) internal {
+    function _updateUserAccounts(address user, bytes32 vaultId, DataTypes.Vault memory vault, DataTypes.User memory userVaultAssets) internal {
 
         /** user -> vaultId (stake)
             - this changes the composition for both the user and vault
@@ -969,7 +969,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
 
     ///@dev cache vault and user structs from storage to memory. checks that vault exists, else reverts.
-    function _cache(uint256 vaultId, address onBehalfOf) internal view returns(DataTypes.User memory, DataTypes.Vault memory) {
+    function _cache(bytes32 vaultId, address onBehalfOf) internal view returns(DataTypes.User memory, DataTypes.Vault memory) {
         
         // ensure vault exists
         DataTypes.Vault memory vault = vaults[vaultId];
@@ -1003,28 +1003,97 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         return resArr;
     }
 
+    ///@dev Generate a vaultId. keccak256 is cheaper than using a counter with a SSTORE, even accounting for eventual collision retries.
+    function _generateVaultId(uint256 salt, address onBehalfOf) internal view returns (bytes32) {
+        return bytes32(keccak256(abi.encode(onBehalfOf, block.timestamp, salt)));
+    }
 
 //-------------------------------pool management-------------------------------------------
 
     /*//////////////////////////////////////////////////////////////
                             POOL MANAGEMENT
     //////////////////////////////////////////////////////////////*/
-
-    //@dev update CREATION_NFTS_REQUIRED. 0 allowed. 
-    function updateCreationNfts(uint256 newAmount) external onlyOwner {
-        uint256 oldAmount = CREATION_NFTS_REQUIRED;
-        CREATION_NFTS_REQUIRED = newAmount; 
-
-        emit CreationNftRequirementUpdated(oldAmount, newAmount);
-    }
-
-
+    
     //note: endVaults follows the same pattern. maybe make separate internal fns for these 2.
     function updateNftMultiplier(uint256 newMultiplier) external onlyOwner {
         require(newMultiplier > 0);
 
+
+        NFT_MULTIPLIER = newMultiplier;
+
+        // emit
+    }
+
+    function updateAllVaultsAndAccounts(bytes32[] calldata vaultIds) external {
+        uint256 numOfVaults = vaultIds.length;
+        require(numOfVaults > 0, "Invalid array");
+
+        
+        for(uint256 i; i < numOfVaults; ++i) {
+
+           // _updateVaultAllAccounts(bytes32 vaultId);
+        }
+
+        // emit
+    }   
+    
+    //note: for each vault, update its boosted balances, then update its respective users
+    // ensure NFT_MULTIPLIER has been changed before calling this fn
+    function updateBoostedBalances(bytes32[] calldata vaultIds, address[][] calldata userAddresses) external onlyOwner {
+        uint256 numOfVaults = vaultIds.length;
+        require(numOfVaults > 0, "Invalid array");
+
+        if(numOfVaults != userAddresses.length) revert();
+
+        // for each vault
+        for(uint256 i; i < numOfVaults; ++i) {
+            
+            bytes32 vaultId = vaultIds[i];
+
+            // get vault + ensure it exists
+            DataTypes.Vault memory vault = vaults[vaultId];
+            if(vault.creator == address(0)) revert Errors.NonExistentVault(vaultId);
+
+            // decrement global totals before updating vault
+            totalBoostedRealmPoints -= vault.boostedRealmPoints;
+            totalBoostedStakedTokens -= vault.boostedStakedTokens;
+
+            // update vault with new multiplier
+            vault.totalBoostFactor = vault.stakedNfts * NFT_MULTIPLIER;
+            vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;    
+            vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;
+
+            uint256 numOfUsersPerVault = userAddresses[i].length;
+
+            // for each vault for user i
+            for(uint256 j; j < numOfUsersPerVault; ++j){
+                address userAddress = userAddresses[i][j];
+    
+                // Fixed: Access the mapping correctly using the user's address and vaultId
+                DataTypes.User memory userVaultAssets = users[userAddress][vaultId];
+
+                userVaultAssets.boostedRealmPoints = (userVaultAssets.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;
+                userVaultAssets.boostedStakedTokens = (userVaultAssets.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;
+
+                // Don't forget to write back to storage
+                users[userAddress][vaultId] = userVaultAssets;
+            }
+
+            // Write back vault changes to storage
+            vaults[vaultId] = vault;
+
+            // increment global totals with new values
+            totalBoostedRealmPoints += vault.boostedRealmPoints;
+            totalBoostedStakedTokens += vault.boostedStakedTokens;
+        }
+
+        // emit
+    }
+
+/*
         uint256 numOfVaults = numberOfVaults;
         uint256 numOfDistributions = activeDistributions.length; // always >= 1; staking power
+
 
         // close the books: for each distribution, update all vaultAccounts
         // no need to update userAccounts and their indexes, since users within a vault operate w/ the same boost
@@ -1050,8 +1119,19 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
             }
         }
+*/
 
-        NFT_MULTIPLIER = newMultiplier;
+
+    /**
+     * @notice Updates the number of NFTs required to create a vault
+     * @dev Zero values are accepted, allowing vault creation without NFT requirements
+     * @param newAmount The new number of NFTs required for vault creation
+     */
+    function updateCreationNfts(uint256 newAmount) external onlyOwner {
+        uint256 oldAmount = CREATION_NFTS_REQUIRED;
+        CREATION_NFTS_REQUIRED = newAmount; 
+
+        emit CreationNftRequirementUpdated(oldAmount, newAmount);
     }
 
     /**
@@ -1184,6 +1264,13 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
 
+    /**
+     * @notice Updates the rewards vault address
+     * @dev Only callable by owner
+     * @param newRewardsVault The address of the new rewards vault contract
+     * @custom:throws If newRewardsVault is zero address
+     * @custom:emits RewardsVaultSet event with old and new vault addresses
+     */
     function setRewardsVault(address newRewardsVault) external onlyOwner {
         require(newRewardsVault != address(0), "Invalid address");
 
@@ -1235,7 +1322,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @param vaultId Address of token contract
      * @param onBehalfOf Recepient of tokens
      */
-    function emergencyExit(uint256 vaultId, address onBehalfOf) external whenStarted whenPaused onlyOwner {
+    function emergencyExit(bytes32 vaultId, address onBehalfOf) external whenStarted whenPaused onlyOwner {
     /*  
         require(isFrozen, "Pool not frozen");
         require(vaultId > 0, "Invalid vaultId");
