@@ -37,6 +37,8 @@ event RealmPointsFeeFactorUpdated(bytes32 indexed vaultId, uint256 oldFactor, ui
 
 // vault management
 event VaultRemoved(bytes32 indexed vaultId);
+event VaultsRemoved(bytes32[] vaultIds);
+
 event VaultCooldownInitiated(bytes32 indexed vaultId);
 
 // migrateVaults
@@ -52,6 +54,17 @@ event VaultMigrated(
 // distribution management
 event DistributionCreated(uint256 indexed distributionId, uint256 startTime, uint256 endTime, uint256 emissionPerSecond, uint256 tokenPrecision);
 event DistributionUpdated(uint256 indexed distributionId, uint256 startTime, uint256 endTime, uint256 emissionPerSecond);
+event DistributionIndexUpdated(
+    uint256 indexed distributionId,
+    uint256 lastUpdateTimestamp,
+    uint256 oldIndex,
+    uint256 newIndex
+);
+event DistributionCompleted(
+    uint256 indexed distributionId,
+    uint256 endTime,
+    uint256 totalEmitted
+);
 
 // admin configuration
 event RewardsVaultSet(address indexed oldVault, address indexed newVault);

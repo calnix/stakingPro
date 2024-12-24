@@ -29,7 +29,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     // period
     uint256 public immutable startTime; // can start arbitrarily after deployment
-    uint256 public endTime;             // if we need to end 
+    uint256 public endTime;             //note: if we need to end 
 
     // staked assets
     uint256 public totalStakedNfts;
@@ -102,7 +102,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
 //-------------------------------constructor------------------------------------------
 
-    constructor(address registry, IERC20 stakedToken, address storedSigner, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
+    constructor(address registry, address stakedToken, address storedSigner, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
         address owner, string memory name, string memory version) payable EIP712(name, version) Ownable(owner) {
 
         // sanity check input data: time, period, rewards
@@ -111,7 +111,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         // interfaces: supporting contracts
         NFT_REGISTRY = INftRegistry(registry);       
-        STAKED_TOKEN = stakedToken;
+        STAKED_TOKEN = IERC20(stakedToken);
 
         // set stakingPro startTime 
         startTime = startTime_;
@@ -213,6 +213,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // cache vault and user data, reverts if vault ended or does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
         
+        // vault cooldown activated: cannot stake
+        if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
+
         // Update vault and user accounting across all active reward distributions
         _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
 
@@ -258,6 +261,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         
         // cache vault and user data, reverts if vault ended or does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+
+        // vault cooldown activated: cannot stake
+        if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
 
         // Update vault and user accounting across all active reward distributions
         _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
@@ -480,6 +486,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // cache vault and user data, reverts if vault ended or does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
 
+        // vault cooldown activated: cannot update fees
+        if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
+
         // sanity check: user must be creator + incoming creatorFeeFactor must be lower than current
         if(vault.creator != onBehalfOf) revert UserIsNotVaultCreator(vaultId, onBehalfOf);
         if(fees.creatorFeeFactor > vault.creatorFeeFactor) revert CreatorFeeCanOnlyBeDecreased(vaultId);
@@ -527,6 +536,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         // Update vault and user accounting across all active reward distributions
         _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
+
+        // vault cooldown already activated: cannot activate again
+        if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
 
         // set endTime       
         vault.endTime = block.timestamp + VAULT_COOLDOWN_DURATION;
@@ -579,9 +591,16 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
             // Then update all vault accounts for this distribution
             for(uint256 j; j < numOfVaults; ++j) {
+
                 bytes32 vaultId = vaultIds[j];
                 DataTypes.Vault memory vault = vaults[vaultId];
                 DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
+
+                // vault cooldown NOT activated: cannot end vault
+                if(vault.endTime == 0) revert VaultCooldownNotActivated(vaultId);
+
+                // vault has been removed from circulation: skip update
+                if(vault.removed == 1) continue;
 
                 // Update vault account
                 (DataTypes.VaultAccount memory vaultAccount,) = _updateVaultAccount(vault, vaultAccount_, distribution);
@@ -615,9 +634,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         totalBoostedRealmPoints -= totalBoostedRealmPointsToRemove;
 
         // Emit event for each removed vault
-        for(uint256 i; i < numOfVaults; ++i) {
-            emit VaultRemoved(vaultIds[i]);
-        }
+        emit VaultsRemoved(vaultIds);
     }
 
     /**
@@ -634,9 +651,12 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         if(oldVaultId == 0) revert InvalidVaultId();
         if(newVaultId == 0) revert InvalidVaultId();
 
-        // cache vault and user data for both vaults, reverts if either vault ended or does not exist
+        // cache vault and user data for both vaults
         (DataTypes.User memory oldUserVaultAssets, DataTypes.Vault memory oldVault) = _cache(oldVaultId, msg.sender);
         (DataTypes.User memory newUserVaultAssets, DataTypes.Vault memory newVault) = _cache(newVaultId, msg.sender);
+
+        // vault cooldown activated: cannot migrate
+        if(newVault.endTime > 0) revert VaultAlreadyEnded(newVaultId);
 
         // oldVault: Update vault and user accounting across all active reward distributions
         _updateUserAccounts(msg.sender, oldVaultId, oldVault, oldUserVaultAssets);
@@ -721,6 +741,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // cache vault and user data, reverts if vault ended or does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
 
+        // vault cooldown activated: cannot stake
+        if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
+
         // verify signature
         bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
             keccak256("StakeRp(address user,bytes32 vaultId,uint256 amount,uint256 expiry)"), 
@@ -765,6 +788,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         - how rewards are calculated: distribution, vault, user
 
      */
+
 
 //-------------------------------internal-------------------------------------------
 
@@ -856,31 +880,67 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 */
     //
     function _updateDistributionIndex(DataTypes.Distribution memory distribution) internal returns (DataTypes.Distribution memory) {
-        
-        // already updated: return
-        if(distribution.lastUpdateTimeStamp == block.timestamp) return distribution;
-        
-        uint256 nextDistributionIndex;
-        uint256 currentTimestamp;
-        uint256 emittedRewards;
+                
+    // Check if distribution has ended: does not apply to staking power, distributionId == 0
+    if (distribution.endTime > 0 && block.timestamp >= distribution.endTime) {
 
-        // select appropriate totalBoostedBalance based on distribution type
-        // staked RP is the base of Staking power rewards | staked Moca is the base of token rewards
-        uint256 totalBoostedBalance = distribution.distributionId == 0 ? totalBoostedRealmPoints : totalBoostedStakedTokens;
-        (nextDistributionIndex, currentTimestamp, emittedRewards) = _calculateDistributionIndex(distribution.index, distribution.emissionPerSecond, distribution.lastUpdateTimeStamp, totalBoostedBalance, distribution.TOKEN_PRECISION);
-        
-        if(nextDistributionIndex != distribution.index) {
+        // If this is the first update after distribution ended, do final update to endTime
+        if (distribution.lastUpdateTimeStamp < distribution.endTime) {
             
-            // prev timestamp, oldIndex, newIndex: emit prev timestamp since you know the currentTimestamp as per txn time
-            // emit VaultIndexUpdated(pool_.lastUpdateTimeStamp, pool_.index, nextPoolIndex); note: update event
+            (uint256 finalIndex, /*currentTimestamp*/, uint256 finalEmitted) = _calculateDistributionIndex(
+                distribution.index,
+                distribution.emissionPerSecond,
+                distribution.lastUpdateTimeStamp,
+                totalBoostedStakedTokens,           // distributions w/ endTimes involve tokens, not realmPoints
+                distribution.TOKEN_PRECISION
+            );
 
-            // index and emitted rewards are in reward token precision
-            distribution.index = nextDistributionIndex;
-            distribution.totalEmitted += emittedRewards; 
-            distribution.lastUpdateTimeStamp = currentTimestamp;
+            distribution.index = finalIndex;
+            distribution.totalEmitted += finalEmitted;
+            distribution.lastUpdateTimeStamp = distribution.endTime;
+            
+            emit DistributionIndexUpdated(distribution.distributionId, distribution.lastUpdateTimeStamp, distribution.index, finalIndex);
+            
+            // Remove from active distributions and mark as completed
+            for (uint256 i = 0; i < activeDistributions.length; i++) {
+                if (activeDistributions[i] == distribution.distributionId) {
+                    // Move last element to current position and pop
+                    activeDistributions[i] = activeDistributions[activeDistributions.length - 1];
+                    activeDistributions.pop();
+                    break;
+                }
+            }
+
+            ++completedDistributions;
+            emit DistributionCompleted(distribution.distributionId, distribution.endTime, distribution.totalEmitted);
         }
-
+        
         return distribution;
+    }    
+
+    // ..... Normal update for active distribution: could be for both tokens and realmPoints .....
+
+    uint256 totalBoostedBalance = distribution.distributionId == 0 ? totalBoostedRealmPoints : totalBoostedStakedTokens;
+
+    (uint256 nextIndex, uint256 currentTimestamp, uint256 emittedRewards) = _calculateDistributionIndex(
+        distribution.index,
+        distribution.emissionPerSecond,
+        distribution.lastUpdateTimeStamp,
+        totalBoostedBalance,
+        distribution.TOKEN_PRECISION
+    );
+    
+    if (nextIndex > distribution.index) {
+
+        distribution.index = nextIndex;
+        distribution.totalEmitted += emittedRewards;
+        distribution.lastUpdateTimeStamp = currentTimestamp;
+
+        emit DistributionIndexUpdated(distribution.distributionId, distribution.lastUpdateTimeStamp, distribution.index, nextIndex);
+    }
+
+    return distribution;
+    
     }
 
     /**
@@ -898,17 +958,19 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             emissionPerSecond == 0                           // 0 emissions. no rewards setup.
             || totalBalance == 0                             // nothing has been staked
             || lastUpdateTimestamp == block.timestamp        // index already updated
-            || lastUpdateTimestamp > endTime                 // distribution has ended
+            //|| lastUpdateTimestamp > endTime                 // distribution has ended note: contract endTime is referenced. do we need?
         ) {
 
             return (currentDistributionIndex, lastUpdateTimestamp, 0);                       
         }
 
         uint256 currentTimestamp;
+
+        // contract endTime
         if(endTime > 0){
             currentTimestamp = block.timestamp > endTime ? endTime : block.timestamp;
         }
-        else {
+        else { 
             currentTimestamp = block.timestamp;
         }
 
@@ -940,13 +1002,35 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         // get latest distributionIndex
         DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_);
-        
+
         // vault already been updated by a prior txn; skip updating
         if(distribution.index == vaultAccount.index) return (vaultAccount, distribution_);
 
-        // If vault has ended, vaultIndex should not be updated, beyond the final update.
-        if(block.timestamp >= vault.endTime) return (vaultAccount, distribution_);
+        // vault has been removed from circulation: final update done by endVaults()
+        if(vault.removed == 1) return (vaultAccount, distribution_);
 
+        // If vault has ended, vaultIndex should not be updated, beyond the final update.
+        /** note:
+            - vaults are removed from circulation via endVaults
+            - endVaults is responsible for the final update and setting vault.removed = 1
+            - final update involves updating all vault accounts, indexes and removing assets from global state
+            - we cannot be sure that endVaults would called precisely at the endTime for each vault
+            - therefore we must allow for some drift
+            - as such, the check below cannot be implemented. 
+         */
+        //if(vault.endTime > 0 && block.timestamp >= vault.endTime) return (vaultAccount, distribution_);
+        
+        /**note:
+            - what about implementing the check with a buffer? 
+            - e.g. if(vault.endTime > 0 && block.timestamp + 7 days >= vault.endTime)
+            - this would allow for some drift, but not too much
+
+            smart over/under updates (?)
+            - under: update distri to vault.Endtime and update the vault indexes till endTime
+            - over: update distri to block.timestamp and update the vault indexes till endTime
+         */
+
+        
         // update vault rewards + fees
         uint256 totalAccRewards; 
         uint256 accCreatorFee; 
@@ -1004,10 +1088,10 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     function _updateUserAccount(
         DataTypes.User memory user, DataTypes.UserAccount memory userAccount, 
-        DataTypes.Vault memory vault, DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution_) internal returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
+        DataTypes.Vault memory vault, DataTypes.VaultAccount memory vaultAccount_, DataTypes.Distribution memory distribution_) internal returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
         
         // get updated vaultAccount and distribution
-        (DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateVaultAccount(vault, vaultAccount, distribution_);
+        (DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateVaultAccount(vault, vaultAccount_, distribution_);
         
         uint256 newUserIndex = vaultAccount.rewardsAccPerUnitStaked;
 
@@ -1104,13 +1188,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     ///@dev cache vault and user structs from storage to memory. checks that vault exists and hasn't ended, else reverts.
     function _cache(bytes32 vaultId, address onBehalfOf) internal view returns(DataTypes.User memory, DataTypes.Vault memory) {
-        
         // ensure vault exists
         DataTypes.Vault memory vault = vaults[vaultId];
         if(vault.creator == address(0)) revert NonExistentVault(vaultId);
-
-        // check if vault has ended
-        if(vault.endTime <= block.timestamp) revert VaultEnded(vaultId, vault.endTime);
 
         // get vault level user data
         DataTypes.User memory userVaultAssets = users[onBehalfOf][vaultId];

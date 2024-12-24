@@ -6,6 +6,7 @@ error InvalidVaultId();
 error InvalidAmount();
 error InvalidAddress();
 error InvalidArray();
+error VaultAlreadyEnded(bytes32 vaultId);
 
 // _cache
 error NonExistentVault(bytes32 vaultId);
@@ -49,7 +50,7 @@ error InvalidSignature();
 error InsufficientRealmPoints(uint256 currentRealmPoints, uint256 requiredRealmPoints);
 
 // cooldown
-error VaultNotMatured(bytes32 vaultId);
+error VaultCooldownNotActivated(bytes32 vaultId);
  
 // updateBoostedBalances
 error NoActiveDistributions();
