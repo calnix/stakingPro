@@ -37,7 +37,7 @@ event RealmPointsFeeFactorUpdated(bytes32 indexed vaultId, uint256 oldFactor, ui
 
 // vault management
 event VaultRemoved(bytes32 indexed vaultId);
-event VaultsRemoved(bytes32[] vaultIds);
+event VaultsRemoved(bytes32[] vaultIds, uint256 vaultsNotEnded);
 
 event VaultCooldownInitiated(bytes32 indexed vaultId);
 

@@ -463,7 +463,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // Update vault and user accounting across all active reward distributions
         // _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
 
-
         // get corresponding user+vault account for this active distribution 
         DataTypes.Distribution memory distribution_ = distributions[distributionId];
         DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
@@ -647,28 +646,30 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         uint256 totalBoostedTokensToRemove;
         uint256 totalBoostedRealmPointsToRemove;
 
+        uint256 vaultsEnded;
+
         // For each distribution
         for(uint256 i; i < numOfDistributions; ++i) {
             uint256 distributionId = activeDistributions[i];
             DataTypes.Distribution memory distribution_ = distributions[distributionId];
 
-            // Update distribution index first
+            // Update distribution first
             DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_);
 
             // Then update all vault accounts for this distribution
             for(uint256 j; j < numOfVaults; ++j) {
-
+                
+                // get vault and vault account from storage
                 bytes32 vaultId = vaultIds[j];
                 DataTypes.Vault memory vault = vaults[vaultId];
                 DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
 
-                // vault cooldown NOT activated: cannot end vault
-                if(vault.endTime == 0) revert VaultCooldownNotActivated(vaultId);
-
-                // vault has been removed from circulation: skip update
+                // cooldown NOT activated; cannot end vault: skip
+                if(vault.endTime == 0) continue;
+                // vault has been removed from circulation: skip
                 if(vault.removed == 1) continue;
 
-                // Update vault account
+                // Update storage: vault account 
                 (DataTypes.VaultAccount memory vaultAccount,) = _updateVaultAccount(vault, vaultAccount_, distribution);
                 vaultAccounts[vaultId][distributionId] = vaultAccount;
 
@@ -682,6 +683,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
                     // Mark vault as removed
                     vault.removed = 1;
+                    ++vaultsEnded;
+
+                    // update storage 
                     vaults[vaultId] = vault;
                 }
             }
@@ -700,7 +704,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         totalBoostedRealmPoints -= totalBoostedRealmPointsToRemove;
 
         // Emit event for each removed vault
-        emit VaultsRemoved(vaultIds);
+        uint256 vaultsNotEnded = numOfVaults - vaultsEnded;
+        emit VaultsRemoved(vaultIds, vaultsNotEnded);
     }
 
     /**
@@ -889,9 +894,12 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 */
     
     function _updateDistributionIndex(DataTypes.Distribution memory distribution) internal returns (DataTypes.Distribution memory) {
+        // distribution already updated
+        if(distribution.lastUpdateTimeStamp == block.timestamp) return distribution;
+
         // distribution has not started
-        if (block.timestamp < distribution.startTime) return distribution;
-        
+        if(block.timestamp < distribution.startTime) return distribution;
+
         // distribution has ended: does not apply to staking power, distributionId == 0
         if (distribution.endTime > 0 && block.timestamp >= distribution.endTime) {
 
@@ -1004,14 +1012,14 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         DataTypes.VaultAccount memory vaultAccount, 
         DataTypes.Distribution memory distribution_) internal returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
 
-        // get latest distributionIndex
+        // get latest distributionIndex, if not already updated
         DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_);
-
-        // vault already been updated by a prior txn; skip updating
-        if(distribution.index == vaultAccount.index) return (vaultAccount, distribution_);
+        
+        // vault already been updated by a prior txn; skip updating vaultAccount
+        if(distribution.index == vaultAccount.index) return (vaultAccount, distribution);
 
         // vault has been removed from circulation: final update done by endVaults()
-        if(vault.removed == 1) return (vaultAccount, distribution_);
+        if(vault.removed == 1) return (vaultAccount, distribution);
 
         // If vault has ended, vaultIndex should not be updated, beyond the final update.
         /** note:
@@ -1022,7 +1030,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             - therefore we must allow for some drift
             - as such, the check below cannot be implemented. 
          */
-        //if(vault.endTime > 0 && block.timestamp >= vault.endTime) return (vaultAccount, distribution_);
+        //if(vault.endTime > 0 && block.timestamp >= vault.endTime) return (vaultAccount, distribution);
         
         /**note:
             - what about implementing the check with a buffer? 
