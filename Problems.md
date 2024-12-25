@@ -106,3 +106,37 @@ revert to using vaultId as bytes32.
 
 both have odd internal fns requirements that don't fit with the rest.
 consider separate ones.
+
+6. Active Distributions Array management
+
+instead of array use mapping to track active status
+
+```solidity
+// Add new mapping to track active status
+mapping(uint256 => bool) public isDistributionActive;
+
+// New helper function
+function _removeFromActiveDistributions(uint256 distributionId) internal {
+    for (uint256 i = 0; i < activeDistributions.length; i++) {
+        if (activeDistributions[i] == distributionId) {
+            activeDistributions[i] = activeDistributions[activeDistributions.length - 1];
+            activeDistributions.pop();
+            isDistributionActive[distributionId] = false;
+            break;
+        }
+    }
+}
+```
+
+7. Precision loss in _calculateDistributionIndex
+
+```solidity
+    // Precision handling for balance conversion
+    uint256 totalBalanceRebased = (totalBalance * distribution.TOKEN_PRECISION) / 1E18;
+    if (totalBalanceRebased == 0) revert PrecisionLoss();
+```
+
+think about when this happens, and how to avoid it.
+
+8. 
+

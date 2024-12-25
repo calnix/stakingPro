@@ -61,7 +61,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         each time a vault is updated we must update all the active tokenIndexes,
         which means we must loop through all the active indexes.
      */
-    // array stores key values for distributions mapping 
+    
+    // array stores key values for distributions mapping. active includes not yet started distributions
     uint256[] public activeDistributions;    // we do not expect a large number of concurrently active distributions
     uint256 public totalDistributions;
     uint256 public completedDistributions;  // note: when does this get updated?
@@ -210,7 +211,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
  
         address onBehalfOf = msg.sender;
 
-        // cache vault and user data, reverts if vault ended or does not exist
+        // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
         
         // vault cooldown activated: cannot stake
@@ -259,7 +260,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         if(vaultId == 0) revert InvalidVaultId();
         if(incomingNfts == 0) revert InvalidAmount();
         
-        // cache vault and user data, reverts if vault ended or does not exist
+        // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
 
         // vault cooldown activated: cannot stake
@@ -303,90 +304,62 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
     /**
-     * @notice Claims all pending rewards for a user from a specific vault and distribution
-     * @param vaultId The ID of the vault to claim rewards from
-     * @param distributionId The ID of the reward distribution to claim from
-     * @dev Updates vault and user accounting across all active distributions before claiming
-     * @dev Calculates and claims 4 types of rewards:
-     *      1. MOCA staking rewards
-     *      2. Realm Points staking rewards 
-     *      3. NFT staking rewards
-     *      4. Creator rewards (if caller is vault creator)
-     * @dev Not applicable to distributionId:0 which is the staking power distribution
-     * @custom:throws InvalidVaultId if vaultId is 0
-     * @custom:throws StakingPowerDistribution if distributionId is 0
-     * @custom:emits RewardsClaimed when rewards are successfully claimed
+     * @notice Stakes realm points into a vault
+     * @dev Requires a valid signature from the stored signer to authorize the staking
+     * @param vaultId The ID of the vault to stake realm points into
+     * @param amount The amount of realm points to stake
+     * @param expiry The expiry timestamp for the signature
+     * @param signature The EIP712 signature authorizing the staking
+     * @custom:throws SignatureExpired if signature has expired
+     * @custom:throws MinimumRpRequired if amount is below MINIMUM_REALMPOINTS_REQUIRED
+     * @custom:throws InvalidSignature if signature is not from STORED_SIGNER
+     * @custom:emits StakedRealmPoints when realm points are successfully staked
      */
-    function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted whenNotPaused {
-        if(vaultId == 0) revert InvalidVaultId();
-        if(distributionId == 0) revert StakingPowerDistribution();
-
+    function stakeRP(bytes32 vaultId, uint256 amount, uint256 expiry, bytes calldata signature) external whenStarted whenNotPaused {
+        if(expiry < block.timestamp) revert SignatureExpired();
+        if(amount < MINIMUM_REALMPOINTS_REQUIRED) revert MinimumRpRequired();
+     
         address onBehalfOf = msg.sender;
 
-        // cache vault and user data, reverts if vault ended or does not exist
+        // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+
+        // vault cooldown activated: cannot stake
+        if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
+
+        // verify signature
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
+            keccak256("StakeRp(address user,bytes32 vaultId,uint256 amount,uint256 expiry)"), 
+            onBehalfOf, vaultId, amount, expiry)));
+        
+        address signer = ECDSA.recover(digest, signature);
+        if(signer != STORED_SIGNER) revert InvalidSignature(); 
 
         // Update vault and user accounting across all active reward distributions
         _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
 
-        //get accounts for specified distribution
-        DataTypes.VaultAccount memory vaultAccount = vaultAccounts[vaultId][distributionId];
-        DataTypes.UserAccount memory userAccount = userAccounts[onBehalfOf][vaultId][distributionId];
+        // calc. boostedStakedRealmPoints
+        uint256 incomingBoostedStakedRealmPoints = (amount * vault.totalBoostFactor) / PRECISION_BASE;
 
+        // increment: vault
+        vault.stakedRealmPoints += amount;
+        vault.boostedRealmPoints += incomingBoostedStakedRealmPoints;
 
-        //------- calc. and update vault and user accounts --------
-        uint256 totalUnclaimedRewards;
+        //increment: userVaultAssets
+        userVaultAssets.stakedRealmPoints += amount;
         
-        // update balances: staking MOCA rewards
-        if (userAccount.accStakingRewards > userAccount.claimedStakingRewards) {
+        // update storage: mappings 
+        vaults[vaultId] = vault;
+        users[onBehalfOf][vaultId] = userVaultAssets;
 
-            uint256 unclaimedRewards = userAccount.accStakingRewards - userAccount.claimedStakingRewards;
-            userAccount.claimedStakingRewards += unclaimedRewards;
-            vaultAccount.totalClaimedRewards += unclaimedRewards;
+        // update storage: variables
+        totalStakedRealmPoints += amount;
+        totalBoostedRealmPoints += incomingBoostedStakedRealmPoints;
 
-            totalUnclaimedRewards += unclaimedRewards;
-        }
+        // Mark signature as used
+        executedSignatures[digest] = 1;
 
-        // update balances: staking RP rewards 
-        if (userAccount.accRealmPointsRewards > userAccount.claimedRealmPointsRewards) {
-
-            uint256 unclaimedRpRewards = userAccount.accRealmPointsRewards - userAccount.claimedRealmPointsRewards;
-            userAccount.claimedRealmPointsRewards += unclaimedRpRewards;
-            vaultAccount.totalClaimedRewards += unclaimedRpRewards;
-
-            totalUnclaimedRewards += unclaimedRpRewards;
-        }
-
-        // update balances: staking NFT rewards
-        if (userAccount.accNftStakingRewards > userAccount.claimedNftRewards) {
-
-            uint256 unclaimedNftRewards = userAccount.accNftStakingRewards - userAccount.claimedNftRewards;
-            userAccount.claimedNftRewards += unclaimedNftRewards;
-            vaultAccount.totalClaimedRewards += unclaimedNftRewards;
-
-            totalUnclaimedRewards += unclaimedNftRewards;
-        }
-
-        // if creator
-        if (vault.creator == onBehalfOf) {
-
-            uint256 unclaimedCreatorRewards = vaultAccount.accCreatorRewards - userAccount.claimedCreatorRewards;
-            userAccount.claimedCreatorRewards += unclaimedCreatorRewards;
-            vaultAccount.totalClaimedRewards += unclaimedCreatorRewards;
-            
-            totalUnclaimedRewards += unclaimedCreatorRewards;
-        }
-
-        // ---------------------------------------------------------------
-
-        // update storage: vault and user accounts
-        vaultAccounts[vaultId][distributionId] = vaultAccount;
-        userAccounts[onBehalfOf][vaultId][distributionId] = userAccount;
-
-        emit RewardsClaimed(vaultId, onBehalfOf, totalUnclaimedRewards);
-
-        // transfer rewards to user, from rewardsVault
-        REWARDS_VAULT.payRewards(distributionId, onBehalfOf, totalUnclaimedRewards);
+        emit StakedRealmPoints(onBehalfOf, vaultId, amount, incomingBoostedStakedRealmPoints);
     }
 
     /**
@@ -400,7 +373,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         address onBehalfOf = msg.sender;
         
-        // cache vault and user data, reverts if vault ended or does not exist
+        // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
 
         // Update vault and user accounting across all active reward distributions
@@ -464,6 +437,99 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
     /**
+     * @notice Claims all pending rewards for a user from a specific vault and distribution
+     * @param vaultId The ID of the vault to claim rewards from
+     * @param distributionId The ID of the reward distribution to claim from
+     * @dev Updates vault and user accounting across all active distributions before claiming
+     * @dev Calculates and claims 4 types of rewards:
+     *      1. MOCA staking rewards
+     *      2. Realm Points staking rewards 
+     *      3. NFT staking rewards
+     *      4. Creator rewards (if caller is vault creator)
+     * @dev Not applicable to distributionId:0 which is the staking power distribution
+     * @custom:throws InvalidVaultId if vaultId is 0
+     * @custom:throws StakingPowerDistribution if distributionId is 0
+     * @custom:emits RewardsClaimed when rewards are successfully claimed
+     */
+    function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted whenNotPaused {
+        if(vaultId == 0) revert InvalidVaultId();
+        if(distributionId == 0) revert StakingPowerDistribution();
+
+        address onBehalfOf = msg.sender;
+
+        // cache vault and user data, reverts if vault does not exist
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+
+        // Update vault and user accounting across all active reward distributions
+        // _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+
+
+        // get corresponding user+vault account for this active distribution 
+        DataTypes.Distribution memory distribution_ = distributions[distributionId];
+        DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
+        DataTypes.UserAccount memory userAccount_ = userAccounts[onBehalfOf][vaultId][distributionId];
+
+        // alternate; update just the specified distribution
+        (DataTypes.UserAccount memory userAccount, DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateUserAccount(userVaultAssets, userAccount_, vault, vaultAccount_, distribution_);
+
+        //------- calc. and update vault and user accounts --------
+        uint256 totalUnclaimedRewards;
+        
+        // update balances: staking MOCA rewards
+        if (userAccount.accStakingRewards > userAccount.claimedStakingRewards) {
+
+            uint256 unclaimedRewards = userAccount.accStakingRewards - userAccount.claimedStakingRewards;
+            userAccount.claimedStakingRewards += unclaimedRewards;
+            vaultAccount.totalClaimedRewards += unclaimedRewards;
+
+            totalUnclaimedRewards += unclaimedRewards;
+        }
+
+        // update balances: staking RP rewards 
+        if (userAccount.accRealmPointsRewards > userAccount.claimedRealmPointsRewards) {
+
+            uint256 unclaimedRpRewards = userAccount.accRealmPointsRewards - userAccount.claimedRealmPointsRewards;
+            userAccount.claimedRealmPointsRewards += unclaimedRpRewards;
+            vaultAccount.totalClaimedRewards += unclaimedRpRewards;
+
+            totalUnclaimedRewards += unclaimedRpRewards;
+        }
+
+        // update balances: staking NFT rewards
+        if (userAccount.accNftStakingRewards > userAccount.claimedNftRewards) {
+
+            uint256 unclaimedNftRewards = userAccount.accNftStakingRewards - userAccount.claimedNftRewards;
+            userAccount.claimedNftRewards += unclaimedNftRewards;
+            vaultAccount.totalClaimedRewards += unclaimedNftRewards;
+
+            totalUnclaimedRewards += unclaimedNftRewards;
+        }
+
+        // if creator
+        if (vault.creator == onBehalfOf) {
+
+            uint256 unclaimedCreatorRewards = vaultAccount.accCreatorRewards - userAccount.claimedCreatorRewards;
+            userAccount.claimedCreatorRewards += unclaimedCreatorRewards;
+            vaultAccount.totalClaimedRewards += unclaimedCreatorRewards;
+            
+            totalUnclaimedRewards += unclaimedCreatorRewards;
+        }
+
+        // ---------------------------------------------------------------
+
+        // update storage: accounts and distributions
+        distributions[distributionId] = distribution;     
+        vaultAccounts[vaultId][distributionId] = vaultAccount;  
+        userAccounts[onBehalfOf][vaultId][distributionId] = userAccount;
+
+        emit RewardsClaimed(vaultId, onBehalfOf, totalUnclaimedRewards);
+
+        // transfer rewards to user, from rewardsVault
+        REWARDS_VAULT.payRewards(distributionId, onBehalfOf, totalUnclaimedRewards);
+    }
+
+
+    /**
      * @notice Updates the fee structure for a vault
      * @dev Only the vault creator can update fees
      * @dev Creator can only decrease their creator fee factor
@@ -483,7 +549,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         
         address onBehalfOf = msg.sender;
 
-        // cache vault and user data, reverts if vault ended or does not exist
+        // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
 
         // vault cooldown activated: cannot update fees
@@ -531,7 +597,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     function activateCooldown(bytes32 vaultId) external whenStarted whenNotPaused {
         if(vaultId == 0) revert InvalidVaultId();
 
-        // cache vault and user data, reverts if vault ended or does not exist
+        // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
         // Update vault and user accounting across all active reward distributions
@@ -651,7 +717,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         if(oldVaultId == 0) revert InvalidVaultId();
         if(newVaultId == 0) revert InvalidVaultId();
 
-        // cache vault and user data for both vaults
+        // cache vault and user data for both vaults, reverts if vault does not exist
         (DataTypes.User memory oldUserVaultAssets, DataTypes.Vault memory oldVault) = _cache(oldVaultId, msg.sender);
         (DataTypes.User memory newUserVaultAssets, DataTypes.Vault memory newVault) = _cache(newVaultId, msg.sender);
 
@@ -720,64 +786,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         );
     }
 
-    /**
-     * @notice Stakes realm points into a vault
-     * @dev Requires a valid signature from the stored signer to authorize the staking
-     * @param vaultId The ID of the vault to stake realm points into
-     * @param amount The amount of realm points to stake
-     * @param expiry The expiry timestamp for the signature
-     * @param signature The EIP712 signature authorizing the staking
-     * @custom:throws SignatureExpired if signature has expired
-     * @custom:throws MinimumRpRequired if amount is below MINIMUM_REALMPOINTS_REQUIRED
-     * @custom:throws InvalidSignature if signature is not from STORED_SIGNER
-     * @custom:emits StakedRealmPoints when realm points are successfully staked
-     */
-    function stakeRP(bytes32 vaultId, uint256 amount, uint256 expiry, bytes calldata signature) external whenStarted whenNotPaused {
-        if(expiry < block.timestamp) revert SignatureExpired();
-        if(amount < MINIMUM_REALMPOINTS_REQUIRED) revert MinimumRpRequired();
-     
-        address onBehalfOf = msg.sender;
 
-        // cache vault and user data, reverts if vault ended or does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
-
-        // vault cooldown activated: cannot stake
-        if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
-
-        // verify signature
-        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
-            keccak256("StakeRp(address user,bytes32 vaultId,uint256 amount,uint256 expiry)"), 
-            onBehalfOf, vaultId, amount, expiry)));
-        
-        address signer = ECDSA.recover(digest, signature);
-        if(signer != STORED_SIGNER) revert InvalidSignature(); 
-
-        // Update vault and user accounting across all active reward distributions
-        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
-
-        // calc. boostedStakedRealmPoints
-        uint256 incomingBoostedStakedRealmPoints = (amount * vault.totalBoostFactor) / PRECISION_BASE;
-
-        // increment: vault
-        vault.stakedRealmPoints += amount;
-        vault.boostedRealmPoints += incomingBoostedStakedRealmPoints;
-
-        //increment: userVaultAssets
-        userVaultAssets.stakedRealmPoints += amount;
-        
-        // update storage: mappings 
-        vaults[vaultId] = vault;
-        users[onBehalfOf][vaultId] = userVaultAssets;
-
-        // update storage: variables
-        totalStakedRealmPoints += amount;
-        totalBoostedRealmPoints += incomingBoostedStakedRealmPoints;
-
-        // Mark signature as used
-        executedSignatures[digest] = 1;
-
-        emit StakedRealmPoints(onBehalfOf, vaultId, amount, incomingBoostedStakedRealmPoints);
-    }
 
     /**
         add checks:
@@ -878,115 +887,110 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         }   
     }
 */
-    //
+    
     function _updateDistributionIndex(DataTypes.Distribution memory distribution) internal returns (DataTypes.Distribution memory) {
-                
-    // Check if distribution has ended: does not apply to staking power, distributionId == 0
-    if (distribution.endTime > 0 && block.timestamp >= distribution.endTime) {
-
-        // If this is the first update after distribution ended, do final update to endTime
-        if (distribution.lastUpdateTimeStamp < distribution.endTime) {
-            
-            (uint256 finalIndex, /*currentTimestamp*/, uint256 finalEmitted) = _calculateDistributionIndex(
-                distribution.index,
-                distribution.emissionPerSecond,
-                distribution.lastUpdateTimeStamp,
-                totalBoostedStakedTokens,           // distributions w/ endTimes involve tokens, not realmPoints
-                distribution.TOKEN_PRECISION
-            );
-
-            distribution.index = finalIndex;
-            distribution.totalEmitted += finalEmitted;
-            distribution.lastUpdateTimeStamp = distribution.endTime;
-            
-            emit DistributionIndexUpdated(distribution.distributionId, distribution.lastUpdateTimeStamp, distribution.index, finalIndex);
-            
-            // Remove from active distributions and mark as completed
-            for (uint256 i = 0; i < activeDistributions.length; i++) {
-                if (activeDistributions[i] == distribution.distributionId) {
-                    // Move last element to current position and pop
-                    activeDistributions[i] = activeDistributions[activeDistributions.length - 1];
-                    activeDistributions.pop();
-                    break;
-                }
-            }
-
-            ++completedDistributions;
-            emit DistributionCompleted(distribution.distributionId, distribution.endTime, distribution.totalEmitted);
-        }
+        // distribution has not started
+        if (block.timestamp < distribution.startTime) return distribution;
         
+        // distribution has ended: does not apply to staking power, distributionId == 0
+        if (distribution.endTime > 0 && block.timestamp >= distribution.endTime) {
+
+            // If this is the first update after distribution ended, do final update to endTime
+            if (distribution.lastUpdateTimeStamp < distribution.endTime) {
+                
+                // distributions w/ endTimes involve tokens, not realmPoints: use totalBoostedStakedTokens
+                (uint256 finalIndex, /*currentTimestamp*/, uint256 finalEmitted) = _calculateDistributionIndex(distribution, totalBoostedStakedTokens);
+
+                distribution.index = finalIndex;
+                distribution.totalEmitted += finalEmitted;
+                distribution.lastUpdateTimeStamp = distribution.endTime;
+                
+                emit DistributionIndexUpdated(distribution.distributionId, distribution.lastUpdateTimeStamp, distribution.index, finalIndex);
+                
+                // Remove from active distributions and mark as completed
+                for (uint256 i; i < activeDistributions.length; ++i) {
+                    if (activeDistributions[i] == distribution.distributionId) {
+                        // Move last element to current position and pop
+                        activeDistributions[i] = activeDistributions[activeDistributions.length - 1];
+                        activeDistributions.pop();
+                        break;
+                    }
+                }
+
+                ++completedDistributions;
+                emit DistributionCompleted(distribution.distributionId, distribution.endTime, distribution.totalEmitted);
+            }
+            
+            return distribution;
+        }    
+
+        // ..... Normal update for active distributions: could be for both tokens and realmPoints .....
+
+        uint256 totalBoostedBalance = distribution.distributionId == 0 ? totalBoostedRealmPoints : totalBoostedStakedTokens;
+        (uint256 nextIndex, uint256 currentTimestamp, uint256 emittedRewards) = _calculateDistributionIndex(distribution, totalBoostedBalance);
+        
+        if (nextIndex > distribution.index) {
+
+            distribution.index = nextIndex;
+            distribution.totalEmitted += emittedRewards;
+            distribution.lastUpdateTimeStamp = currentTimestamp;
+
+            emit DistributionIndexUpdated(distribution.distributionId, distribution.lastUpdateTimeStamp, distribution.index, nextIndex);
+        }
+
         return distribution;
-    }    
-
-    // ..... Normal update for active distribution: could be for both tokens and realmPoints .....
-
-    uint256 totalBoostedBalance = distribution.distributionId == 0 ? totalBoostedRealmPoints : totalBoostedStakedTokens;
-
-    (uint256 nextIndex, uint256 currentTimestamp, uint256 emittedRewards) = _calculateDistributionIndex(
-        distribution.index,
-        distribution.emissionPerSecond,
-        distribution.lastUpdateTimeStamp,
-        totalBoostedBalance,
-        distribution.TOKEN_PRECISION
-    );
-    
-    if (nextIndex > distribution.index) {
-
-        distribution.index = nextIndex;
-        distribution.totalEmitted += emittedRewards;
-        distribution.lastUpdateTimeStamp = currentTimestamp;
-
-        emit DistributionIndexUpdated(distribution.distributionId, distribution.lastUpdateTimeStamp, distribution.index, nextIndex);
-    }
-
-    return distribution;
-    
     }
 
     /**
-     * @dev Calculates latest pool index. Pool index represents accRewardsPerAllocPoint since startTime.
-     * @param currentDistributionIndex Latest reward index as per previous update
-     * @param emissionPerSecond Reward tokens emitted per second (in wei)
-     * @param lastUpdateTimestamp Time at which previous update occurred
-     * @param totalBalance Total allocPoints of the pool 
-     * @return nextPoolIndex: Updated pool index, 
-               currentTimestamp: either lasUpdateTimestamp or block.timestamp, 
-               emittedRewards: rewards emitted from lastUpdateTimestamp till now
+     * @dev Calculates the latest distribution index and emitted rewards since last update
+     * @param distribution The distribution struct containing current state
+     * @param totalBalance Total boosted balance (either tokens or realm points) for the distribution
+     * @return nextIndex The updated distribution index
+     * @return currentTimestamp The timestamp used for the calculation (capped by distribution/contract end time)
+     * @return emittedRewards The total rewards emitted since last update
      */
-    function _calculateDistributionIndex(uint256 currentDistributionIndex, uint256 emissionPerSecond, uint256 lastUpdateTimestamp, uint256 totalBalance, uint256 distributionPrecision) internal view returns (uint256, uint256, uint256) {
+    function _calculateDistributionIndex(DataTypes.Distribution memory distribution, uint256 totalBalance) internal view returns (uint256, uint256, uint256) {
         if (
-            emissionPerSecond == 0                           // 0 emissions. no rewards setup.
-            || totalBalance == 0                             // nothing has been staked
-            || lastUpdateTimestamp == block.timestamp        // index already updated
+            totalBalance == 0                                              // nothing has been staked
+            || distribution.emissionPerSecond == 0                         // 0 emissions. no rewards setup.
+            || distribution.lastUpdateTimeStamp == block.timestamp         // index already updated
             //|| lastUpdateTimestamp > endTime                 // distribution has ended note: contract endTime is referenced. do we need?
         ) {
-
-            return (currentDistributionIndex, lastUpdateTimestamp, 0);                       
+            return (distribution.index, distribution.lastUpdateTimeStamp, 0);                       
         }
 
         uint256 currentTimestamp;
 
-        // contract endTime
-        if(endTime > 0){
+        // If distributionEndTime is provided (non-zero), use it as the cap
+        if(distribution.endTime > 0) {
+            currentTimestamp = block.timestamp > distribution.endTime ? distribution.endTime : block.timestamp;
+        } 
+        // Otherwise use contract endTime if set
+        else if(endTime > 0) {
             currentTimestamp = block.timestamp > endTime ? endTime : block.timestamp;
         }
-        else { 
+        // If neither is set, use current block timestamp
+        else {
             currentTimestamp = block.timestamp;
         }
 
-        uint256 timeDelta = currentTimestamp - lastUpdateTimestamp;
+        uint256 timeDelta = currentTimestamp - distribution.lastUpdateTimeStamp;
         
         // emissionPerSecond expressed w/ full token precision 
-        uint256 emittedRewards = emissionPerSecond * timeDelta;
+        uint256 emittedRewards;
+        unchecked {
+            // Overflow is unlikely as timeDelta is bounded by block times
+            emittedRewards = distribution.emissionPerSecond * timeDelta;
+        }
 
         //note: totalBalance is expressed 1e18. 
         //      emittedRewards is variable as per distribution.TOKEN_PRECISION
         //      normalize totalBalance to reward token's native precision
         //      why: paying out rewards token, standardize to that
-        uint256 totalBalanceRebased = (totalBalance * distributionPrecision) / 1E18;  // what if its already 1e18? do we want to bother with an if check?
-
+        uint256 totalBalanceRebased = (totalBalance * distribution.TOKEN_PRECISION) / 1E18;  // what if its already 1e18? do we want to bother with an if check?
+    
         //note: indexes are denominated in the distribution's precision
-        uint256 nextDistributionIndex = (emittedRewards * distributionPrecision / totalBalanceRebased) + currentDistributionIndex; 
+        uint256 nextDistributionIndex = ((emittedRewards * distribution.TOKEN_PRECISION) / totalBalanceRebased) + distribution.index; 
 
     
         return (nextDistributionIndex, currentTimestamp, emittedRewards);
@@ -1012,9 +1016,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // If vault has ended, vaultIndex should not be updated, beyond the final update.
         /** note:
             - vaults are removed from circulation via endVaults
-            - endVaults is responsible for the final update and setting vault.removed = 1
+            - endVaults is responsible for the final update and setting `vault.removed = 1`
             - final update involves updating all vault accounts, indexes and removing assets from global state
-            - we cannot be sure that endVaults would called precisely at the endTime for each vault
+            - we cannot be sure that endVaults would be called precisely at the endTime for each vault
             - therefore we must allow for some drift
             - as such, the check below cannot be implemented. 
          */
@@ -1157,10 +1161,10 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
          */
 
         // always > 0, staking power is setup on deployment
-        uint256 numOfUserAccounts = activeDistributions.length;
+        uint256 numOfDistributions = activeDistributions.length;
         
         // update each user account, looping thru distributions
-        for (uint256 i; i < numOfUserAccounts; i++) {
+        for (uint256 i; i < numOfDistributions; ++i) {
              
             uint256 distributionId = activeDistributions[i];   
 
@@ -1177,7 +1181,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             vaultAccounts[vaultId][distributionId] = vaultAccount;  
             userAccounts[user][vaultId][distributionId] = userAccount;
         }
- 
     }
 
     // for calc. rewards from index deltas. assumes tt indexes are expressed in the distribution's precision. therefore balance must be rebased to the same precision
