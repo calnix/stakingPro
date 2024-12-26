@@ -76,12 +76,6 @@ contract DataTypes {
         uint256[] tokenIds;     
         uint256 stakedTokens;   
         uint256 stakedRealmPoints;
-
-        // boosted balances 
-        //uint256 boostedRealmPoints; 
-        //uint256 boostedStakedTokens; // within a vault, users' split can be calculated on the base, since they all have the same boost effect         
-        //note: do i really need boosted balances?
-        // - if i do, i need to update each user's boosted balances when someone unstakes an nft from the vault
     }
 
     struct UserAccount {

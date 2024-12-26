@@ -16,100 +16,195 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
 
     address public pool;
     uint32 public immutable srcEid; //    LZ's eid for where this contract is deployed
+    uint256 public immutable SOLANA_EID = 30168;
 
     // roles
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant MONEY_MANAGER_ROLE = keccak256("MONEY_MANAGER_ROLE");
     
+    // structs
     struct Distribution {
-        uint32 dstEid;  // LZ eid
-        bytes32 tokenAddress;
+        uint32 dstEid;          // LZ eid: proxy for chainId. if zero, assumed to be local
+        bytes32 tokenAddress;    // token address encoded as bytes32
         
-        uint256 totalClaimed;
-        uint256 totalDeposited;
+        uint256 total;           // should be set by pool
+        uint256 claimed;
+        uint256 deposited;
     }
 
     struct AddressBook {
-        address evm;
-        bytes32 solana;        
+        address evmAddress;
+        bytes32 solanaAddress;        
         //....
     }
 
+    mapping(address user => AddressBook addressBook) public users;
     mapping(uint256 distributionId => Distribution distribution) public distributions;
-
-    mapping(address users => AddressBook addressBook) public users;
-
-    // events
-    event Deposit(address indexed from, uint256 amount);
-    event Withdraw(address indexed to, uint256 amount);
+    
+//------- events --------------------------------
+    event Deposit(uint256 distributionId, uint32 dstEid, address indexed from, uint256 amount);
+    event Withdraw(uint256 distributionId, uint32 dstEid, address indexed to, uint256 amount);
     event RecoveredTokens(address indexed token, address indexed target, uint256 indexed amount);
     event PoolSet(address indexed oldPool, address indexed newPool);
-
-    // errors
+    event DistributionSet(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress);
+    
+    // evm and non-evm
+    event PayRewards(uint256 distributionId, uint32 dstEid, address indexed to, address indexed receiver, uint256 amount);
+    event PayRewards(uint256 distributionId, uint32 dstEid, address indexed to, bytes32 indexed receiver, uint256 amount);
+    
+//------- errors --------------------------------
     error IncorrectToken();
     error InsufficientDeposits();
     error InsufficientGas();
-
+    error DistributionNotSetup();
+    error ExcessiveWithdrawal();
+    error ExcessiveDeposit();
+//------- constructor ----------------------------
     constructor(address moneyManager, address admin, address endpoint, address owner) OApp(endpoint, owner) Ownable(owner) {
 
         _grantRole(MONEY_MANAGER_ROLE, moneyManager);
         _grantRole(ADMIN_ROLE, admin);
     }
 
+//------- external functions ----------------------------
+    
+    // note: consider making this only callable by pool
+    /**
+     * @notice Sets up a new distribution for tracking rewards
+     * @dev Only callable by admin role. Distribution ID 0 is reserved for staking power.
+     * @param distributionId Unique identifier for this distribution
+     * @param dstEid LayerZero endpoint ID for the destination chain (0 for local chain)
+     * @param tokenAddress The token address for this distribution encoded as bytes32
+     * @custom:throws "Invalid distributionId" if distributionId is 0
+     * @custom:throws "Invalid tokenAddress" if tokenAddress is empty bytes32
+     * @custom:emits DistributionSet when distribution is successfully created
+     */
+    function setUpDistribution(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress, uint256 total) onlyRole(ADMIN_ROLE) external {
+        require(distributionId > 0, "Invalid distributionId");  // 0 is reserved for staking power
+        require(tokenAddress != bytes32(0), "Invalid tokenAddress");
+
+        // update
+        distributions[distributionId] = Distribution({
+            dstEid: dstEid,                                 // if 0, assumed to be local
+            tokenAddress: tokenAddress,
+            total: total,
+            claimed: 0,
+            deposited: 0
+        });
+
+        emit DistributionSet(distributionId, dstEid, tokenAddress);
+    }
+
 
     /**
-     * @notice Deposit rewards into the vault
-     * @param from Address from which rewards are to be pulled
-     * @param amount Rewards amount (in wei)
+     * @notice Deposits rewards into the vault for a specific distribution
+     * @dev Only callable by accounts with MONEY_MANAGER_ROLE. Distribution ID 0 is reserved for staking power.
+     * @param distributionId The ID of the distribution to deposit rewards for
+     * @param amount Amount of rewards to deposit (in wei)
+     * @param from Address from which rewards will be pulled
+     * @custom:throws "Invalid distributionId" if distributionId is 0
+     * @custom:throws "Invalid address" if from address is zero
+     * @custom:throws "Invalid amount" if amount is 0
+     * @custom:throws DistributionNotSetup if distribution is not initialized
+     * @custom:throws ExcessiveDeposit if deposit would exceed distribution total
+     * @custom:emits Deposit when rewards are successfully deposited
      */
-    function deposit(uint256 distributionId, address token, uint256 amount, address from) onlyRole(MONEY_MANAGER_ROLE) external {
+    function deposit(uint256 distributionId, uint256 amount, address from) onlyRole(MONEY_MANAGER_ROLE) external {
+        require(distributionId > 0, "Invalid distributionId");  // 0 is reserved for staking power
         require(from != address(0), "Invalid address");
+        require(amount > 0, "Invalid amount");
+        
+        // check
+        Distribution memory distribution = distributions[distributionId];
+        if(distribution.tokenAddress == bytes32(0)) revert DistributionNotSetup();
+
+        // check if excess: allow for partial deposits
+        if(distribution.total < distribution.deposited + amount) revert ExcessiveDeposit();
+        
+        // update
+        distribution.deposited += amount;
+
+        // local: transfer from sender
+        if(distribution.dstEid == 0){
+            address token = bytes32ToAddress(distribution.tokenAddress);
+            IERC20(token).safeTransferFrom(from, address(this), amount);
+        }
+        
+        // remote
+        else {
+
+            // do something?
+            // call x-chain vault?
+        }
+
+        // update storage
+        distributions[distributionId] = distribution;
+
+        emit Deposit(distributionId, distribution.dstEid, from, amount);
+    }
+
+
+    /**
+     * @notice Withdraws rewards from the vault for a specific distribution
+     * @dev Only callable by accounts with MONEY_MANAGER_ROLE. Distribution ID 0 is reserved for staking power.
+     * @param distributionId The ID of the distribution to withdraw rewards from
+     * @param amount Amount of rewards to withdraw (in wei)
+     * @param to Address to which rewards will be sent
+     * @custom:throws "Invalid address" if to address is zero
+     * @custom:throws "Invalid amount" if amount is 0
+     * @custom:throws DistributionNotSetup if distribution is not initialized
+     * @custom:throws InsufficientDeposits if withdrawal amount exceeds available balance
+     * @custom:emits Withdraw when rewards are successfully withdrawn
+     */
+    function withdraw(uint256 distributionId, uint256 amount, address to) onlyRole(MONEY_MANAGER_ROLE) external {
+        require(to != address(0), "Invalid address");
         require(amount > 0, "Invalid amount");
 
         // check
         Distribution memory distribution = distributions[distributionId];
-        if(token != bytes32ToAddress(distribution.tokenAddress)) revert IncorrectToken();
+        if(distribution.tokenAddress == bytes32(0)) revert DistributionNotSetup();
+        
+        // check if enough
+        uint256 remaining = distribution.total - distribution.claimed;
+        if(remaining < amount) revert InsufficientDeposits();
 
-        // update
-        distribution.totalDeposited += amount;
+        // update storage
+        distribution.claimed += amount;
+        
+        // local: transfer to receiver
+        if(distribution.dstEid == 0){
+            address token = bytes32ToAddress(distribution.tokenAddress);
+            IERC20(token).safeTransfer(to, amount);
+        }
+
+        // remote
+        else {
+
+            // do something?
+            // call x-chain vault?
+        }
         
         // update storage
         distributions[distributionId] = distribution;
 
-        emit Deposit(from, amount);
-
-        IERC20(token).safeTransferFrom(from, address(this), amount);
+        emit Withdraw(distributionId, distribution.dstEid, to, amount);
     }
 
     /**
-     * @notice Withdraw rewards from the vault
-     * @param to Address from which rewards are to be pulled
-     * @param amount Rewards amount (in wei)
-     */
-    function withdraw(uint256 distributionId, address token, uint256 amount, address to) onlyRole(MONEY_MANAGER_ROLE) external {
-        require(to != address(0), "Invalid address");
-        require(amount > 0, "Invalid amount");
-
-        Distribution memory distribution = distributions[distributionId];
-        if(token != bytes32ToAddress(distribution.tokenAddress)) revert IncorrectToken();
-
-        distribution.totalDeposited -= amount;
-        
-        // update storage
-        distributions[distributionId] = distribution;
-
-        emit Withdraw(to, amount);
-
-        IERC20(token).safeTransfer(to, amount);
-    }
-
-    function payRewards(uint256 distributionId, uint32 dstEid, address to, uint256 amount) external payable virtual {}
-
-
-    /**
-     * @notice Called by Staking Pool contract to transfer rewards to users
-     * @param to Address to which rewards are to be paid out
+     * @notice Transfers rewards to users, handling both local and cross-chain distributions
+     * @dev Only callable by the Staking Pool contract. Handles three cases:
+     *      1. Local transfers using direct ERC20 transfer
+     *      2. Solana transfers using LayerZero messaging
+     *      3. Other EVM chain transfers using LayerZero messaging
+     * @param distributionId The ID of the distribution to pay rewards from
+     * @param to Address of the user receiving rewards
      * @param amount Reward amount (expressed in the token's precision)
+     * @custom:throws "Only Pool" if caller is not the pool contract
+     * @custom:throws DistributionNotSetup if distribution is not initialized
+     * @custom:throws InsufficientDeposits if reward amount exceeds available balance
+     * @custom:throws InsufficientGas if msg.value is insufficient for cross-chain message fees
+     * @custom:emits PayRewards(uint256,uint32,address,address,uint256) for local and EVM chain transfers
+     * @custom:emits PayRewards(uint256,uint32,address,bytes32,uint256) for Solana transfers
      */
     function payRewards(uint256 distributionId, address to, uint256 amount) external payable virtual {
         require(msg.sender == pool, "Only Pool");
@@ -117,37 +212,43 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
         Distribution memory distribution = distributions[distributionId];
         
         // check balance
-        uint256 available = distribution.totalDeposited - distribution.totalClaimed;
+        uint256 available = distribution.total - distribution.claimed;
         if(available < amount) revert InsufficientDeposits();
 
         // update balance
-        distribution.totalClaimed += amount;
+        distribution.claimed += amount;
 
         // update storage
         distributions[distributionId] = distribution;
 
-        // emit    
-        
-        // is local
-        if(distribution.dstEid == srcEid){
+        // get user struct
+        AddressBook memory user = users[to];
 
-            AddressBook memory user = users[to];
-            address receiver = user.evm == address(0) ? to : user.evm;
+        // local: transfer to receiver
+        if(distribution.dstEid == 0){
+            
+            // get user address
+            address receiver = user.evmAddress == address(0) ? to : user.evmAddress;
 
-            // get address + transfer
+            // get token address
             address token = bytes32ToAddress(distribution.tokenAddress);
+
+            emit PayRewards(distributionId, distribution.dstEid, to, receiver, amount);
+ 
+            //transfer
             IERC20(token).safeTransfer(receiver, amount); 
         }
 
-        // is it solana
-        else if (distribution.dstEid == 30168){
+        // if it is solana
+        else if (distribution.dstEid == SOLANA_EID){
 
             // create options
             bytes memory options;
             //options = OptionsBuilder.newOptions().addExecutorLzReceiveOption({_gas: uint128(totalGas), _value: 0});
 
             // craft payload: beneficiary address + amount
-            bytes memory payload = abi.encode(users[to].solana, amount);
+            bytes memory payload = abi.encode(user.solanaAddress, amount);
+
 
             // check gas needed
             MessagingFee memory fee = _quote(distribution.dstEid, payload, options, false);
@@ -157,12 +258,13 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
             // returns MessagingReceipt struct
             _lzSend(distribution.dstEid, payload, options, fee, payable(msg.sender));
 
-        
-        // is it x-chain evm
+            emit PayRewards(distributionId, distribution.dstEid, to, user.solanaAddress, amount);
+
+        // we assume all else is x-chain evm
         } else { 
 
-            AddressBook memory user = users[to];
-            address receiver = user.evm == address(0) ? to : user.evm;
+            // get user address
+            address receiver = user.evmAddress == address(0) ? to : user.evmAddress;
             
             // create options
             bytes memory options;
@@ -179,6 +281,7 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
             // returns MessagingReceipt struct
             _lzSend(distribution.dstEid, payload, options, fee, payable(msg.sender));
 
+            emit PayRewards(distributionId, distribution.dstEid, to, receiver, amount);
         }
     }
 

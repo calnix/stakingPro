@@ -97,7 +97,6 @@ staking power will be identified by its distribution id as 0, throughout the con
 - else, we would be emitting token rewards indefinitely
 - stakingPro does not check if tokens have been deposited or not; it will only make a call to RewardsVault contract to transfer
 
-## updateDistribution
 
 ## updateDistribution
 
@@ -175,3 +174,5 @@ Key aspects:
 - Takes effect immediately for future reward distributions
 
 This provides flexibility to upgrade reward distribution logic while maintaining core staking functionality.
+
+## 

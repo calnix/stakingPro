@@ -135,4 +135,3 @@ This is because _updateUserAccounts gets distribution from storage. So we don't 
             DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
             DataTypes.UserAccount memory userAccount_ = userAccounts[user][vaultId][distributionId];
 ```
-

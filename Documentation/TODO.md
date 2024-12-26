@@ -84,3 +84,9 @@ _updateUserAccount(userVaultAssets, userAccount_, vault, vaultAccount_, distribu
 7. document: 
         - how rewards are calculated: distribution, vault, user
 
+8. After pausing the contract to update nft multiplier, can i put a lock on calculations for distribution, vault, user?
+
+- can update nft multiplier without affecting the calculations for distribution, vault, user
+- there won't be drift between batchs of update vaults and boosted values.
+
+

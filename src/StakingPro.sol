@@ -1382,6 +1382,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         ++ totalDistributions;
 
         emit DistributionCreated(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision);
+
+        //REWARDS_VAULT.setupDistribution(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision);
     }
 
     /** 
@@ -1619,13 +1621,5 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         _;
     }
-
-/*
-    modifier auth() {
-        
-        require(msg.sender == router || msg.sender == owner(), "Incorrect Caller");    
-
-        _;
-    }
-*/
+    
 }
