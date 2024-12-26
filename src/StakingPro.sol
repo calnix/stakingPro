@@ -631,8 +631,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         vaults[vaultId] = vault;
     }
 
-    // note: may want to flip the loop order
-    // REVIEW AFTER FINALIZING ALL INTERNAL FUNCTIONS
     function endVaults(bytes32[] calldata vaultIds) external whenStarted whenNotPaused {
         uint256 numOfVaults = vaultIds.length;
         if(numOfVaults == 0) revert InvalidArray();
@@ -792,18 +790,14 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
 
-
     /**
         add checks:
         - check if vault should stop earning rewards - if so do not update; or update as per last
 
-        document
-        - how rewards are calculated: distribution, vault, user
-
      */
 
 
-//-------------------------------internal-------------------------------------------
+//-------------------------------internal------------------------------------------- 
   
     function _updateDistributionIndex(DataTypes.Distribution memory distribution) internal returns (DataTypes.Distribution memory) {
         // distribution already updated
@@ -1153,36 +1147,83 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
                             POOL MANAGEMENT
     //////////////////////////////////////////////////////////////*/
     
-    //note: endVaults follows the same pattern. maybe make separate internal fns for these 2.
+
+    //--------------  NFT MULTIPLIER  ----------------------------
+    /**    
+        1. pause contract
+        2. close all the books: distributions, vaultAccounts [updateAllVaultsAndAccounts]
+        3. update Nft Multiplier [updateNftMultiplier]
+        4. totalBoosted values and vault boosted values are now different: update all vault and user Structs. [updateBoostedBalances]
+        5. unpause
+
+     */
+
+    // note: onlyOwner? if ended remove?
+    /**
+     * @notice Updates all vault accounts for the given vault IDs across all active distributions
+     * @dev Updates distribution indexes and vault account states for each vault across all active distributions
+     * @param vaultIds Array of vault IDs to update
+     * @custom:throws InvalidArray if vaultIds array is empty
+     */
+    function updateAllVaultsAndAccounts(bytes32[] calldata vaultIds) external {
+        uint256 numOfVaults = vaultIds.length;
+        if(numOfVaults == 0) revert InvalidArray();
+
+        uint256 numOfDistributions = activeDistributions.length;
+
+        // For each distribution
+        for(uint256 i; i < numOfDistributions; ++i) {
+            
+            uint256 distributionId = activeDistributions[i];
+            DataTypes.Distribution memory distribution_ = distributions[distributionId];
+
+            // Update distribution first
+            DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_);
+
+            // Then update all vault accounts for this distribution
+            for(uint256 j; j < numOfVaults; ++j) {
+                
+                // get vault and vault account from storage
+                bytes32 vaultId = vaultIds[j];
+                DataTypes.Vault memory vault = vaults[vaultId];
+                DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
+
+                // vault has been removed from circulation: skip
+                if(vault.removed == 1) continue;
+
+                // Update storage: vault account 
+                (DataTypes.VaultAccount memory vaultAccount,) = _updateVaultAccount(vault, vaultAccount_, distribution);
+                vaultAccounts[vaultId][distributionId] = vaultAccount;
+            }
+
+            // Update distribution storage if changed
+            if(distribution.lastUpdateTimeStamp > distribution_.lastUpdateTimeStamp) {
+                distributions[distributionId] = distribution;
+            }
+        }
+    }    
+
+    /**
+     * @notice Updates the NFT multiplier used to calculate boost factors
+     * @dev Only callable by contract owner
+     * @param newMultiplier The new multiplier value to set
+     * @custom:throws If newMultiplier is 0
+     * @custom:emits NftMultiplierUpdated when multiplier is updated
+     */
     function updateNftMultiplier(uint256 newMultiplier) external onlyOwner {
         require(newMultiplier > 0);
 
-
+        uint256 oldMultiplier = NFT_MULTIPLIER;
         NFT_MULTIPLIER = newMultiplier;
 
-        // emit
+        emit NftMultiplierUpdated(oldMultiplier, newMultiplier);
     }
 
-    function updateAllVaultsAndAccounts(bytes32[] calldata vaultIds) external {
-        uint256 numOfVaults = vaultIds.length;
-        require(numOfVaults > 0, "Invalid array");
-
-        
-        for(uint256 i; i < numOfVaults; ++i) {
-
-           // _updateVaultAllAccounts(bytes32 vaultId);
-        }
-
-        // emit
-    }   
-    
     //note: for each vault, update its boosted balances, then update its respective users
     // ensure NFT_MULTIPLIER has been changed before calling this fn
-    function updateBoostedBalances(bytes32[] calldata vaultIds, address[][] calldata userAddresses) external onlyOwner {
+    function updateBoostedBalances(bytes32[] calldata vaultIds) external onlyOwner {
         uint256 numOfVaults = vaultIds.length;
-        require(numOfVaults > 0, "Invalid array");
-
-        if(numOfVaults != userAddresses.length) revert InvalidArray();
+        if(numOfVaults == 0) revert InvalidArray();
 
         // for each vault
         for(uint256 i; i < numOfVaults; ++i) {
@@ -1202,22 +1243,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;    
             vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;
 
-            uint256 numOfUsersPerVault = userAddresses[i].length;
-
-            // for each vault for user i
-            for(uint256 j; j < numOfUsersPerVault; ++j){
-                address userAddress = userAddresses[i][j];
-    
-                // Fixed: Access the mapping correctly using the user's address and vaultId
-                DataTypes.User memory userVaultAssets = users[userAddress][vaultId];
-
-                //userVaultAssets.boostedRealmPoints = (userVaultAssets.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;
-                //userVaultAssets.boostedStakedTokens = (userVaultAssets.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;
-
-                // Don't forget to write back to storage
-                users[userAddress][vaultId] = userVaultAssets;
-            }
-
             // Write back vault changes to storage
             vaults[vaultId] = vault;
 
@@ -1226,7 +1251,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             totalBoostedStakedTokens += vault.boostedStakedTokens;
         }
 
-        // emit
+        emit BoostedBalancesUpdated(vaultIds);
     }
 
 /*
@@ -1259,6 +1284,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             }
         }
 */
+  
+    //--------------  NFT MULTIPLIER OVER  ----------------------------
 
 
     /**
@@ -1446,7 +1473,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         emit DistributionUpdated(distributionId, distribution.startTime, distribution.endTime, distribution.emissionPerSecond);
     }
-
+    
+    //note: what about setting to 0 to disable the rewards vault?
     /**
      * @notice Updates the rewards vault address
      * @dev Only callable by owner when contract is not paused
@@ -1455,7 +1483,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits RewardsVaultSet when vault address is updated
      */
     function setRewardsVault(address newRewardsVault) external onlyOwner whenNotPaused {
-        if(newRewardsVault == address(0)) revert InvalidAddress();       //note: what about setting to 0 to disable the rewards vault?
+        if(newRewardsVault == address(0)) revert InvalidAddress();       
 
         emit RewardsVaultSet(address(REWARDS_VAULT), newRewardsVault);
         REWARDS_VAULT = IRewardsVault(newRewardsVault);    
@@ -1575,6 +1603,10 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         IERC20(tokenAddress).safeTransfer(receiver, amount);
     }
 
+    // for users to unstake their assets when contract is paused
+    function emergencyUnstake(bytes32 vaultId, address onBehalfOf) external onlyOwner whenStarted whenPaused {
+
+    }
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS

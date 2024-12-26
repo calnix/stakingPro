@@ -79,8 +79,8 @@ _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
 _updateUserAccount(userVaultAssets, userAccount_, vault, vaultAccount_, distribution_);
 
 
-
-
-
-
 ```
+
+7. document: 
+        - how rewards are calculated: distribution, vault, user
+

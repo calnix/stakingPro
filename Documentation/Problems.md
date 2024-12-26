@@ -1,23 +1,21 @@
-1. Handling fee pct values against diff token precision values
+## 1. Handling fee pct values against diff token precision values
 
-2. Calculating NFT Boost factors and updating it on stakeNfts
+## 2. Calculating NFT Boost factors and updating it on stakeNfts
 
-3. redistribution inactive participants in a vault
+## 3. redistribution inactive participants in a vault
     - their rewards go to active participants
     - i.e
     - vault has rp staked, but no moca tokens. Only eligible for staking power; not token rewards
     - staking power earned -> rp stakers get a fee; as per fee schedule
     - what about the component that is meant to go to moca token stakers
 
-4. Minimum of 100 RP for onboarding to contract
-
-5. Special NFTS
+## 4. Special NFTS
 
 ----
 
 # Design considerations
 
-1. Decimal Precision
+## 1. Decimal Precision
 
 index rebased to 1e18
 rewards calculated and stored in native
@@ -39,6 +37,7 @@ we must convert the decimal precision of stakedBase
 this impacts _calculateDistributionIndex and _calculateRewards
 
 staking base gets rounded down: 
+
 ```solidity
 
 contract PrecisionConversion {
@@ -58,21 +57,7 @@ contract PrecisionConversion {
 }
 ```
 
-2. Decimal Precision for feeFactors and NFT multiplier [PRECISION_BASE]
-
-integer: 100
-2 dp   : 10000
-
-on 2dp base
-- 100% : 10_000
-- 50%  : 5000
-- 1%   : 100
-- 0.5% : 50
-- 0.25%: 25
-- 0.05%: 5
-- 0.01%: 1
-
-3. explain the process of updating each vaultAccount and userAccount for a specific user's vault.
+## 2. explain the process of updating each vaultAccount and userAccount for a specific user's vault
 
 ```solidity
         /**
@@ -93,7 +78,7 @@ on 2dp base
 
 ```
 
-4. vaultId bytes32 -> uint256
+## 3. vaultId bytes32 -> uint256
 
 changed `vaultId` to uint256, to allow sequential looping
 
@@ -102,12 +87,12 @@ this is to enable `updateNftMultiplier`.
 if we cannot loop through all the vaults in existence,
 revert to using vaultId as bytes32.
 
-5. endVaults and updateNftMultiplier
+## 5. endVaults and updateNftMultiplier
 
 both have odd internal fns requirements that don't fit with the rest.
 consider separate ones.
 
-6. Active Distributions Array management
+## 6. Active Distributions Array management
 
 instead of array use mapping to track active status
 
@@ -128,7 +113,7 @@ function _removeFromActiveDistributions(uint256 distributionId) internal {
 }
 ```
 
-7. Precision loss in _calculateDistributionIndex
+## 7. Precision loss in _calculateDistributionIndex
 
 ```solidity
     // Precision handling for balance conversion
@@ -138,5 +123,16 @@ function _removeFromActiveDistributions(uint256 distributionId) internal {
 
 think about when this happens, and how to avoid it.
 
-8. 
+## 8. endVaults and updateAllVaultsAndAccounts use a different approach
+
+Does not call _updateUserAccounts, like the other functions.
+Instead, it updates a single distribution then calls _updateVaultAccount to update the related vault accounts.
+
+This is because _updateUserAccounts gets distribution from storage. So we don't want to loop over each vaultId calling _updateUserAccounts, as it would mean redundant storage calls for distribution.
+```solidity
+            // get corresponding user+vault account for this active distribution 
+            DataTypes.Distribution memory distribution_ = distributions[distributionId];
+            DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
+            DataTypes.UserAccount memory userAccount_ = userAccounts[user][vaultId][distributionId];
+```
 

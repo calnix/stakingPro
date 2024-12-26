@@ -72,3 +72,8 @@ event CreationNftRequirementUpdated(uint256 oldAmount, uint256 newAmount);
 event MinimumRealmPointsUpdated(uint256 oldAmount, uint256 newAmount);
 event VaultCooldownDurationUpdated(uint256 oldDuration, uint256 newDuration);
 
+// updateNftMultiplier
+event NftMultiplierUpdated(uint256 oldMultiplier, uint256 newMultiplier);
+
+// updateBoostedBalances
+event BoostedBalancesUpdated(bytes32[] vaultIds);
