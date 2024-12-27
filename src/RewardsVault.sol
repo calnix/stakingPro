@@ -3,12 +3,12 @@ pragma solidity 0.8.24;
 
 import {SafeERC20, IERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import { OApp, Origin, MessagingFee } from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
-
-import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {Ownable2Step, Ownable} from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import {AccessControl} from "openzeppelin-contracts/contracts/access/AccessControl.sol";
 
+import { OApp, Origin, MessagingFee } from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
+//import { OptionsBuilder } from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 
 // this is just a container. all calcs and tracking is on staking contract
 contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
@@ -27,9 +27,9 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
         uint32 dstEid;          // LZ eid: proxy for chainId. if zero, assumed to be local
         bytes32 tokenAddress;    // token address encoded as bytes32
         
-        uint256 total;           // should be set by pool
-        uint256 claimed;
-        uint256 deposited;
+        uint256 totalRequired;           // should be set by pool
+        uint256 totalClaimed;
+        uint256 totalDeposited;
     }
 
     struct AddressBook {
@@ -59,6 +59,7 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
     error DistributionNotSetup();
     error ExcessiveWithdrawal();
     error ExcessiveDeposit();
+    error CallDepositOnRemote();
 //------- constructor ----------------------------
     constructor(address moneyManager, address admin, address endpoint, address owner) OApp(endpoint, owner) Ownable(owner) {
 
@@ -79,7 +80,7 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
      * @custom:throws "Invalid tokenAddress" if tokenAddress is empty bytes32
      * @custom:emits DistributionSet when distribution is successfully created
      */
-    function setUpDistribution(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress, uint256 total) onlyRole(ADMIN_ROLE) external {
+    function setUpDistribution(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress, uint256 totalRequired) onlyRole(ADMIN_ROLE) external {
         require(distributionId > 0, "Invalid distributionId");  // 0 is reserved for staking power
         require(tokenAddress != bytes32(0), "Invalid tokenAddress");
 
@@ -87,16 +88,16 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
         distributions[distributionId] = Distribution({
             dstEid: dstEid,                                 // if 0, assumed to be local
             tokenAddress: tokenAddress,
-            total: total,
-            claimed: 0,
-            deposited: 0
+            totalRequired: totalRequired,
+            totalClaimed: 0,
+            totalDeposited: 0
         });
 
         emit DistributionSet(distributionId, dstEid, tokenAddress);
     }
 
 
-    /**
+    /** note: only for local deposits. 
      * @notice Deposits rewards into the vault for a specific distribution
      * @dev Only callable by accounts with MONEY_MANAGER_ROLE. Distribution ID 0 is reserved for staking power.
      * @param distributionId The ID of the distribution to deposit rewards for
@@ -114,36 +115,29 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
         require(from != address(0), "Invalid address");
         require(amount > 0, "Invalid amount");
         
-        // check
+        // sanity checks
         Distribution memory distribution = distributions[distributionId];
+        // only local deposits
+        if(distribution.dstEid > 0) revert CallDepositOnRemote();
+        // distribution must be setup
         if(distribution.tokenAddress == bytes32(0)) revert DistributionNotSetup();
-
-        // check if excess: allow for partial deposits
-        if(distribution.total < distribution.deposited + amount) revert ExcessiveDeposit();
         
-        // update
-        distribution.deposited += amount;
+        // check if excess: allow for partial deposits
+        if(distribution.totalRequired < distribution.totalDeposited + amount) revert ExcessiveDeposit();
+        
+        // update + storage
+        distribution.totalDeposited += amount;
+        distributions[distributionId] = distribution;
 
         // local: transfer from sender
-        if(distribution.dstEid == 0){
-            address token = bytes32ToAddress(distribution.tokenAddress);
-            IERC20(token).safeTransferFrom(from, address(this), amount);
-        }
-        
-        // remote
-        else {
-
-            // do something?
-            // call x-chain vault?
-        }
-
-        // update storage
-        distributions[distributionId] = distribution;
+        address token = bytes32ToAddress(distribution.tokenAddress);
+        IERC20(token).safeTransferFrom(from, address(this), amount);
 
         emit Deposit(distributionId, distribution.dstEid, from, amount);
     }
 
-
+    
+    /** note: only for local withdrawals. 
     /**
      * @notice Withdraws rewards from the vault for a specific distribution
      * @dev Only callable by accounts with MONEY_MANAGER_ROLE. Distribution ID 0 is reserved for staking power.
@@ -165,27 +159,16 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
         if(distribution.tokenAddress == bytes32(0)) revert DistributionNotSetup();
         
         // check if enough
-        uint256 remaining = distribution.total - distribution.claimed;
+        uint256 remaining = distribution.totalRequired - distribution.totalClaimed;
         if(remaining < amount) revert InsufficientDeposits();
 
-        // update storage
-        distribution.claimed += amount;
-        
-        // local: transfer to receiver
-        if(distribution.dstEid == 0){
-            address token = bytes32ToAddress(distribution.tokenAddress);
-            IERC20(token).safeTransfer(to, amount);
-        }
-
-        // remote
-        else {
-
-            // do something?
-            // call x-chain vault?
-        }
-        
-        // update storage
+        // update + storage
+        distribution.totalClaimed += amount;
         distributions[distributionId] = distribution;
+
+        // local: transfer to receiver
+        address token = bytes32ToAddress(distribution.tokenAddress);
+        IERC20(token).safeTransfer(to, amount);
 
         emit Withdraw(distributionId, distribution.dstEid, to, amount);
     }
@@ -212,11 +195,11 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
         Distribution memory distribution = distributions[distributionId];
         
         // check balance
-        uint256 available = distribution.total - distribution.claimed;
+        uint256 available = distribution.totalRequired - distribution.totalClaimed;
         if(available < amount) revert InsufficientDeposits();
 
         // update balance
-        distribution.claimed += amount;
+        distribution.totalClaimed += amount;
 
         // update storage
         distributions[distributionId] = distribution;
@@ -247,8 +230,7 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
             //options = OptionsBuilder.newOptions().addExecutorLzReceiveOption({_gas: uint128(totalGas), _value: 0});
 
             // craft payload: beneficiary address + amount
-            bytes memory payload = abi.encode(user.solanaAddress, amount);
-
+            bytes memory payload = abi.encode(distribution.tokenAddress, amount, user.solanaAddress);
 
             // check gas needed
             MessagingFee memory fee = _quote(distribution.dstEid, payload, options, false);
@@ -271,7 +253,7 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
             //options = OptionsBuilder.newOptions().addExecutorLzReceiveOption({_gas: uint128(totalGas), _value: 0});
 
             // craft payload: beneficiary address + amount
-            bytes memory payload = abi.encode(receiver, amount);
+            bytes memory payload = abi.encode(distributionId, distribution.tokenAddress, amount, receiver);
 
             // check gas needed
             MessagingFee memory fee = _quote(distribution.dstEid, payload, options, false);
@@ -374,20 +356,31 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
 
     /**
      * @dev Override of _lzReceive internal fn in OAppReceiver.sol. The public fn lzReceive, handles param validation.
-     * @param origin A struct containing information about where the packet came from.
-     * @param guid A global unique identifier for tracking the packet.
      * @param payload message payload being received
-     * @custom:anon-param address: Executor address as specified by the OApp.
-     * @custom:anon-param bytes calldata: Any extra data or options to trigger on receipt.
+     * @custom:anon-param origin A struct containing information about where the packet came from.
+     * @custom:anon-param guid: A global unique identifier for tracking the packet.
+     * @custom:anon-param executor: Executor address as specified by the OApp.
+     * @custom:anon-param options: Any extra data or options to trigger on receipt.
      */
-    function _lzReceive(Origin calldata origin, bytes32 guid, bytes calldata payload, address, bytes calldata) internal override {
+    function _lzReceive(Origin calldata origin, bytes32 /*guid*/, bytes calldata payload, address /*executor*/, bytes calldata /*options*/) internal override {
+    
+        //note: distributionId != 0 already checked in remote
+
+        // deposits made on remote vaults
+        (uint256 distributionId, uint256 amount, uint256 isDeposit) = abi.decode(payload, (uint256, uint256, uint256));
         
-        //note: do i want to implement receive?    
+        // deposits made on remote vaults
+        if(isDeposit == 1){
 
-        // owner, tokendId
-        //(address owner, uint256[] memory tokenIds) = abi.decode(payload, (address, uint256[]));
+            distributions[distributionId].totalDeposited += amount;
+        }
+        
+        // withdrawals made on remote vaults
+        else {
+            distributions[distributionId].totalClaimed += amount;
+        }
 
-        //_unlock(owner, tokenIds);
+        emit Deposit(distributionId, origin.srcEid, msg.sender, amount);
     }
 
 } 
