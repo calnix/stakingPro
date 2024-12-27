@@ -17,8 +17,6 @@ contract EVMVault is OApp, Pausable, Ownable2Step {
 
     // Track token balances and activity
     struct TokenInfo {
-        //uint256 totalRequired;      // Total amount required across all distributions
-        
         uint256 totalDeposited;     // Total amount deposited
         uint256 totalWithdrawn;     // Total amount withdrawn
         uint256 totalPaidOut;       // Total amount paid out as rewards
@@ -46,9 +44,11 @@ contract EVMVault is OApp, Pausable, Ownable2Step {
         dstEid = dstEid_;
     }
 
+    //------------------------------- DEPOSIT/WITHDRAW ---------------------------------
+
     //note: call back to home: rewards vault
     //note: caller is expected to reference the Distribution.totalRequired on the RewardsVault
-    function depositForDistribution(address token, uint256 amount, address from, uint256 distributionId) external payable onlyOwner {
+    function deposit(address token, uint256 amount, address from, uint256 distributionId) external payable onlyOwner {
         if(token == address(0)) revert InvalidToken();
         
         // update distribution
@@ -114,8 +114,11 @@ contract EVMVault is OApp, Pausable, Ownable2Step {
         //----------------------- ----- -----------------------
     }
 
-
+    //------------------------------- PAY REWARDS ---------------------------------
     function payRewards(address token, address receiver, uint256 amount) external payable onlyOwner virtual {
+        
+        tokens[token].totalPaidOut += amount;
+        
         // transfer to user
         IERC20(token).safeTransfer(receiver, amount);
 
