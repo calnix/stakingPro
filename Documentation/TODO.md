@@ -1,6 +1,8 @@
-1. createVault
+# TODO
 
-- add batch fn to registry to check ownership of multiple nfts
+## 1. createVault
+
+- add batch fn to NFT_REGISTRY to check ownership of multiple nfts
 
 ```solidity
         for (uint256 i; i < CREATION_NFTS_REQUIRED; i++) {
@@ -12,17 +14,17 @@
         }
 ```
 
-2. caching msg.sender as onBehalfOf
+## 2. caching msg.sender as onBehalfOf
 
 ```solidity
         address onBehalfOf = msg.sender;
 ```
 consider just using msg.sender directly
 
-3. decide if you want to remove vaultId from the struct
+## 3. decide if you want to remove vaultId from the struct
 
 
-4. add streamingOwnerCheck() to NftLocker
+## 4. add streamingOwnerCheck() to NftLocker
 
 - streaming contract is deployed on ethereum, as will the NftLocker
 - streamingOwnerCheck() will check if the msg.sender is the owner of tokenId
@@ -34,7 +36,7 @@ consider just using msg.sender directly
 
 nft streaming: 0xb46F2634Fcb79fa2F73899487d04acfB0252A457
 
-5. add batch fn to registry to check ownership of multiple nfts
+## 5. add batch fn to registry to check ownership of multiple nfts
 
 ```solidity
         (address owner, bytes32 nftVaultId) = NFT_REGISTRY.nfts(tokenIds);
@@ -48,7 +50,7 @@ nft streaming: 0xb46F2634Fcb79fa2F73899487d04acfB0252A457
         }
 ```
 
-6. add batch fn to registry to check if multiple nfts are already staked
+## 6. add batch fn to registry to check if multiple nfts are already staked
 
 ```solidity
         (address owner, bytes32 nftVaultId) = NFT_REGISTRY.nfts(tokenIds);
@@ -81,12 +83,30 @@ _updateUserAccount(userVaultAssets, userAccount_, vault, vaultAccount_, distribu
 
 ```
 
-7. document: 
+## 7. Precision loss in _calculateDistributionIndex
+
+- check and test if precision loss is a problem, given varying token precisions
+
+```solidity
+    // Precision handling for balance conversion
+    uint256 totalBalanceRebased = (totalBalance * distribution.TOKEN_PRECISION) / 1E18;
+    if (totalBalanceRebased == 0) revert PrecisionLoss();
+```
+
+## 7. document: 
         - how rewards are calculated: distribution, vault, user
 
-8. After pausing the contract to update nft multiplier, can i put a lock on calculations for distribution, vault, user?
+## 8. After pausing the contract to update nft multiplier, can i put a lock on calculations for distribution, vault, user?
 
 - can update nft multiplier without affecting the calculations for distribution, vault, user
 - there won't be drift between batchs of update vaults and boosted values.
 
+## 9. Errors to be a library containing all errors
 
+## 10. endVaults and updateAllVaultsAndAccounts
+
+consider if there is a way to simplify the logic of these functions.
+
+## 11. Special NFTS
+
+ 

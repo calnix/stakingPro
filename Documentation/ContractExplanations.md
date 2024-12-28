@@ -176,3 +176,28 @@ Key aspects:
 This provides flexibility to upgrade reward distribution logic while maintaining core staking functionality.
 
 ## 
+
+
+
+# Notes
+
+## 1. explain the process of updating each vaultAccount and userAccount for a specific user's vault
+
+```solidity
+        /**
+            user to stake in a specific vault
+            that vault must be updated and booked first
+            - update all active distributions
+            - update all vault accounts for specified vault [per distribution]
+            - update all user accounts for specified vault  [per distribution]
+            - book stake and update vault assets
+            - book stake 
+         */
+
+
+        // update all vault accounts for specified vault [per distribution]
+        // - update all active distributions: book prior rewards, based on prior alloc points
+        // - update all vault accounts for each active distribution 
+        // - update user's account
+
+```

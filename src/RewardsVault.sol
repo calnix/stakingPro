@@ -43,6 +43,9 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
     mapping(address user => AddressBook addressBook) public users;
     mapping(uint256 distributionId => Distribution distribution) public distributions;
     
+    // Track rewards paid out to each user for each token note: is this needed?
+    //mapping(address user => mapping(address token => uint256 amount)) public users;
+
 //------- events --------------------------------
     event Deposit(uint256 distributionId, uint32 dstEid, address indexed from, uint256 amount);
     event Withdraw(uint256 distributionId, uint32 dstEid, address indexed to, uint256 amount);

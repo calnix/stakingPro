@@ -1,4 +1,6 @@
-# discarded fns
+# Discarded fns and ideas
+
+## 1. Alternative internal fns for updating distributions
 
 ```solidity
     // update all active distributions: book prior rewards, based on prior alloc points 
@@ -87,4 +89,25 @@
             vaultAccounts[vaultId][activeDistributions[i]] = vaultAccount;   
         }   
     }
+```
+
+## 2. Active Distributions Array management
+
+instead of array use mapping to track active status
+
+```solidity
+// Add new mapping to track active status
+mapping(uint256 => bool) public isDistributionActive;
+
+// New helper function
+function _removeFromActiveDistributions(uint256 distributionId) internal {
+    for (uint256 i = 0; i < activeDistributions.length; i++) {
+        if (activeDistributions[i] == distributionId) {
+            activeDistributions[i] = activeDistributions[activeDistributions.length - 1];
+            activeDistributions.pop();
+            isDistributionActive[distributionId] = false;
+            break;
+        }
+    }
+}
 ```

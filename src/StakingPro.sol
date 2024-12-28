@@ -868,7 +868,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             totalBalance == 0                                              // nothing has been staked
             || distribution.emissionPerSecond == 0                         // 0 emissions. no rewards setup.
             || distribution.lastUpdateTimeStamp == block.timestamp         // index already updated
-            //|| lastUpdateTimestamp > endTime                 // distribution has ended note: contract endTime is referenced. do we need?
+            //|| lastUpdateTimestamp > endTime                              // distribution has ended note: contract endTime is referenced. do we need?
         ) {
             return (distribution.index, distribution.lastUpdateTimeStamp, 0);                       
         }
@@ -959,7 +959,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         uint256 boostedBalance = distribution.distributionId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
         uint256 totalBalanceRebased = (boostedBalance * distribution.TOKEN_PRECISION) / 1E18;  
         // note: rewards calc. in reward token precision
-        totalAccRewards = _calculateRewards(totalBalanceRebased, distribution.index, vaultAccount.index);
+        totalAccRewards = _calculateRewards(totalBalanceRebased, distribution.index, vaultAccount.index, distribution.TOKEN_PRECISION);
 
         // calc. creator fees
         if(vault.creatorFeeFactor > 0) {
@@ -1019,7 +1019,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             if(user.stakedTokens > 0) {
                 // users whom staked tokens are eligible for rewards less of fees
                 uint256 balanceRebased = (user.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
-                uint256 accruedRewards = _calculateRewards(balanceRebased, newUserIndex, userAccount.index);
+                uint256 accruedRewards = _calculateRewards(balanceRebased, newUserIndex, userAccount.index, distribution.TOKEN_PRECISION);
                 userAccount.accStakingRewards += accruedRewards;
 
                 // emit RewardsAccrued(user, accruedRewards, distributionPrecision);
@@ -1098,8 +1098,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
     // for calc. rewards from index deltas. assumes tt indexes are expressed in the distribution's precision. therefore balance must be rebased to the same precision
-    function _calculateRewards(uint256 balanceRebased, uint256 currentIndex, uint256 priorIndex) internal pure returns (uint256) {
-        return (balanceRebased * (currentIndex - priorIndex)) / 1E18;
+    function _calculateRewards(uint256 balanceRebased, uint256 currentIndex, uint256 priorIndex, uint256 PRECISION) internal pure returns (uint256) {
+        return (balanceRebased * (currentIndex - priorIndex)) / PRECISION;
     }
 
 
