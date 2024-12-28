@@ -175,7 +175,34 @@ Key aspects:
 
 This provides flexibility to upgrade reward distribution logic while maintaining core staking functionality.
 
-## 
+## Owner fns breakdown
+
+(nft stuff)
+- updateNftMultiplier
+- updateBoostedBalances
+
+(global variables)
+- updateCreationNfts
+- updateMinimumRealmPoints
+- updateVaultCooldown
+
+(distribution stuff)
+- setupDistribution
+- updateDistribution
+- endDistributionImmediately
+
+(contract)
+- setRewardsVault
+
+(crisis)
+pause
+unpause
+freeze
+emergencyExit
+recoverERC20
+
+The only thing an operator should do it pause the contract.
+
 
 
 # Notes
