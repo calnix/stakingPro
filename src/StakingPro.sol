@@ -524,7 +524,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         emit RewardsClaimed(vaultId, onBehalfOf, totalUnclaimedRewards);
 
         // transfer rewards to user, from rewardsVault
-        REWARDS_VAULT.payRewards(distributionId, onBehalfOf, totalUnclaimedRewards);
+        REWARDS_VAULT.payRewards(distributionId, totalUnclaimedRewards, onBehalfOf);
     }
 
 
@@ -1346,7 +1346,10 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:throws DistributionAlreadySetup if distribution with ID already exists
      * @custom:emits DistributionCreated when distribution is successfully created
      */
-    function setupDistribution(uint256 distributionId, uint256 distributionStartTime, uint256 distributionEndTime, uint256 emissionPerSecond, uint256 tokenPrecision) external onlyOwner {
+    function setupDistribution(
+        uint256 distributionId, uint256 distributionStartTime, uint256 distributionEndTime, uint256 emissionPerSecond, uint256 tokenPrecision,
+        uint32 dstEid, bytes32 tokenAddress) external onlyOwner {
+            
         if (emissionPerSecond == 0) revert ZeroEmissionRate();
         if (tokenPrecision == 0) revert ZeroTokenPrecision();
 
@@ -1370,8 +1373,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             startTime: distributionStartTime,
             emissionPerSecond: emissionPerSecond,
             index: 0,                    // Initialize explicitly
-            totalEmitted: 0,            // Initialize explicitly
-            lastUpdateTimeStamp: distributionStartTime
+            totalEmitted: 0,             // Initialize explicitly
+            lastUpdateTimeStamp: distributionStartTime,
+            manuallyEnded: 0
         });
 
         // update storage
@@ -1382,8 +1386,18 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         ++ totalDistributions;
 
         emit DistributionCreated(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision);
+        
 
-        //REWARDS_VAULT.setupDistribution(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision);
+        // REWARDS_VAULT setup: only for non-staking power distributions
+        if(distributionId > 0) {
+
+            if(dstEid == 0) revert InvalidDstEid();
+            if(tokenAddress == bytes32(0)) revert InvalidTokenAddress();
+
+            uint256 totalRequired = (distributionEndTime - distributionStartTime) * emissionPerSecond;
+
+            REWARDS_VAULT.setUpDistribution(distributionId, dstEid, tokenAddress, totalRequired);
+        }
     }
 
     /** 
@@ -1415,7 +1429,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // Check distribution exists
         if(distribution.startTime == 0) revert NonExistentDistribution();
 
-        if(block.timestamp >= distribution.endTime) revert DistributionEnded();
+        if(block.timestamp >= distribution.endTime) revert DistributionOver();
         
         _updateDistributionIndex(distribution);
 
@@ -1466,14 +1480,19 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         DataTypes.Distribution memory distribution = distributions[distributionId];
         
         if(distribution.startTime == 0) revert NonExistentDistribution();
-        if(block.timestamp >= distribution.endTime) revert DistributionEnded();
+        if(block.timestamp >= distribution.endTime) revert DistributionOver();
+        if(distribution.manuallyEnded == 1) revert DistributionManuallyEnded();
         
         _updateDistributionIndex(distribution);
         
         distribution.endTime = block.timestamp;
+        distribution.manuallyEnded = 1;
         distributions[distributionId] = distribution;
 
-        emit DistributionUpdated(distributionId, distribution.startTime, distribution.endTime, distribution.emissionPerSecond);
+        emit DistributionEnded(distributionId);
+
+        // REWARDS_VAULT endDistributionImmediately: only for token distributions
+        if(distributionId > 0) REWARDS_VAULT.endDistributionImmediately(distributionId);
     }
     
     //note: what about setting to 0 to disable the rewards vault?

@@ -21,7 +21,7 @@ error TotalFeeFactorExceeded();
 // updateDistribution
 error InvalidDistributionParameters();
 error NonExistentDistribution();
-error DistributionEnded();
+error DistributionAlreadyEnded();
 error DistributionStarted();
 error InvalidStartTime();
 error InvalidEndTime();
@@ -31,6 +31,8 @@ error InvalidDistributionEndTime();
 error ZeroEmissionRate();
 error ZeroTokenPrecision();
 error DistributionAlreadySetup();
+error InvalidDstEid();
+error InvalidTokenAddress();
 
 // claimRewards
 error StakingPowerDistribution();
@@ -54,3 +56,7 @@ error VaultCooldownNotActivated(bytes32 vaultId);
  
 // updateBoostedBalances
 error NoActiveDistributions();
+
+// endDistributionImmediately
+error DistributionOver();
+error DistributionManuallyEnded();

@@ -54,17 +54,10 @@ event VaultMigrated(
 // distribution management
 event DistributionCreated(uint256 indexed distributionId, uint256 startTime, uint256 endTime, uint256 emissionPerSecond, uint256 tokenPrecision);
 event DistributionUpdated(uint256 indexed distributionId, uint256 startTime, uint256 endTime, uint256 emissionPerSecond);
-event DistributionIndexUpdated(
-    uint256 indexed distributionId,
-    uint256 lastUpdateTimestamp,
-    uint256 oldIndex,
-    uint256 newIndex
-);
-event DistributionCompleted(
-    uint256 indexed distributionId,
-    uint256 endTime,
-    uint256 totalEmitted
-);
+event DistributionIndexUpdated(uint256 indexed distributionId, uint256 lastUpdateTimestamp, uint256 oldIndex, uint256 newIndex);
+event DistributionCompleted(uint256 indexed distributionId, uint256 endTime, uint256 totalEmitted);
+
+event DistributionEnded(uint256 indexed distributionId);
 
 // admin configuration
 event RewardsVaultSet(address indexed oldVault, address indexed newVault);

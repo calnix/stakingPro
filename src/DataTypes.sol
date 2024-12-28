@@ -116,6 +116,8 @@ contract DataTypes {
         uint256 index;
         uint256 totalEmitted;
         uint256 lastUpdateTimeStamp;  
+
+        uint256 manuallyEnded;
     }
 
 }

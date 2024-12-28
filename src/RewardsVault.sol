@@ -30,6 +30,8 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
         uint256 totalRequired;           // should be set by pool
         uint256 totalClaimed;
         uint256 totalDeposited;
+
+        uint256 manuallyEnded;
     }
 
     struct AddressBook {
@@ -46,8 +48,9 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
     event Withdraw(uint256 distributionId, uint32 dstEid, address indexed to, uint256 amount);
     event RecoveredTokens(address indexed token, address indexed target, uint256 indexed amount);
     event PoolSet(address indexed oldPool, address indexed newPool);
-    event DistributionSet(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress);
-    
+    event DistributionCreated(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress);
+    event DistributionEnded(uint256 distributionId);
+
     // evm and non-evm
     event PayRewards(uint256 distributionId, uint32 dstEid, address indexed to, address indexed receiver, uint256 amount);
     event PayRewards(uint256 distributionId, uint32 dstEid, address indexed to, bytes32 indexed receiver, uint256 amount);
@@ -60,6 +63,9 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
     error ExcessiveWithdrawal();
     error ExcessiveDeposit();
     error CallDepositOnRemote();
+    error NonExistentDistribution();
+    error DistributionCompleted();
+    error DistributionManuallyEnded();
 //------- constructor ----------------------------
     constructor(address moneyManager, address admin, address endpoint, address owner) OApp(endpoint, owner) Ownable(owner) {
 
@@ -80,7 +86,9 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
      * @custom:throws "Invalid tokenAddress" if tokenAddress is empty bytes32
      * @custom:emits DistributionSet when distribution is successfully created
      */
-    function setUpDistribution(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress, uint256 totalRequired) onlyRole(ADMIN_ROLE) external {
+    function setUpDistribution(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress, uint256 totalRequired) external {
+        require(msg.sender == pool, "Only Pool");
+
         require(distributionId > 0, "Invalid distributionId");  // 0 is reserved for staking power
         require(tokenAddress != bytes32(0), "Invalid tokenAddress");
 
@@ -90,10 +98,31 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
             tokenAddress: tokenAddress,
             totalRequired: totalRequired,
             totalClaimed: 0,
-            totalDeposited: 0
+            totalDeposited: 0,
+            manuallyEnded: 0
         });
 
-        emit DistributionSet(distributionId, dstEid, tokenAddress);
+        emit DistributionCreated(distributionId, dstEid, tokenAddress);
+    }
+
+    /**
+     * @notice Ends a distribution immediately
+     * @dev Only callable by admin role
+     * @param distributionId The ID of the distribution to end
+     * @custom:throws NonExistentDistribution if distribution does not exist
+     * @custom:throws DistributionEnded if distribution has already ended
+     * @custom:emits DistributionEnded when distribution is ended
+     */
+    function endDistributionImmediately(uint256 distributionId) external {
+        require(msg.sender == pool, "Only Pool");
+
+        Distribution storage distributionPointer = distributions[distributionId];
+
+        if(distributionPointer.manuallyEnded == 1) revert DistributionManuallyEnded();
+
+        distributionPointer.manuallyEnded = 1;
+
+        emit DistributionEnded(distributionId);
     }
 
 
