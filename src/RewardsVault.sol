@@ -409,7 +409,7 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
         
         // withdrawals made on remote vaults
         else {
-            distributions[distributionId].totalClaimed += amount;
+            distributions[distributionId].totalDeposited -= amount;
         }
 
         emit Deposit(distributionId, origin.srcEid, msg.sender, amount);

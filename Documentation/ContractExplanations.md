@@ -178,7 +178,6 @@ This provides flexibility to upgrade reward distribution logic while maintaining
 ## 
 
 
-
 # Notes
 
 ## 1. explain the process of updating each vaultAccount and userAccount for a specific user's vault
@@ -201,3 +200,61 @@ This provides flexibility to upgrade reward distribution logic while maintaining
         // - update user's account
 
 ```
+
+# Execution Flow
+
+## 1. setupDistribution
+
+- called on stakingPro
+- has nested call to rewardsVault to communicate necessary values: `totalRequired`, `dstEid`, `tokenAddress` (bytes32)
+- `totalRequired` is the total amount of tokens required to be deposited
+- `dstEid` is the destination EID, (assuming its a remote token)
+- `tokenAddress` is the address of the token to be deposited
+- `tokenAddress` is stored as bytes32, to standardize across evm and non-evm chains
+
+Nested call within stakingPro so that we do not have to make 2 independent txns to setup distribution; reducing human error.
+
+## 2. Deposit tokens
+
+### Local token
+
+- token exists on the same chain as the stakingPro
+- MONEY_MANAGER to call deposit() on rewardsVault
+- `deposit(uint256 distributionId, uint256 amount, address from) onlyRole(MONEY_MANAGER_ROLE) external`
+
+### Remote token
+
+- token exists on a different chain as the stakingPro
+- MONEY_MANAGER to call deposit() on evmVault, which exists on the remote chain
+- `deposit(address token, uint256 amount, address from, uint256 distributionId) external payable onlyOwner`
+- this is a LZ enabled fn, so it is payable
+- will fire off a xchain message to the home chain, to update rewardsVault
+- `totalDeposited` is incremented on rewardsVault
+
+## 3. Withdraw tokens
+
+### Local token
+
+- MONEY_MANAGER to call withdraw() on rewardsVault
+- `withdraw(uint256 distributionId, uint256 amount, address to) onlyRole(MONEY_MANAGER_ROLE) external`
+
+### Remote token
+
+- MONEY_MANAGER to call withdraw() on evmVault, which exists on the remote chain
+- `withdraw(address token, uint256 amount, address to, uint256 distributionId) external onlyOwner`
+- this is a LZ enabled fn, so it is payable
+- will fire off a xchain message to the home chain, to update rewardsVault
+- `totalDeposited` is decremented on rewardsVault
+
+## 3. claimRewards
+
+- user to call claimRewards() on stakingPro
+- `claimRewards(bytes32 vaultId, uint256 distributionId) external`
+- after calculating rewards, will make an external call to rewardsVault to transfer rewards to user
+- if the token is local, rewardsVault will transfer the rewards to the user
+- if the token is remote, rewardsVault will fire off a xchain message to the remote chain, hitting the evmVault there and instructing it to transfer rewards to the user
+- `totalClaimed` is incremented on rewardsVault
+
+Note that the rewardsVault only supports local, other remote evm chains and solana.
+
+![alt text](image.png)
