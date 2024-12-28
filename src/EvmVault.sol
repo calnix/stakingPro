@@ -156,8 +156,11 @@ contract EVMVault is OApp, Pausable, Ownable2Step {
      */
     function _lzReceive(Origin calldata /*origin*/, bytes32 /*guid*/, bytes calldata payload, address /*executor*/, bytes calldata /*options*/) internal override {
 
-        (address token, address receiver, uint256 amount) = abi.decode(payload, (address, address, uint256));
+        (bytes32 tokenAddress, uint256 amount, address receiver) = abi.decode(payload, (bytes32, uint256, address));
         
+        // convert bytes32 to address
+        address token = address(uint160(uint256(tokenAddress)));
+
         // transfer to user
         IERC20(token).safeTransfer(receiver, amount);
 

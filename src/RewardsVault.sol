@@ -282,7 +282,7 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
             //options = OptionsBuilder.newOptions().addExecutorLzReceiveOption({_gas: uint128(totalGas), _value: 0});
 
             // craft payload: beneficiary address + amount
-            bytes memory payload = abi.encode(distributionId, distribution.tokenAddress, amount, receiver);
+            bytes memory payload = abi.encode(distribution.tokenAddress, amount, receiver);
 
             // check gas needed
             MessagingFee memory fee = _quote(distribution.dstEid, payload, options, false);
