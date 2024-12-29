@@ -2,7 +2,7 @@
 
 Handling varying decimal precision for reward tokens, and ensuring that the index and emission calculations are correct.
 
-## 1. Decimal Precision
+## 1. Decimal Precision for indexes and rewards
 
 indexes are denominated in the distribution's precision
 rewards calculated and stored in the distribution's precision
@@ -236,27 +236,7 @@ There should not be any issues with rewards and index calculations, as long as n
 - `boostedBalance`: which could be either `vault.boostedRealmPoints` or `vault.boostedStakedTokens` [in `_updateVaultAccount`]
 - `user.stakedTokens`: in `_updateUserAccount`
 
-
-
-
-# Contract Walkthrough
-
-## Constructor
-
-```solidity
- constructor(address registry, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
-        address owner, string memory name, string memory version) payable EIP712(name, version) Ownable(owner)
-```
-
-On deployment, the following must be defined:
-
-1. address of nft registry contract (should be deployed in advance)
-2. startTime: user are only able to call staking functions after startTime.
-3. nftMultiplier: boost factor per nft
-4. creationNftsRequired: number of creation nfts required per vault
-5. vaultCoolDownDuration: cooldown period of vault before ending permanently
-
-## Decimal Precision for feeFactors and NFT multiplier
+## 2. Decimal Precision for feeFactors and NFT multiplier
 
 `PRECISION_BASE` is expressed as `10_000`, for 2dp precision.
 
@@ -274,7 +254,7 @@ This is used to express fee factors and NFT multiplier in 2dp precision (XX.yy%)
 - 0.05%: 5
 - 0.01%: 1
 
-## NFT Multiplier
+### 2.1 NFT Multiplier
 
 Therefore for an nft multiplier of 10%, `NFT_MULTIPLIER` must be set to `1000`, when `PRECISION_BASE` is expressed as `10_000`.
 Increasing `NFT_MULTIPLIER` beyond `10_000` changes the boost from fractional to whole number (e.g., `20_000` = 200% boost).
@@ -305,7 +285,7 @@ Exceeding `10_000` is acceptable for NFT_MULTIPLIER, and it can still retain 2dp
 
 **In the above example, by setting `NFT_MULTIPLIER` to `20_050`, we are able to retain 2dp precision; which is reflective of 200.5% boost.**
 
-## Fee Factors
+### 2.2 Fee Factors
 
 Fee factors cannot exceed `5000`, as this would be equivalent to 50% fee.
 In  `createVault`, we check if the total fee factor exceeds `5000`:
@@ -346,8 +326,7 @@ In `_updateUserAccount`, we calculate the fees accrued by the user:
     } 
 ```
 
-
-### PrecisionBase reference
+### 2.3 PrecisionBase reference
 
 If we only wanted to express fee factors in integer values, (meaning 0 precision), we could set `PRECISION_BASE` to `100`.
 
@@ -358,6 +337,27 @@ If we only wanted to express fee factors in integer values, (meaning 0 precision
 - 0.25%: 2.5
 - 0.05%: 0.5
 - 0.01%: 0.1
+
+---
+
+# Contract Walkthrough
+
+## Constructor
+
+```solidity
+ constructor(address registry, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
+        address owner, string memory name, string memory version) payable EIP712(name, version) Ownable(owner)
+```
+
+On deployment, the following must be defined:
+
+1. address of nft registry contract (should be deployed in advance)
+2. startTime: user are only able to call staking functions after startTime.
+3. nftMultiplier: boost factor per nft
+4. creationNftsRequired: number of creation nfts required per vault
+5. vaultCoolDownDuration: cooldown period of vault before ending permanently
+
+
 
 # Owner functions
 
