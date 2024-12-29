@@ -897,16 +897,15 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             emittedRewards = distribution.emissionPerSecond * timeDelta;
         }
 
-        //note: totalBalance is expressed 1e18. 
-        //      emittedRewards is variable as per distribution.TOKEN_PRECISION
-        //      normalize totalBalance to reward token's native precision
-        //      why: paying out rewards token, standardize to that
-        uint256 totalBalanceRebased = (totalBalance * distribution.TOKEN_PRECISION) / 1E18;  // what if its already 1e18? do we want to bother with an if check?
+        /* note: totalBalance is expressed 1e18. 
+                 emittedRewards is variable as per distribution.TOKEN_PRECISION
+                 normalize totalBalance to reward token's native precision
+                 why: paying out rewards token, standardize to that */
+        uint256 totalBalanceRebased = (totalBalance * distribution.TOKEN_PRECISION) / 1E18;
     
         //note: indexes are denominated in the distribution's precision
         uint256 nextDistributionIndex = ((emittedRewards * distribution.TOKEN_PRECISION) / totalBalanceRebased) + distribution.index; 
 
-    
         return (nextDistributionIndex, currentTimestamp, emittedRewards);
     }
 

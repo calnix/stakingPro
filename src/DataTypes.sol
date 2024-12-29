@@ -107,7 +107,7 @@ contract DataTypes {
         
     struct Distribution {
         uint256 distributionId; //0 for staking power
-        uint256 TOKEN_PRECISION;
+        uint256 TOKEN_PRECISION; // cannot be 0. min 1e0
 
         uint256 endTime;
         uint256 startTime;
