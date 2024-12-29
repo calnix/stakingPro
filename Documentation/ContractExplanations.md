@@ -260,11 +260,12 @@ On deployment, the following must be defined:
 
 `PRECISION_BASE` is expressed as `10_000`, for 2dp precision.
 
-PrecisionBase reference:
-- integer: 100
-- 2 dp   : 10000
+This applies to fee factors and NFT multiplier.
 
-On 2dp base:
+`PRECISION_BASE` is set to `10_000`.
+This is used to express fee factors and NFT multiplier in 2dp precision (XX.yy%).
+
+**On 2dp a base:**
 - 100% : 10_000
 - 50%  : 5000
 - 1%   : 100
@@ -273,8 +274,90 @@ On 2dp base:
 - 0.05%: 5
 - 0.01%: 1
 
-Therefore for an nft multiplier of 10%, nftMultiplier must be set to `1000`, when `PRECISION_BASE` is expressed as `10_000`.
-This applied similarly to fee factors.
+## NFT Multiplier
+
+Therefore for an nft multiplier of 10%, `NFT_MULTIPLIER` must be set to `1000`, when `PRECISION_BASE` is expressed as `10_000`.
+Increasing `NFT_MULTIPLIER` beyond `10_000` changes the boost from fractional to whole number (e.g., `20_000` = 200% boost).
+
+```solidity
+        // calc. boostedStakedTokens
+        uint256 incomingBoostedStakedTokens = (amount * vault.totalBoostFactor) / PRECISION_BASE;
+```
+
+Exceeding `10_000` is acceptable for NFT_MULTIPLIER, and it can still retain 2dp precision.
+
+```solidity
+    function nftPrecision() public pure returns(uint256) {
+        
+        uint256 PRECISION_BASE = 10_000;
+        
+        uint256 amount = 1 ether;
+        uint256 vault_totalBoostFactor = 20_050 * 1;  // assume 1 nft staked
+        // 20_050 = 200.5%
+
+        uint256 incomingBoostedStakedTokens = (amount * vault_totalBoostFactor) / PRECISION_BASE;
+
+        return incomingBoostedStakedTokens;
+        // 1 ether: 2005000000000000000 = 2.005 tokens 
+        // 1.23 ether: 2466150000000000000 = 2.46615 tokens -> 200.5%
+    }
+```
+
+**In the above example, by setting `NFT_MULTIPLIER` to `20_050`, we are able to retain 2dp precision; which is reflective of 200.5% boost.**
+
+## Fee Factors
+
+Fee factors cannot exceed `5000`, as this would be equivalent to 50% fee.
+In  `createVault`, we check if the total fee factor exceeds `5000`:
+
+```solidity
+        uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
+        if(totalFeeFactor > 5000) revert TotalFeeFactorExceeded();
+```
+
+**This is to ensure that MOCA stakers receive at least 50% of rewards.**
+
+In `_updateUserAccount`, we calculate the fees accrued by the user:
+
+```solidity
+    // calc. creator fees
+    if(vault.creatorFeeFactor > 0) {
+        accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / PRECISION_BASE;
+    }
+
+    // nft fees accrued only if there were staked NFTs
+    if(vault.stakedNfts > 0) {
+        if(vault.nftFeeFactor > 0) {
+
+            accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / PRECISION_BASE;
+            vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);              // nftIndex: rewardsAccPerNFT
+        }
+    }
+
+    // rp fees accrued only if there were staked RP 
+    if(vault.stakedRealmPoints > 0) {
+        if(vault.realmPointsFeeFactor > 0) {
+            accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / PRECISION_BASE;
+
+            // accRealmPointsFee is in reward token precision
+            uint256 stakedRealmPointsRebased = (vault.stakedRealmPoints * distribution.TOKEN_PRECISION) / 1E18;  
+            vaultAccount.rpIndex += (accRealmPointsFee / stakedRealmPointsRebased);              // rpIndex: rewardsAccPerRP
+        }
+    } 
+```
+
+
+### PrecisionBase reference
+
+If we only wanted to express fee factors in integer values, (meaning 0 precision), we could set `PRECISION_BASE` to `100`.
+
+- 100% : 100
+- 50%  : 50
+- 1%   : 1
+- 0.5% : 5
+- 0.25%: 2.5
+- 0.05%: 0.5
+- 0.01%: 0.1
 
 # Owner functions
 
