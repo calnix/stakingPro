@@ -26,26 +26,6 @@ This is because `_updateUserAccounts` gets distribution from storage. So we don'
 
 ---
 
-## 5. createVault: add batch fn to registry to check ownership of multiple nfts
-
-- add batch fn to NFT_REGISTRY to check ownership of multiple nfts
-
-```solidity
-        for (uint256 i; i < CREATION_NFTS_REQUIRED; i++) {
-
-            (address owner, bytes32 nftVaultId) = NFT_REGISTRY.nfts(tokenIds[i]);   // note: add batch fn to registry to check ownership
-            
-            if(owner != onBehalfOf) revert Errors.IncorrectNftOwner(tokenIds[i]);
-            if(nftVaultId != bytes32(0)) revert Errors.NftAlreadyStaked(tokenIds[i]);
-        }
-```
-
-## 6. stakeNFts: add batch fn to registry to check if multiple nfts are already staked
-
-```solidity
-        (address owner, bytes32 nftVaultId) = NFT_REGISTRY.nfts(tokenIds);
-```
-
 ## 7. add streamingOwnerCheck() to NftLocker
 
 - streaming contract is deployed on ethereum, as will the NftLocker

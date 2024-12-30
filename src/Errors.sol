@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.24;
+pragma solidity 0.8.26;
 
 library Errors {
     // generic (used across multiple functions)
+    error NotStarted();
     error InvalidAmount();
     error InvalidVaultId();
     error InvalidAddress();
@@ -51,6 +52,9 @@ library Errors {
     // unstakeAll
     error UserHasNothingStaked(bytes32 vaultId, address user);
     
+    // updateNftMultiplier
+    error InvalidMultiplier();
+
     // updateBoostedBalances
     error NoActiveDistributions();
 

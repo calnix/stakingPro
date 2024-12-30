@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.24;
+pragma solidity 0.8.26;
 
 import './Events.sol';
 import {Errors} from './Errors.sol';
@@ -26,8 +26,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     INftRegistry public immutable NFT_REGISTRY;
     IRewardsVault public REWARDS_VAULT;
 
-    address public immutable STORED_SIGNER;                 // can this be immutable? 
-       
+    address internal immutable STORED_SIGNER;                 // can this be immutable? 
+
     uint256 public immutable startTime; 
 
     // staked assets
@@ -134,7 +134,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         if(incomingNfts != CREATION_NFTS_REQUIRED) revert Errors.IncorrectCreationNfts();
         
         uint256 check = NFT_REGISTRY.checkIfUnassignedAndOwned(msg.sender, tokenIds);
-        if(check != 0) revert Errors.InvalidNfts(tokenIds);
+        if(check > 0) revert Errors.InvalidNfts(tokenIds);
     
         //note: MOCA stakers must receive at least 50% of rewards
         uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
@@ -233,7 +233,11 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         if(vaultId == 0) revert Errors.InvalidVaultId();
         if(incomingNfts == 0) revert Errors.InvalidAmount();
-        
+
+        // check if NFTs are unassigned and owned by msg.sender
+        uint256 check = NFT_REGISTRY.checkIfUnassignedAndOwned(msg.sender, tokenIds);
+        if(check > 0) revert Errors.InvalidNfts(tokenIds);
+
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
@@ -342,7 +346,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @dev Creator can only decrease their creator fee factor
      * @dev Total of all fees cannot exceed 50%
      * @param vaultId The ID of the vault to update fees for
-     * @param fees The new fee structure to apply
+     * @param nftFeeFactor The new NFT fee factor factor
+     * @param creatorFeeFactor The new creator fee factor
+     * @param realmPointsFeeFactor The new realm points fee factor
      * @custom:throws InvalidVaultId if vaultId is 0
      * @custom:throws UserIsNotVaultCreator if caller is not the vault creator
      * @custom:throws CreatorFeeCanOnlyBeDecreased if new creator fee is higher than current
@@ -351,7 +357,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits NftFeeFactorUpdated when NFT fee is updated
      * @custom:emits RealmPointsFeeFactorUpdated when realm points fee is updated
      */
-    function updateVaultFees(bytes32 vaultId, DataTypes.Fees calldata fees) external whenStarted whenNotPaused {
+    function updateVaultFees(bytes32 vaultId, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStarted whenNotPaused {
         if(vaultId == 0) revert Errors.InvalidVaultId();
         
         // cache vault and user data, reverts if vault does not exist
@@ -362,10 +368,10 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         // sanity check: user must be creator + incoming creatorFeeFactor must be lower than current
         if(vault.creator != msg.sender) revert Errors.UserIsNotCreator();
-        if(fees.creatorFeeFactor > vault.creatorFeeFactor) revert Errors.CreatorFeeCanOnlyBeDecreased();
+        if(creatorFeeFactor > vault.creatorFeeFactor) revert Errors.CreatorFeeCanOnlyBeDecreased();
         
         // sanity check: new fee compositions cannot exceed 50%
-        uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
+        uint256 totalFeeFactor = nftFeeFactor + creatorFeeFactor + realmPointsFeeFactor;
         if(totalFeeFactor > 5000) revert Errors.TotalFeeFactorExceeded();     // 50% = 5000/10_000 = 5000/PRECISION_BASE
 
         // storage update: vault and user accounting across all active reward distributions
@@ -377,17 +383,17 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         uint256 oldRealmPointsFeeFactor = vault.realmPointsFeeFactor;
 
         // update fees
-        vault.nftFeeFactor = fees.nftFeeFactor;
-        vault.creatorFeeFactor = fees.creatorFeeFactor;
-        vault.realmPointsFeeFactor = fees.realmPointsFeeFactor;
+        vault.nftFeeFactor = nftFeeFactor;
+        vault.creatorFeeFactor = creatorFeeFactor;
+        vault.realmPointsFeeFactor = realmPointsFeeFactor;
         
         // update storage 
         vaults[vaultId] = vault;
 
         // emit events for fee changes
-        emit CreatorFeeFactorUpdated(vaultId, oldCreatorFeeFactor, fees.creatorFeeFactor);
-        emit NftFeeFactorUpdated(vaultId, oldNftFeeFactor, fees.nftFeeFactor);
-        emit RealmPointsFeeFactorUpdated(vaultId, oldRealmPointsFeeFactor, fees.realmPointsFeeFactor);
+        emit CreatorFeeFactorUpdated(vaultId, oldCreatorFeeFactor, creatorFeeFactor);
+        emit NftFeeFactorUpdated(vaultId, oldNftFeeFactor, nftFeeFactor);
+        emit RealmPointsFeeFactorUpdated(vaultId, oldRealmPointsFeeFactor, realmPointsFeeFactor);
     }
 
     /**
@@ -1175,7 +1181,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits NftMultiplierUpdated when multiplier is updated
      */
     function updateNftMultiplier(uint256 newMultiplier) external onlyOwner {
-        require(newMultiplier > 0);
+        if(newMultiplier == 0) revert Errors.InvalidMultiplier();
 
         uint256 oldMultiplier = NFT_MULTIPLIER;
         NFT_MULTIPLIER = newMultiplier;
@@ -1616,12 +1622,13 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
                                MODIFIERS
     //////////////////////////////////////////////////////////////*/
 
+    function _whenStarted() internal view {
+        if(block.timestamp < startTime) revert Errors.NotStarted();    
+    }
 
     modifier whenStarted() {
-
-        require(block.timestamp >= startTime, "Not started");    
-
+        _whenStarted();
         _;
     }
-    
+
 }
