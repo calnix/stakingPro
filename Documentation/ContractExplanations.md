@@ -340,6 +340,18 @@ If we only wanted to express fee factors in integer values, (meaning 0 precision
 
 ---
 
+# Distributions
+
+
+    /** track token distributions
+
+        each distribution has an id
+        two different distributionsIds could lead to the same token - w/ just different distribution schedules
+        
+        each time a vault is updated we must update all the active tokenIndexes,
+        which means we must loop through all the active indexes.
+     */
+
 # Contract Walkthrough
 
 ## Constructor

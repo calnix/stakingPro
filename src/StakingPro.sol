@@ -21,15 +21,14 @@ import {IRewardsVault} from "./interfaces/IRewardsVault.sol";
 contract StakingPro is EIP712, Pausable, Ownable2Step {
     using SafeERC20 for IERC20;
 
+    // external interfaces
     IERC20 public immutable STAKED_TOKEN;  
     INftRegistry public immutable NFT_REGISTRY;
-    address public immutable STORED_SIGNER;                 // can this be immutable? 
-    
     IRewardsVault public REWARDS_VAULT;
 
-    // period
-    uint256 public immutable startTime; // can start arbitrarily after deployment
-    uint256 public endTime;             //note: if we need to end 
+    address public immutable STORED_SIGNER;                 // can this be immutable? 
+       
+    uint256 public immutable startTime; 
 
     // staked assets
     uint256 public totalStakedNfts;
@@ -40,32 +39,22 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     uint256 public totalBoostedRealmPoints;
     uint256 public totalBoostedStakedTokens;
 
-    // pool emergency state
-    uint256 public isFrozen;
-
+    // nft multiplier
     uint256 public NFT_MULTIPLIER;                     // 10% = 1000/10_000 = 1000/PERCENTAGE_BASE 
-    uint256 public constant PRECISION_BASE = 10_000;   // feeFactors & nft multiplier expressed in 2dp precision (XX.yy%)
+    uint256 public constant PRECISION_BASE = 10_000;   // feeFactors & nft multiplier expressed in 2dp precision (XX.yy
 
-    // creation nft requirement
+    // vault 
     uint256 public CREATION_NFTS_REQUIRED;
     uint256 public VAULT_COOLDOWN_DURATION;
     uint256 public MINIMUM_REALMPOINTS_REQUIRED;
-    
-    //--------------------------------
 
-    /** track token distributions
+    // distributions
+    uint256[] public activeDistributions;    // array stores key values for distributions mapping; includes not yet started distributions
+    uint256 public completedDistributions;   // updated when distribution has ended and removed from activeDistributions
+    uint256 public totalDistributions;       // updated when distribution is created in setupDistribution()
 
-        each distribution has an id
-        two different distributionsIds could lead to the same token - w/ just different distribution schedules
-        
-        each time a vault is updated we must update all the active tokenIndexes,
-        which means we must loop through all the active indexes.
-     */
-    
-    // array stores key values for distributions mapping. active includes not yet started distributions
-    uint256[] public activeDistributions;    // we do not expect a large number of concurrently active distributions
-    uint256 public totalDistributions;
-    uint256 public completedDistributions;  // note: when does this get updated?
+    // pool emergency state
+    uint256 public isFrozen;
 
     struct StakeRp {
         address user;
@@ -873,23 +862,18 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         if (
             totalBalance == 0                                              // nothing has been staked
             || distribution.emissionPerSecond == 0                         // 0 emissions. no rewards setup.
-            || distribution.lastUpdateTimeStamp == block.timestamp         // index already updated
-            //|| lastUpdateTimestamp > endTime                              // distribution has ended note: contract endTime is referenced. do we need?
+            || distribution.lastUpdateTimeStamp == block.timestamp         // distribution already updated
         ) {
             return (distribution.index, distribution.lastUpdateTimeStamp, 0);                       
         }
 
         uint256 currentTimestamp;
-
-        // If distributionEndTime is provided (non-zero), use it as the cap
+        
+        // Token distributions will have endTime set; use it as the cap
         if(distribution.endTime > 0) {
             currentTimestamp = block.timestamp > distribution.endTime ? distribution.endTime : block.timestamp;
-        } 
-        // Otherwise use contract endTime if set
-        else if(endTime > 0) {
-            currentTimestamp = block.timestamp > endTime ? endTime : block.timestamp;
         }
-        // If neither is set, use current block timestamp
+        // Staking Power will not have endTime set; use current block timestamp
         else {
             currentTimestamp = block.timestamp;
         }
