@@ -65,16 +65,10 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
 //-------------------------------mappings--------------------------------------------
 
-    /**
-        users create vaults for staking
-        tokens are distributed via distributions
-        distributions are created and managed on an ad-hoc basis
-     */
-
     // vault base attributes
     mapping(bytes32 vaultId => DataTypes.Vault vault) public vaults;
 
-    // just stick staking power as distributionId:0 => tokenData{uint256 chainId:0, bytes32 tokenAddr: 0,...}
+    // staking power is distributionId:0 => tokenData{uint256 chainId:0, bytes32 tokenAddr: 0,...}
     mapping(uint256 distributionId => DataTypes.Distribution distribution) public distributions;
 
     // user's assets per vault
@@ -86,7 +80,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     // rewards accrued per user, per distribution
     mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) public userAccounts;
 
-    // replay attack: 1 is true, 0 is false
+    // has signature been executed: 1 is true, 0 is false [replay attack prevention]
     mapping(bytes32 signature => uint256 executed) public executedSignatures;
 
 
@@ -134,8 +128,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits VaultCreated event with creator address and vault ID
      */
     function createVault(uint256[] calldata tokenIds, DataTypes.Fees calldata fees) external whenStarted whenNotPaused {
-        address onBehalfOf = msg.sender;
-
+        
         // must commit unstaked NFTs to create vaults: these do not count towards stakedNFTs
         uint256 incomingNfts = tokenIds.length;
         if(incomingNfts != CREATION_NFTS_REQUIRED) revert IncorrectCreationNfts();
@@ -144,7 +137,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
             (address owner, bytes32 nftVaultId) = NFT_REGISTRY.nfts(tokenIds[i]);   // note: add batch fn to registry to check ownership
             
-            if(owner != onBehalfOf) revert IncorrectNftOwner(tokenIds[i]);
+            if(owner != msg.sender) revert IncorrectNftOwner(tokenIds[i]);
             if(nftVaultId != bytes32(0)) revert NftAlreadyStaked(tokenIds[i]);
         }
 
@@ -156,14 +149,14 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         bytes32 vaultId;
         {
             uint256 salt = block.number - 1;
-            vaultId = _generateVaultId(salt, onBehalfOf);
-            while (vaults[vaultId].creator != address(0)) vaultId = _generateVaultId(--salt, onBehalfOf);      // If vaultId exists, generate new random Id
+            vaultId = _generateVaultId(salt, msg.sender);
+            while (vaults[vaultId].creator != address(0)) vaultId = _generateVaultId(--salt, msg.sender);      // If vaultId exists, generate new random Id
         }
 
         // build vault
         DataTypes.Vault memory vault; 
             //vault.vaultId = vaultId;
-            vault.creator = onBehalfOf;
+            vault.creator = msg.sender;
             vault.creationTokenIds = tokenIds;  
             
             vault.startTime = block.timestamp; 
@@ -179,10 +172,10 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // update storage
         vaults[vaultId] = vault;
 
-        emit VaultCreated(vaultId, onBehalfOf, fees.nftFeeFactor, fees.creatorFeeFactor, fees.realmPointsFeeFactor);
+        emit VaultCreated(vaultId, msg.sender, fees.nftFeeFactor, fees.creatorFeeFactor, fees.realmPointsFeeFactor);
 
         // record NFT commitment on registry contract
-        NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, vaultId);
+        NFT_REGISTRY.recordStake(msg.sender, tokenIds, vaultId);
     }  
 
     /**
@@ -197,17 +190,15 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     function stakeTokens(bytes32 vaultId, uint256 amount) external whenStarted whenNotPaused {
         if(amount == 0) revert InvalidAmount();
         if(vaultId == 0) revert InvalidVaultId();
- 
-        address onBehalfOf = msg.sender;
 
         // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
         
         // vault cooldown activated: cannot stake
         if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
 
         // Update vault and user accounting across all active reward distributions
-        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+        _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
 
         // calc. boostedStakedTokens
         uint256 incomingBoostedStakedTokens = (amount * vault.totalBoostFactor) / PRECISION_BASE;
@@ -221,42 +212,41 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         // update storage: mappings 
         vaults[vaultId] = vault;
-        users[onBehalfOf][vaultId] = userVaultAssets;
+        users[msg.sender][vaultId] = userVaultAssets;
         // update storage: variables
         totalStakedTokens += amount;
         totalBoostedStakedTokens += incomingBoostedStakedTokens;
         
-        emit StakedTokens(onBehalfOf, vaultId, amount);
+        emit StakedTokens(msg.sender, vaultId, amount);
 
         // grab MOCA
-        STAKED_TOKEN.safeTransferFrom(onBehalfOf, address(this), amount);
+        STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
     }
 
     /**
      * @notice Stakes NFTs into a vault
      * @dev No staking limits on NFT assets. NFTs increase the boost factor for staked tokens and realm points.
      * @param vaultId The ID of the vault to stake NFTs into
-     * @param onBehalfOf The address to stake NFTs on behalf of
      * @param tokenIds Array of NFT token IDs to stake
      * @custom:throws InvalidVaultId if vaultId is 0
      * @custom:throws InvalidAmount if tokenIds array is empty
      * @custom:emits StakedNfts when NFTs are staked successfully
      * @custom:emits VaultMultiplierUpdated when vault's boosted balances are updated
      */
-    function stakeNfts(bytes32 vaultId, address onBehalfOf, uint256[] calldata tokenIds) external whenStarted whenNotPaused {
+    function stakeNfts(bytes32 vaultId, uint256[] calldata tokenIds) external whenStarted whenNotPaused {
         uint256 incomingNfts = tokenIds.length;
 
         if(vaultId == 0) revert InvalidVaultId();
         if(incomingNfts == 0) revert InvalidAmount();
         
         // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
         // vault cooldown activated: cannot stake
         if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
 
         // Update vault and user accounting across all active reward distributions
-        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+        _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
 
         // cache
         uint256 oldBoostedRealmPoints = vault.boostedRealmPoints;
@@ -278,18 +268,18 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         // update storage: mappings 
         vaults[vaultId] = vault;
-        users[onBehalfOf][vaultId] = userVaultAssets;
+        users[msg.sender][vaultId] = userVaultAssets;
 
         // update storage: global variables 
         totalStakedNfts += incomingNfts;
         totalBoostedRealmPoints += (vault.boostedRealmPoints - oldBoostedRealmPoints);
         totalBoostedStakedTokens += (vault.boostedStakedTokens - oldBoostedStakedTokens);
 
-        emit StakedNfts(onBehalfOf, vaultId, tokenIds);
+        emit StakedNfts(msg.sender, vaultId, tokenIds);
         emit VaultMultiplierUpdated(vaultId, oldBoostedStakedTokens, vault.boostedStakedTokens);
 
         // record stake with registry
-        NFT_REGISTRY.recordStake(onBehalfOf, tokenIds, vaultId);
+        NFT_REGISTRY.recordStake(msg.sender, tokenIds, vaultId);
     }
 
     /**
@@ -308,10 +298,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         if(expiry < block.timestamp) revert SignatureExpired();
         if(amount < MINIMUM_REALMPOINTS_REQUIRED) revert MinimumRpRequired();
      
-        address onBehalfOf = msg.sender;
-
         // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
         // vault cooldown activated: cannot stake
         if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
@@ -319,13 +307,13 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // verify signature
         bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
             keccak256("StakeRp(address user,bytes32 vaultId,uint256 amount,uint256 expiry)"), 
-            onBehalfOf, vaultId, amount, expiry)));
+            msg.sender, vaultId, amount, expiry)));
         
         address signer = ECDSA.recover(digest, signature);
         if(signer != STORED_SIGNER) revert InvalidSignature(); 
 
         // Update vault and user accounting across all active reward distributions
-        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+        _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
 
         // calc. boostedStakedRealmPoints
         uint256 incomingBoostedStakedRealmPoints = (amount * vault.totalBoostFactor) / PRECISION_BASE;
@@ -339,7 +327,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         
         // update storage: mappings 
         vaults[vaultId] = vault;
-        users[onBehalfOf][vaultId] = userVaultAssets;
+        users[msg.sender][vaultId] = userVaultAssets;
 
         // update storage: variables
         totalStakedRealmPoints += amount;
@@ -348,7 +336,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // Mark signature as used
         executedSignatures[digest] = 1;
 
-        emit StakedRealmPoints(onBehalfOf, vaultId, amount, incomingBoostedStakedRealmPoints);
+        emit StakedRealmPoints(msg.sender, vaultId, amount, incomingBoostedStakedRealmPoints);
     }
 
     /**
@@ -369,16 +357,14 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     function updateVaultFees(bytes32 vaultId, DataTypes.Fees calldata fees) external whenStarted whenNotPaused {
         if(vaultId == 0) revert InvalidVaultId();
         
-        address onBehalfOf = msg.sender;
-
         // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
         // vault cooldown activated: cannot update fees
         if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
 
         // sanity check: user must be creator + incoming creatorFeeFactor must be lower than current
-        if(vault.creator != onBehalfOf) revert UserIsNotVaultCreator(vaultId, onBehalfOf);
+        if(vault.creator != msg.sender) revert UserIsNotVaultCreator(vaultId, msg.sender);
         if(fees.creatorFeeFactor > vault.creatorFeeFactor) revert CreatorFeeCanOnlyBeDecreased(vaultId);
         
         // sanity check: new fee compositions cannot exceed 50%
@@ -386,7 +372,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         if(totalFeeFactor > 5000) revert TotalFeeFactorExceeded();     // 50% = 5000/10_000 = 5000/PRECISION_BASE
 
         // Update vault and user accounting across all active reward distributions
-        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+        _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
                 
         // cache old fees for events
         uint256 oldCreatorFeeFactor = vault.creatorFeeFactor;
@@ -624,20 +610,18 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         if(isFrozen == 1) revert IsFrozen();
         if(vaultId == 0) revert InvalidVaultId();
 
-        address onBehalfOf = msg.sender;
-        
         // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
         // Update vault and user accounting across all active reward distributions
-        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+        _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
 
         // get user staked assets: old values for events
         uint256 numOfNfts = userVaultAssets.tokenIds.length;
         uint256 stakedTokens = userVaultAssets.stakedTokens;        
 
         // check if user has non-zero holdings
-        if(stakedTokens + numOfNfts == 0) revert UserHasNothingStaked(vaultId, onBehalfOf);
+        if(stakedTokens + numOfNfts == 0) revert UserHasNothingStaked(vaultId, msg.sender);
         
         // update tokens
         if(stakedTokens > 0){
@@ -656,18 +640,18 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             totalStakedTokens -= stakedTokens;
             totalBoostedStakedTokens -= userBoostedStakedTokens;
 
-            emit UnstakedTokens(onBehalfOf, vaultId, stakedTokens);       
+            emit UnstakedTokens(msg.sender, vaultId, stakedTokens);       
 
             // return MOCA
-            STAKED_TOKEN.safeTransfer(onBehalfOf, stakedTokens);
+            STAKED_TOKEN.safeTransfer(msg.sender, stakedTokens);
         }
 
         // update nfts
         if(numOfNfts > 0){
 
             // record unstake with registry
-            NFT_REGISTRY.recordUnstake(onBehalfOf, userVaultAssets.tokenIds, vaultId);
-            emit UnstakedNfts(onBehalfOf, vaultId, userVaultAssets.tokenIds);       
+            NFT_REGISTRY.recordUnstake(msg.sender, userVaultAssets.tokenIds, vaultId);
+            emit UnstakedNfts(msg.sender, vaultId, userVaultAssets.tokenIds);       
 
             // update user
             delete userVaultAssets.tokenIds;
@@ -686,7 +670,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         // update storage: mappings 
         vaults[vaultId] = vault;
-        users[onBehalfOf][vaultId] = userVaultAssets;
+        users[msg.sender][vaultId] = userVaultAssets;
     }
 
     /**
@@ -710,18 +694,16 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         if(vaultId == 0) revert InvalidVaultId();
         if(distributionId == 0) revert StakingPowerDistribution();
 
-        address onBehalfOf = msg.sender;
-
         // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
         // Update vault and user accounting across all active reward distributions
-        // _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+        // _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
 
         // get corresponding user+vault account for this active distribution 
         DataTypes.Distribution memory distribution_ = distributions[distributionId];
         DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
-        DataTypes.UserAccount memory userAccount_ = userAccounts[onBehalfOf][vaultId][distributionId];
+        DataTypes.UserAccount memory userAccount_ = userAccounts[msg.sender][vaultId][distributionId];
 
         // alternate; update just the specified distribution
         (DataTypes.UserAccount memory userAccount, DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateUserAccount(userVaultAssets, userAccount_, vault, vaultAccount_, distribution_);
@@ -760,7 +742,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         }
 
         // if creator
-        if (vault.creator == onBehalfOf) {
+        if (vault.creator == msg.sender) {
 
             uint256 unclaimedCreatorRewards = vaultAccount.accCreatorRewards - userAccount.claimedCreatorRewards;
             userAccount.claimedCreatorRewards += unclaimedCreatorRewards;
@@ -774,12 +756,12 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // update storage: accounts and distributions
         distributions[distributionId] = distribution;     
         vaultAccounts[vaultId][distributionId] = vaultAccount;  
-        userAccounts[onBehalfOf][vaultId][distributionId] = userAccount;
+        userAccounts[msg.sender][vaultId][distributionId] = userAccount;
 
-        emit RewardsClaimed(vaultId, onBehalfOf, totalUnclaimedRewards);
+        emit RewardsClaimed(vaultId, msg.sender, totalUnclaimedRewards);
 
         // transfer rewards to user, from rewardsVault
-        REWARDS_VAULT.payRewards(distributionId, totalUnclaimedRewards, onBehalfOf);
+        REWARDS_VAULT.payRewards(distributionId, totalUnclaimedRewards, msg.sender);
     }
 
     /**
@@ -1093,13 +1075,13 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
 
     ///@dev cache vault and user structs from storage to memory. checks that vault exists, else reverts.
-    function _cache(bytes32 vaultId, address onBehalfOf) internal view returns(DataTypes.User memory, DataTypes.Vault memory) {
+    function _cache(bytes32 vaultId, address user) internal view returns(DataTypes.User memory, DataTypes.Vault memory) {
         // ensure vault exists
         DataTypes.Vault memory vault = vaults[vaultId];
         if(vault.creator == address(0)) revert NonExistentVault(vaultId);
 
         // get vault level user data
-        DataTypes.User memory userVaultAssets = users[onBehalfOf][vaultId];
+        DataTypes.User memory userVaultAssets = users[user][vaultId];
 
         return (userVaultAssets, vault);
     }
@@ -1126,8 +1108,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
     ///@dev Generate a vaultId. keccak256 is cheaper than using a counter with a SSTORE, even accounting for eventual collision retries.
-    function _generateVaultId(uint256 salt, address onBehalfOf) internal view returns (bytes32) {
-        return bytes32(keccak256(abi.encode(onBehalfOf, block.timestamp, salt)));
+    function _generateVaultId(uint256 salt, address user) internal view returns (bytes32) {
+        return bytes32(keccak256(abi.encode(user, block.timestamp, salt)));
     }
 
 //-------------------------------pool management-------------------------------------------

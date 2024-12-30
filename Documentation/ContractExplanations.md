@@ -352,6 +352,16 @@ If we only wanted to express fee factors in integer values, (meaning 0 precision
         which means we must loop through all the active indexes.
      */
 
+
+    /**
+        users create vaults for staking
+        tokens are distributed via distributions
+        distributions are created and managed on an ad-hoc basis
+     */
+
+staking power
+    // staking power is distributionId:0 => tokenData{uint256 chainId:0, bytes32 tokenAddr: 0,...}
+
 # Contract Walkthrough
 
 ## Constructor

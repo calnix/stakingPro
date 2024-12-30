@@ -24,13 +24,6 @@ This is because `_updateUserAccounts` gets distribution from storage. So we don'
             DataTypes.UserAccount memory userAccount_ = userAccounts[user][vaultId][distributionId];
 ```
 
-## 4. caching msg.sender as onBehalfOf
-
-```solidity
-        address onBehalfOf = msg.sender;
-```
-consider just using msg.sender directly
-
 ---
 
 ## 5. createVault: add batch fn to registry to check ownership of multiple nfts
