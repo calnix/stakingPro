@@ -19,7 +19,8 @@ event StakedTokens(address indexed user, bytes32 indexed vaultId, uint256 amount
 
 // stakeNfts
 event StakedNfts(address indexed user, bytes32 indexed vaultId, uint256[] tokenIds);
-event VaultMultiplierUpdated(bytes32 indexed vaultId, uint256 oldBoostedStakedTokens, uint256 newBoostedStakedTokens);
+event VaultBoostFactorUpdated(bytes32 indexed vaultId, uint256 newBoostFactor);
+
 // stakeRP
 event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 amount, uint256 boostedAmount);
 
@@ -38,7 +39,6 @@ event RealmPointsFeeFactorUpdated(bytes32 indexed vaultId, uint256 oldFactor, ui
 // vault management
 event VaultRemoved(bytes32 indexed vaultId);
 event VaultsRemoved(bytes32[] vaultIds, uint256 vaultsNotEnded);
-
 event VaultCooldownInitiated(bytes32 indexed vaultId);
 
 // migrateVaults
@@ -48,7 +48,7 @@ event VaultMigrated(
     bytes32 indexed newVaultId,
     uint256 stakedTokens,
     uint256 stakedRealmPoints,
-    uint256 numOfNfts
+    uint256[] tokenIds
 );
 
 // distribution management

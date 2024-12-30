@@ -2,7 +2,7 @@
 pragma solidity 0.8.24;
 
 import './Events.sol';
-import './Errors.sol';
+import {Errors} from './Errors.sol';
 import {DataTypes} from './DataTypes.sol';
 
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
@@ -81,7 +81,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) public userAccounts;
 
     // has signature been executed: 1 is true, 0 is false [replay attack prevention]
-    mapping(bytes32 signature => uint256 executed) public executedSignatures;
+    mapping(bytes signature => uint256 executed) public executedSignatures;
 
 
 //-------------------------------constructor------------------------------------------
@@ -131,19 +131,14 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         
         // must commit unstaked NFTs to create vaults: these do not count towards stakedNFTs
         uint256 incomingNfts = tokenIds.length;
-        if(incomingNfts != CREATION_NFTS_REQUIRED) revert IncorrectCreationNfts();
+        if(incomingNfts != CREATION_NFTS_REQUIRED) revert Errors.IncorrectCreationNfts();
         
-        for (uint256 i; i < CREATION_NFTS_REQUIRED; i++) {
-
-            (address owner, bytes32 nftVaultId) = NFT_REGISTRY.nfts(tokenIds[i]);   // note: add batch fn to registry to check ownership
-            
-            if(owner != msg.sender) revert IncorrectNftOwner(tokenIds[i]);
-            if(nftVaultId != bytes32(0)) revert NftAlreadyStaked(tokenIds[i]);
-        }
-
+        uint256 check = NFT_REGISTRY.checkIfUnassignedAndOwned(msg.sender, tokenIds);
+        if(check != 0) revert Errors.InvalidNfts(tokenIds);
+    
         //note: MOCA stakers must receive at least 50% of rewards
         uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
-        if(totalFeeFactor > 5000) revert TotalFeeFactorExceeded();
+        if(totalFeeFactor > 5000) revert Errors.TotalFeeFactorExceeded();
 
         // vaultId generation
         bytes32 vaultId;
@@ -155,7 +150,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         // build vault
         DataTypes.Vault memory vault; 
-            //vault.vaultId = vaultId;
             vault.creator = msg.sender;
             vault.creationTokenIds = tokenIds;  
             
@@ -188,16 +182,16 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits StakedMoca when tokens are staked successfully
      */
     function stakeTokens(bytes32 vaultId, uint256 amount) external whenStarted whenNotPaused {
-        if(amount == 0) revert InvalidAmount();
-        if(vaultId == 0) revert InvalidVaultId();
+        if(amount == 0) revert Errors.InvalidAmount();
+        if(vaultId == 0) revert Errors.InvalidVaultId();
 
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
         
         // vault cooldown activated: cannot stake
-        if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
+        if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
 
-        // Update vault and user accounting across all active reward distributions
+        // storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
 
         // calc. boostedStakedTokens
@@ -213,6 +207,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // update storage: mappings 
         vaults[vaultId] = vault;
         users[msg.sender][vaultId] = userVaultAssets;
+
         // update storage: variables
         totalStakedTokens += amount;
         totalBoostedStakedTokens += incomingBoostedStakedTokens;
@@ -236,28 +231,27 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     function stakeNfts(bytes32 vaultId, uint256[] calldata tokenIds) external whenStarted whenNotPaused {
         uint256 incomingNfts = tokenIds.length;
 
-        if(vaultId == 0) revert InvalidVaultId();
-        if(incomingNfts == 0) revert InvalidAmount();
+        if(vaultId == 0) revert Errors.InvalidVaultId();
+        if(incomingNfts == 0) revert Errors.InvalidAmount();
         
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
         // vault cooldown activated: cannot stake
-        if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
+        if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
 
-        // Update vault and user accounting across all active reward distributions
+        // storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
 
         // cache
         uint256 oldBoostedRealmPoints = vault.boostedRealmPoints;
         uint256 oldBoostedStakedTokens = vault.boostedStakedTokens;
 
-        // update: vault's nfts 
+        // increment: vault's nfts 
         vault.stakedNfts += incomingNfts;
                
-        // update boost factor: 
-        uint256 boostFactorDelta = incomingNfts * NFT_MULTIPLIER;
-        vault.totalBoostFactor += boostFactorDelta;     // totalBoostFactor begins frm PRECISION_BASE -> expressed as 1.XXX; 
+        // increment: total boost factor
+        vault.totalBoostFactor += (incomingNfts * NFT_MULTIPLIER); 
 
         // recalc. boosted balances with new boost factor 
         if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;            
@@ -276,7 +270,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         totalBoostedStakedTokens += (vault.boostedStakedTokens - oldBoostedStakedTokens);
 
         emit StakedNfts(msg.sender, vaultId, tokenIds);
-        emit VaultMultiplierUpdated(vaultId, oldBoostedStakedTokens, vault.boostedStakedTokens);
+        emit VaultBoostFactorUpdated(vaultId, vault.totalBoostFactor);
 
         // record stake with registry
         NFT_REGISTRY.recordStake(msg.sender, tokenIds, vaultId);
@@ -295,14 +289,17 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits StakedRealmPoints when realm points are successfully staked
      */
     function stakeRP(bytes32 vaultId, uint256 amount, uint256 expiry, bytes calldata signature) external whenStarted whenNotPaused {
-        if(expiry < block.timestamp) revert SignatureExpired();
-        if(amount < MINIMUM_REALMPOINTS_REQUIRED) revert MinimumRpRequired();
-     
+        if(expiry < block.timestamp) revert Errors.SignatureExpired();
+        if(amount < MINIMUM_REALMPOINTS_REQUIRED) revert Errors.MinimumRpRequired();
+        
+        // replay attack prevention
+        if(executedSignatures[signature] == 1) revert Errors.SignatureAlreadyExecuted();
+
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
         // vault cooldown activated: cannot stake
-        if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
+        if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
 
         // verify signature
         bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
@@ -310,9 +307,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             msg.sender, vaultId, amount, expiry)));
         
         address signer = ECDSA.recover(digest, signature);
-        if(signer != STORED_SIGNER) revert InvalidSignature(); 
+        if(signer != STORED_SIGNER) revert Errors.InvalidSignature(); 
 
-        // Update vault and user accounting across all active reward distributions
+        // storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
 
         // calc. boostedStakedRealmPoints
@@ -334,7 +331,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         totalBoostedRealmPoints += incomingBoostedStakedRealmPoints;
 
         // Mark signature as used
-        executedSignatures[digest] = 1;
+        executedSignatures[signature] = 1;
 
         emit StakedRealmPoints(msg.sender, vaultId, amount, incomingBoostedStakedRealmPoints);
     }
@@ -355,23 +352,23 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits RealmPointsFeeFactorUpdated when realm points fee is updated
      */
     function updateVaultFees(bytes32 vaultId, DataTypes.Fees calldata fees) external whenStarted whenNotPaused {
-        if(vaultId == 0) revert InvalidVaultId();
+        if(vaultId == 0) revert Errors.InvalidVaultId();
         
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
         // vault cooldown activated: cannot update fees
-        if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
+        if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
 
         // sanity check: user must be creator + incoming creatorFeeFactor must be lower than current
-        if(vault.creator != msg.sender) revert UserIsNotVaultCreator(vaultId, msg.sender);
-        if(fees.creatorFeeFactor > vault.creatorFeeFactor) revert CreatorFeeCanOnlyBeDecreased(vaultId);
+        if(vault.creator != msg.sender) revert Errors.UserIsNotCreator();
+        if(fees.creatorFeeFactor > vault.creatorFeeFactor) revert Errors.CreatorFeeCanOnlyBeDecreased();
         
         // sanity check: new fee compositions cannot exceed 50%
         uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
-        if(totalFeeFactor > 5000) revert TotalFeeFactorExceeded();     // 50% = 5000/10_000 = 5000/PRECISION_BASE
+        if(totalFeeFactor > 5000) revert Errors.TotalFeeFactorExceeded();     // 50% = 5000/10_000 = 5000/PRECISION_BASE
 
-        // Update vault and user accounting across all active reward distributions
+        // storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
                 
         // cache old fees for events
@@ -403,23 +400,22 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits VaultCooldownInitiated when cooldown period begins
      */
     function activateCooldown(bytes32 vaultId) external whenStarted whenNotPaused {
-        if(vaultId == 0) revert InvalidVaultId();
+        if(vaultId == 0) revert Errors.InvalidVaultId();
 
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
-        // Update vault and user accounting across all active reward distributions
+        // storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
 
         // vault cooldown already activated: cannot activate again
-        if(vault.endTime > 0) revert VaultAlreadyEnded(vaultId);
-
-        // set endTime       
-        vault.endTime = block.timestamp + VAULT_COOLDOWN_DURATION;
+        if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
 
         // if zero cooldown, remove vault from circulation immediately 
         if(VAULT_COOLDOWN_DURATION == 0) {
             
+            // set endTime + removed
+            vault.endTime = block.timestamp;
             vault.removed = 1;
 
             // decrement state vars
@@ -433,6 +429,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             emit VaultRemoved(vaultId);
 
         } else {
+            // set endTime       
+            vault.endTime = block.timestamp + VAULT_COOLDOWN_DURATION;
             emit VaultCooldownInitiated(vaultId);
         }
 
@@ -442,7 +440,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     function endVaults(bytes32[] calldata vaultIds) external whenStarted whenNotPaused {
         uint256 numOfVaults = vaultIds.length;
-        if(numOfVaults == 0) revert InvalidArray();
+        if(numOfVaults == 0) revert Errors.InvalidArray();
 
         uint256 numOfDistributions = activeDistributions.length;
 
@@ -510,7 +508,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         totalBoostedStakedTokens -= totalBoostedTokensToRemove;
         totalBoostedRealmPoints -= totalBoostedRealmPointsToRemove;
 
-        // Emit event for each removed vault
+        // emit
         uint256 vaultsNotEnded = numOfVaults - vaultsEnded;
         emit VaultsRemoved(vaultIds, vaultsNotEnded);
     }
@@ -526,21 +524,21 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits VaultMigrated when migration is complete
      */
     function migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStarted whenNotPaused {
-        if(oldVaultId == 0) revert InvalidVaultId();
-        if(newVaultId == 0) revert InvalidVaultId();
+        if(oldVaultId == 0) revert Errors.InvalidVaultId();
+        if(newVaultId == 0) revert Errors.InvalidVaultId();
 
         // cache vault and user data for both vaults, reverts if vault does not exist
         (DataTypes.User memory oldUserVaultAssets, DataTypes.Vault memory oldVault) = _cache(oldVaultId, msg.sender);
         (DataTypes.User memory newUserVaultAssets, DataTypes.Vault memory newVault) = _cache(newVaultId, msg.sender);
 
         // vault cooldown activated: cannot migrate
-        if(newVault.endTime > 0) revert VaultAlreadyEnded(newVaultId);
+        if(newVault.endTime > 0) revert Errors.VaultAlreadyEnded(newVaultId);
 
-        // oldVault: Update vault and user accounting across all active reward distributions
+        // oldVault: storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(msg.sender, oldVaultId, oldVault, oldUserVaultAssets);
         
         // note: user may have assets already staked in the new vault
-        // newVault: Update vault and user accounting across all active reward distributions
+        // newVault: storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(msg.sender, newVaultId, newVault, newUserVaultAssets);
 
         // increment new vault: base assets (including existing assets)
@@ -548,8 +546,11 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         newVault.stakedTokens += oldUserVaultAssets.stakedTokens;
         newVault.stakedRealmPoints += oldUserVaultAssets.stakedRealmPoints;
         
-        // update boost
-        newVault.totalBoostFactor += oldUserVaultAssets.tokenIds.length * NFT_MULTIPLIER;
+        // boostFactor delta
+        uint256 boostFactorDelta = oldUserVaultAssets.tokenIds.length * NFT_MULTIPLIER;
+
+        // update boost on newVault
+        newVault.totalBoostFactor += boostFactorDelta;
         newVault.boostedStakedTokens = (newVault.stakedTokens * newVault.totalBoostFactor) / PRECISION_BASE; 
         newVault.boostedRealmPoints = (newVault.stakedRealmPoints * newVault.totalBoostFactor) / PRECISION_BASE; 
 
@@ -558,18 +559,15 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         oldVault.stakedTokens -= oldUserVaultAssets.stakedTokens;
         oldVault.stakedRealmPoints -= oldUserVaultAssets.stakedRealmPoints;
         
-        // update boost
-        oldVault.totalBoostFactor -= oldUserVaultAssets.tokenIds.length * NFT_MULTIPLIER;
+        // update boost on oldVault
+        oldVault.totalBoostFactor -= boostFactorDelta;
         oldVault.boostedStakedTokens = (oldVault.stakedTokens * oldVault.totalBoostFactor) / PRECISION_BASE; 
         oldVault.boostedRealmPoints = (oldVault.stakedRealmPoints * oldVault.totalBoostFactor) / PRECISION_BASE; 
 
         // NFT management
         NFT_REGISTRY.recordUnstake(msg.sender, oldUserVaultAssets.tokenIds, oldVaultId);
-        emit UnstakedNfts(msg.sender, oldVaultId, oldUserVaultAssets.tokenIds);       
-
         NFT_REGISTRY.recordStake(msg.sender, oldUserVaultAssets.tokenIds, newVaultId);
-        emit StakedNfts(msg.sender, newVaultId, oldUserVaultAssets.tokenIds);
-
+        
         // Update new user assets: combine NFTs and add migrated assets
         newUserVaultAssets.tokenIds = _concatArrays(newUserVaultAssets.tokenIds, oldUserVaultAssets.tokenIds);
         newUserVaultAssets.stakedTokens += oldUserVaultAssets.stakedTokens;
@@ -594,7 +592,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             newVaultId,
             oldUserVaultAssets.stakedTokens,  // Only migrated tokens
             oldUserVaultAssets.stakedRealmPoints,  // Only migrated realm points
-            oldUserVaultAssets.tokenIds.length  // Only migrated NFTs
+            oldUserVaultAssets.tokenIds  // Only migrated NFTs
         );
     }
 
@@ -607,13 +605,13 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits UnstakedTokens, UnstakedNfts
      */
     function unstakeAll(bytes32 vaultId) external whenStarted {
-        if(isFrozen == 1) revert IsFrozen();
-        if(vaultId == 0) revert InvalidVaultId();
+        if(isFrozen == 1) revert Errors.IsFrozen();
+        if(vaultId == 0) revert Errors.InvalidVaultId();
 
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
-        // Update vault and user accounting across all active reward distributions
+        // storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
 
         // get user staked assets: old values for events
@@ -621,7 +619,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         uint256 stakedTokens = userVaultAssets.stakedTokens;        
 
         // check if user has non-zero holdings
-        if(stakedTokens + numOfNfts == 0) revert UserHasNothingStaked(vaultId, msg.sender);
+        if(stakedTokens + numOfNfts == 0) revert Errors.UserHasNothingStaked(vaultId, msg.sender);
         
         // update tokens
         if(stakedTokens > 0){
@@ -689,16 +687,13 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits RewardsClaimed when rewards are successfully claimed
      */
     function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted {
-        if(isFrozen == 1) revert IsFrozen();
+        if(isFrozen == 1) revert Errors.IsFrozen();
     
-        if(vaultId == 0) revert InvalidVaultId();
-        if(distributionId == 0) revert StakingPowerDistribution();
+        if(vaultId == 0) revert Errors.InvalidVaultId();
+        if(distributionId == 0) revert Errors.StakingPowerDistribution();
 
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
-
-        // Update vault and user accounting across all active reward distributions
-        // _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
 
         // get corresponding user+vault account for this active distribution 
         DataTypes.Distribution memory distribution_ = distributions[distributionId];
@@ -1018,9 +1013,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
                 //emit something
             }
-
         }
-
 
         // update user indexes
         userAccount.index = vaultAccount.rewardsAccPerUnitStaked;   // less of fees
@@ -1078,7 +1071,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     function _cache(bytes32 vaultId, address user) internal view returns(DataTypes.User memory, DataTypes.Vault memory) {
         // ensure vault exists
         DataTypes.Vault memory vault = vaults[vaultId];
-        if(vault.creator == address(0)) revert NonExistentVault(vaultId);
+        if(vault.creator == address(0)) revert Errors.NonExistentVault(vaultId);
 
         // get vault level user data
         DataTypes.User memory userVaultAssets = users[user][vaultId];
@@ -1138,7 +1131,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      */
     function updateAllVaultsAndAccounts(bytes32[] calldata vaultIds) external {
         uint256 numOfVaults = vaultIds.length;
-        if(numOfVaults == 0) revert InvalidArray();
+        if(numOfVaults == 0) revert Errors.InvalidArray();
 
         uint256 numOfDistributions = activeDistributions.length;
 
@@ -1194,7 +1187,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     // ensure NFT_MULTIPLIER has been changed before calling this fn
     function updateBoostedBalances(bytes32[] calldata vaultIds) external onlyOwner {
         uint256 numOfVaults = vaultIds.length;
-        if(numOfVaults == 0) revert InvalidArray();
+        if(numOfVaults == 0) revert Errors.InvalidArray();
 
         // for each vault
         for(uint256 i; i < numOfVaults; ++i) {
@@ -1203,7 +1196,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
             // get vault + ensure it exists
             DataTypes.Vault memory vault = vaults[vaultId];
-            if(vault.creator == address(0)) revert NonExistentVault(vaultId);
+            if(vault.creator == address(0)) revert Errors.NonExistentVault(vaultId);
 
             // decrement global totals before updating vault
             totalBoostedRealmPoints -= vault.boostedRealmPoints;
@@ -1279,7 +1272,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits MinimumRealmPointsUpdated when requirement is changed
      */
     function updateMinimumRealmPoints(uint256 newAmount) external onlyOwner {
-        if(newAmount == 0) revert InvalidAmount();
+        if(newAmount == 0) revert Errors.InvalidAmount();
         
         uint256 oldAmount = MINIMUM_REALMPOINTS_REQUIRED;
         MINIMUM_REALMPOINTS_REQUIRED = newAmount;
@@ -1321,33 +1314,29 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         uint256 distributionId, uint256 distributionStartTime, uint256 distributionEndTime, uint256 emissionPerSecond, uint256 tokenPrecision,
         uint32 dstEid, bytes32 tokenAddress) external onlyOwner {
             
-        if (emissionPerSecond == 0) revert ZeroEmissionRate();
-        if (tokenPrecision == 0) revert ZeroTokenPrecision();
+        if (emissionPerSecond == 0) revert Errors.ZeroEmissionRate();
+        if (tokenPrecision == 0) revert Errors.ZeroTokenPrecision();
 
-        if (distributionStartTime <= block.timestamp) revert InvalidStartTime();
-        if (distributionEndTime <= distributionStartTime) revert InvalidDistributionEndTime();
+        if (distributionStartTime <= block.timestamp) revert Errors.InvalidStartTime();
+        if (distributionEndTime <= distributionStartTime) revert Errors.InvalidDistributionEndTime();
 
         // only staking power can have indefinite endTime
-        if(distributionId > 0 && distributionEndTime == 0) revert InvalidEndTime();
+        if(distributionId > 0 && distributionEndTime == 0) revert Errors.InvalidEndTime();
 
         // lazy load startTime, instead of entire struct
         DataTypes.Distribution storage distributionPointer = distributions[distributionId]; 
         
         // check if fresh id
-        if(distributionPointer.startTime > 0) revert DistributionAlreadySetup();
+        if(distributionPointer.startTime > 0) revert Errors.DistributionAlreadySetup();
             
         // Initialize struct
-        DataTypes.Distribution memory distribution = DataTypes.Distribution({
-            distributionId: distributionId,
-            TOKEN_PRECISION: tokenPrecision,
-            endTime: distributionEndTime,
-            startTime: distributionStartTime,
-            emissionPerSecond: emissionPerSecond,
-            index: 0,                    // Initialize explicitly
-            totalEmitted: 0,             // Initialize explicitly
-            lastUpdateTimeStamp: distributionStartTime,
-            manuallyEnded: 0
-        });
+        DataTypes.Distribution memory distribution;
+            distribution.distributionId = distributionId;
+            distribution.TOKEN_PRECISION = tokenPrecision;
+            distribution.endTime = distributionEndTime;
+            distribution.startTime = distributionStartTime;
+            distribution.emissionPerSecond = emissionPerSecond;
+            distribution.lastUpdateTimeStamp = distributionStartTime;
 
         // update storage
         distributions[distributionId] = distribution;
@@ -1362,8 +1351,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         // REWARDS_VAULT setup: only for non-staking power distributions
         if(distributionId > 0) {
 
-            if(dstEid == 0) revert InvalidDstEid();
-            if(tokenAddress == bytes32(0)) revert InvalidTokenAddress();
+            if(dstEid == 0) revert Errors.InvalidDstEid();
+            if(tokenAddress == bytes32(0)) revert Errors.InvalidTokenAddress();
 
             uint256 totalRequired = (distributionEndTime - distributionStartTime) * emissionPerSecond;
 
@@ -1393,24 +1382,24 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      */
     function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external onlyOwner whenNotPaused {
 
-        if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert InvalidDistributionParameters(); 
+        if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert Errors.InvalidDistributionParameters(); 
 
         DataTypes.Distribution memory distribution = distributions[distributionId];
         
         // Check distribution exists
-        if(distribution.startTime == 0) revert NonExistentDistribution();
+        if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
 
-        if(block.timestamp >= distribution.endTime) revert DistributionOver();
+        if(block.timestamp >= distribution.endTime) revert Errors.DistributionOver();
         
         _updateDistributionIndex(distribution);
 
         // startTime modification
         if(newStartTime > 0) {
             // Cannot update if distribution has already started
-            if(block.timestamp >= distribution.startTime) revert DistributionStarted();
+            if(block.timestamp >= distribution.startTime) revert Errors.DistributionStarted();
             
             // newStartTime must be a future time
-            if(newStartTime <= block.timestamp) revert InvalidStartTime();
+            if(newStartTime <= block.timestamp) revert Errors.InvalidStartTime();
 
             distribution.startTime = newStartTime;
         }
@@ -1419,13 +1408,13 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         if(newEndTime > 0) {
 
             // cannot be in the past
-            if(newEndTime < block.timestamp) revert InvalidEndTime();
+            if(newEndTime < block.timestamp) revert Errors.InvalidEndTime();
 
             // If only endTime is being updated, ensure it's after existing startTime
-            if(newStartTime == 0 && newEndTime <= distribution.startTime) revert InvalidDistributionEndTime();
+            if(newStartTime == 0 && newEndTime <= distribution.startTime) revert Errors.InvalidDistributionEndTime();
             
             // If both times are being updated, ensure end is after start
-            if(newStartTime > 0 && newEndTime <= newStartTime) revert InvalidDistributionEndTime();
+            if(newStartTime > 0 && newEndTime <= newStartTime) revert Errors.InvalidDistributionEndTime();
 
             // update endTime
             distribution.endTime = newEndTime;
@@ -1439,7 +1428,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         emit DistributionUpdated(distributionId, distribution.startTime, distribution.endTime, distribution.emissionPerSecond);
     }
 
-
     /**
      * @notice Immediately ends a distribution
      * @param distributionId ID of the distribution to end
@@ -1450,9 +1438,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     function endDistributionImmediately(uint256 distributionId) external onlyOwner whenNotPaused {
         DataTypes.Distribution memory distribution = distributions[distributionId];
         
-        if(distribution.startTime == 0) revert NonExistentDistribution();
-        if(block.timestamp >= distribution.endTime) revert DistributionOver();
-        if(distribution.manuallyEnded == 1) revert DistributionManuallyEnded();
+        if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
+        if(block.timestamp >= distribution.endTime) revert Errors.DistributionOver();
+        if(distribution.manuallyEnded == 1) revert Errors.DistributionManuallyEnded();
         
         _updateDistributionIndex(distribution);
         
@@ -1475,7 +1463,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits RewardsVaultSet when vault address is updated
      */
     function setRewardsVault(address newRewardsVault) external onlyOwner whenNotPaused {
-        if(newRewardsVault == address(0)) revert InvalidAddress();       
+        if(newRewardsVault == address(0)) revert Errors.InvalidAddress();       
 
         emit RewardsVaultSet(address(REWARDS_VAULT), newRewardsVault);
         REWARDS_VAULT = IRewardsVault(newRewardsVault);    
@@ -1497,7 +1485,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     function pause() external onlyOwner {
 
         // at least staking power should have been setup on deployment
-        if(activeDistributions.length == 0) revert NoActiveDistributions(); 
+        if(activeDistributions.length == 0) revert Errors.NoActiveDistributions(); 
 
         uint256 numOfDistributions = activeDistributions.length;
         
@@ -1517,7 +1505,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @notice Unpause pool. Cannot unpause once frozen
      */
     function unpause() external onlyOwner {
-        if(isFrozen == 1) revert IsFrozen(); 
+        if(isFrozen == 1) revert Errors.IsFrozen(); 
         _unpause();
     }
 
@@ -1528,7 +1516,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      *      Enables emergencyExit() to be called.
      */
     function freeze() external whenPaused onlyOwner {
-        if(isFrozen == 1) revert IsFrozen();
+        if(isFrozen == 1) revert Errors.IsFrozen();
         
         isFrozen = 1;
 
@@ -1552,8 +1540,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @custom:emits UnstakedNfts when NFTs are recovered
      */
     function emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted whenPaused {
-        if(isFrozen == 0) revert NotFrozen();
-        if(vaultIds.length == 0) revert InvalidArray();
+        if(isFrozen == 0) revert Errors.NotFrozen();
+        if(vaultIds.length == 0) revert Errors.InvalidArray();
       
         uint256 userTotalStakedNfts;
         uint256 userTotalStakedTokens;
@@ -1567,7 +1555,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
             // check user has non-zero holdings
             uint256 stakedNfts = userVaultAssets.tokenIds.length;
             uint256 stakedTokens = userVaultAssets.stakedTokens;       
-            if(stakedNfts == 0 && stakedTokens == 0) revert UserHasNothingStaked(vaultId, onBehalfOf);
+            if(stakedNfts == 0 && stakedTokens == 0) revert Errors.UserHasNothingStaked(vaultId, onBehalfOf);
 
             // update balances: user + vault
             if(stakedTokens > 0){

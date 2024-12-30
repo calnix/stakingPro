@@ -9,7 +9,6 @@ contract DataTypes {
 
 
     struct Vault {
-        //uint256 vaultId;   // do i need?
         address creator;
         uint256[] creationTokenIds;     // nfts staked for creation
 

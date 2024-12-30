@@ -360,6 +360,7 @@ If we only wanted to express fee factors in integer values, (meaning 0 precision
      */
 
 staking power
+
     // staking power is distributionId:0 => tokenData{uint256 chainId:0, bytes32 tokenAddr: 0,...}
 
 # Contract Walkthrough
