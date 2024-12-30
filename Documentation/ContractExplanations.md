@@ -596,7 +596,7 @@ Nested call within stakingPro so that we do not have to make 2 independent txns 
 - will fire off a xchain message to the home chain, to update rewardsVault
 - `totalDeposited` is decremented on rewardsVault
 
-## 3. claimRewards
+## 4. claimRewards
 
 - user to call claimRewards() on stakingPro
 - `claimRewards(bytes32 vaultId, uint256 distributionId) external`
@@ -608,3 +608,48 @@ Nested call within stakingPro so that we do not have to make 2 independent txns 
 Note that the rewardsVault only supports local, other remote evm chains and solana.
 
 ![alt text](image.png)
+
+
+## 5. How to end stakingPro and/or migrate to a new stakingPro 
+
+1. pause contract
+2. when paused, users can only call: `unstakeAll` and `claimRewards`
+
+So to end the current instance of stakingPro, we simply pause the contract and have users call `unstakeAll` and `claimRewards` to exit.
+It is not possible to nest claimRewards within unstakeAll, as claimRewards operates on a per-distribution basis. Hence, 2 functions are needed.
+
+> - If paused, _updateDistributionIndex() will not update and just return.
+> - Must update it before pausing; so rewards are calculated up to the point of NOW, to be paused.
+> - This is done atomically with `pause()`
+
+## 6. Emergency Exit
+
+Assuming black swan event, we can call `emergencyExit` to allow users to exit.
+Function is callable by anyone, but only after the contract has been paused and frozen.
+
+1. pause() -> only unstake
+2. freeze() -> cannot unpause
+3. emergencyExit() -> only unstake
+
+After pausing, users can only call `unstakeAll` and `claimRewards`.
+However, once **frozen**, users can no longer call `unstakeAll` or `claimRewards`.
+
+They can only call `emergencyExit` to recover their tokens.
+
+```solidity
+emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf)
+```
+
+- This allows users to recover their principal assets in a black swan event.
+- It does not allow users to recover their rewards or fees.
+
+**This is the contrasting point versus calling `unstakeAll` and `claimRewards`. Why?**
+
+- The assumption here is that the contract can no longer be trusted, and calculations and updates should not be trusted or engaged with.
+- So we only look to recover the principal assets.
+- Can worry about calculating what is owed off-chain at our leisure once users assets are secured.
+
+**Function is callable by anyone, but asset transfers are made to the correct beneficiary**
+
+- This is done by checking the `onBehalfOf` address.
+- The reason for this is to allow both users and us to call the function, to allow for a swift exit.

@@ -70,3 +70,11 @@ event NftMultiplierUpdated(uint256 oldMultiplier, uint256 newMultiplier);
 
 // updateBoostedBalances
 event BoostedBalancesUpdated(bytes32[] vaultIds);
+
+// pause
+event DistributionsUpdated(uint256[] distributionIds);
+
+
+// emergencyExit
+event UnstakedTokens(address indexed user, bytes32[] indexed vaultIds, uint256 amount);
+event UnstakedNfts(address indexed user, bytes32[] indexed vaultIds, uint256[] tokenIds);

@@ -60,3 +60,7 @@ error NoActiveDistributions();
 // endDistributionImmediately
 error DistributionOver();
 error DistributionManuallyEnded();
+
+// freeze
+error IsFrozen();
+error NotFrozen();

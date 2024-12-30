@@ -41,7 +41,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     uint256 public totalBoostedStakedTokens;
 
     // pool emergency state
-    bool public isFrozen;
+    uint256 public isFrozen;
 
     uint256 public NFT_MULTIPLIER;                     // 10% = 1000/10_000 = 1000/PERCENTAGE_BASE 
     uint256 public constant PRECISION_BASE = 10_000;   // feeFactors & nft multiplier expressed in 2dp precision (XX.yy%)
@@ -363,172 +363,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
     /**
-     * @notice Unstakes all tokens and NFTs from a vault
-     * @dev Updates accounting, transfers tokens, and records NFT unstaking
-     * @param vaultId The ID of the vault to unstake from
-     * @custom:emits UnstakedTokens, UnstakedNfts
-     */
-    function unstakeAll(bytes32 vaultId) external whenStarted whenNotPaused {
-        if(vaultId == 0) revert InvalidVaultId();
-
-        address onBehalfOf = msg.sender;
-        
-        // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
-
-        // Update vault and user accounting across all active reward distributions
-        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
-
-        // get user staked assets: old values for events
-        uint256 numOfNfts = userVaultAssets.tokenIds.length;
-        uint256 stakedTokens = userVaultAssets.stakedTokens;        
-
-        // check if user has non-zero holdings
-        if(stakedTokens + numOfNfts == 0) revert UserHasNothingStaked(vaultId, onBehalfOf);
-        
-        // update tokens
-        if(stakedTokens > 0){
-
-            // calc. boosted values
-            uint256 userBoostedStakedTokens = (stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;
-
-            // update vault
-            vault.stakedTokens -= stakedTokens;
-            vault.boostedStakedTokens -= userBoostedStakedTokens;
-            
-            // update user
-            delete userVaultAssets.stakedTokens;
-
-            // update global
-            totalStakedTokens -= stakedTokens;
-            totalBoostedStakedTokens -= userBoostedStakedTokens;
-
-            emit UnstakedTokens(onBehalfOf, vaultId, stakedTokens);       
-
-            // return MOCA
-            STAKED_TOKEN.safeTransfer(onBehalfOf, stakedTokens);
-        }
-
-        // update nfts
-        if(numOfNfts > 0){
-
-            // record unstake with registry
-            NFT_REGISTRY.recordUnstake(onBehalfOf, userVaultAssets.tokenIds, vaultId);
-            emit UnstakedNfts(onBehalfOf, vaultId, userVaultAssets.tokenIds);       
-
-            // update user
-            delete userVaultAssets.tokenIds;
-
-            // update vault
-            vault.stakedNfts -= numOfNfts;            
-            vault.totalBoostFactor = vault.stakedNfts * NFT_MULTIPLIER;
-
-            // recalc vault's boosted balances, based on remaining staked assets
-            if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;            
-            if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;
-
-            // update global
-            totalStakedNfts -= numOfNfts;
-        }
-
-        // update storage: mappings 
-        vaults[vaultId] = vault;
-        users[onBehalfOf][vaultId] = userVaultAssets;
-    }
-
-    /**
-     * @notice Claims all pending rewards for a user from a specific vault and distribution
-     * @param vaultId The ID of the vault to claim rewards from
-     * @param distributionId The ID of the reward distribution to claim from
-     * @dev Updates vault and user accounting across all active distributions before claiming
-     * @dev Calculates and claims 4 types of rewards:
-     *      1. MOCA staking rewards
-     *      2. Realm Points staking rewards 
-     *      3. NFT staking rewards
-     *      4. Creator rewards (if caller is vault creator)
-     * @dev Not applicable to distributionId:0 which is the staking power distribution
-     * @custom:throws InvalidVaultId if vaultId is 0
-     * @custom:throws StakingPowerDistribution if distributionId is 0
-     * @custom:emits RewardsClaimed when rewards are successfully claimed
-     */
-    function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted whenNotPaused {
-        if(vaultId == 0) revert InvalidVaultId();
-        if(distributionId == 0) revert StakingPowerDistribution();
-
-        address onBehalfOf = msg.sender;
-
-        // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
-
-        // Update vault and user accounting across all active reward distributions
-        // _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
-
-        // get corresponding user+vault account for this active distribution 
-        DataTypes.Distribution memory distribution_ = distributions[distributionId];
-        DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
-        DataTypes.UserAccount memory userAccount_ = userAccounts[onBehalfOf][vaultId][distributionId];
-
-        // alternate; update just the specified distribution
-        (DataTypes.UserAccount memory userAccount, DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateUserAccount(userVaultAssets, userAccount_, vault, vaultAccount_, distribution_);
-
-        //------- calc. and update vault and user accounts --------
-        uint256 totalUnclaimedRewards;
-        
-        // update balances: staking MOCA rewards
-        if (userAccount.accStakingRewards > userAccount.claimedStakingRewards) {
-
-            uint256 unclaimedRewards = userAccount.accStakingRewards - userAccount.claimedStakingRewards;
-            userAccount.claimedStakingRewards += unclaimedRewards;
-            vaultAccount.totalClaimedRewards += unclaimedRewards;
-
-            totalUnclaimedRewards += unclaimedRewards;
-        }
-
-        // update balances: staking RP rewards 
-        if (userAccount.accRealmPointsRewards > userAccount.claimedRealmPointsRewards) {
-
-            uint256 unclaimedRpRewards = userAccount.accRealmPointsRewards - userAccount.claimedRealmPointsRewards;
-            userAccount.claimedRealmPointsRewards += unclaimedRpRewards;
-            vaultAccount.totalClaimedRewards += unclaimedRpRewards;
-
-            totalUnclaimedRewards += unclaimedRpRewards;
-        }
-
-        // update balances: staking NFT rewards
-        if (userAccount.accNftStakingRewards > userAccount.claimedNftRewards) {
-
-            uint256 unclaimedNftRewards = userAccount.accNftStakingRewards - userAccount.claimedNftRewards;
-            userAccount.claimedNftRewards += unclaimedNftRewards;
-            vaultAccount.totalClaimedRewards += unclaimedNftRewards;
-
-            totalUnclaimedRewards += unclaimedNftRewards;
-        }
-
-        // if creator
-        if (vault.creator == onBehalfOf) {
-
-            uint256 unclaimedCreatorRewards = vaultAccount.accCreatorRewards - userAccount.claimedCreatorRewards;
-            userAccount.claimedCreatorRewards += unclaimedCreatorRewards;
-            vaultAccount.totalClaimedRewards += unclaimedCreatorRewards;
-            
-            totalUnclaimedRewards += unclaimedCreatorRewards;
-        }
-
-        // ---------------------------------------------------------------
-
-        // update storage: accounts and distributions
-        distributions[distributionId] = distribution;     
-        vaultAccounts[vaultId][distributionId] = vaultAccount;  
-        userAccounts[onBehalfOf][vaultId][distributionId] = userAccount;
-
-        emit RewardsClaimed(vaultId, onBehalfOf, totalUnclaimedRewards);
-
-        // transfer rewards to user, from rewardsVault
-        REWARDS_VAULT.payRewards(distributionId, totalUnclaimedRewards, onBehalfOf);
-    }
-
-
-    /**
      * @notice Updates the fee structure for a vault
      * @dev Only the vault creator can update fees
      * @dev Creator can only decrease their creator fee factor
@@ -789,6 +623,175 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         );
     }
 
+// ------ can be called when paused -----
+
+    /**
+     * @notice Unstakes all tokens and NFTs from a vault
+     * @dev Updates accounting, transfers tokens, and records NFT unstaking
+     * @param vaultId The ID of the vault to unstake from
+     * @custom:emits UnstakedTokens, UnstakedNfts
+     */
+    function unstakeAll(bytes32 vaultId) external whenStarted {
+        if(isFrozen == 1) revert IsFrozen();
+        if(vaultId == 0) revert InvalidVaultId();
+
+        address onBehalfOf = msg.sender;
+        
+        // cache vault and user data, reverts if vault does not exist
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+
+        // Update vault and user accounting across all active reward distributions
+        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+
+        // get user staked assets: old values for events
+        uint256 numOfNfts = userVaultAssets.tokenIds.length;
+        uint256 stakedTokens = userVaultAssets.stakedTokens;        
+
+        // check if user has non-zero holdings
+        if(stakedTokens + numOfNfts == 0) revert UserHasNothingStaked(vaultId, onBehalfOf);
+        
+        // update tokens
+        if(stakedTokens > 0){
+
+            // calc. boosted values
+            uint256 userBoostedStakedTokens = (stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;
+
+            // update vault
+            vault.stakedTokens -= stakedTokens;
+            vault.boostedStakedTokens -= userBoostedStakedTokens;
+            
+            // update user
+            delete userVaultAssets.stakedTokens;
+
+            // update global
+            totalStakedTokens -= stakedTokens;
+            totalBoostedStakedTokens -= userBoostedStakedTokens;
+
+            emit UnstakedTokens(onBehalfOf, vaultId, stakedTokens);       
+
+            // return MOCA
+            STAKED_TOKEN.safeTransfer(onBehalfOf, stakedTokens);
+        }
+
+        // update nfts
+        if(numOfNfts > 0){
+
+            // record unstake with registry
+            NFT_REGISTRY.recordUnstake(onBehalfOf, userVaultAssets.tokenIds, vaultId);
+            emit UnstakedNfts(onBehalfOf, vaultId, userVaultAssets.tokenIds);       
+
+            // update user
+            delete userVaultAssets.tokenIds;
+
+            // update vault
+            vault.stakedNfts -= numOfNfts;            
+            vault.totalBoostFactor = vault.stakedNfts * NFT_MULTIPLIER;
+
+            // recalc vault's boosted balances, based on remaining staked assets
+            if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;            
+            if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;
+
+            // update global
+            totalStakedNfts -= numOfNfts;
+        }
+
+        // update storage: mappings 
+        vaults[vaultId] = vault;
+        users[onBehalfOf][vaultId] = userVaultAssets;
+    }
+
+    /**
+     * @notice Claims all pending rewards for a user from a specific vault and distribution
+     * @param vaultId The ID of the vault to claim rewards from
+     * @param distributionId The ID of the reward distribution to claim from
+     * @dev Updates vault and user accounting across all active distributions before claiming
+     * @dev Calculates and claims 4 types of rewards:
+     *      1. MOCA staking rewards
+     *      2. Realm Points staking rewards 
+     *      3. NFT staking rewards
+     *      4. Creator rewards (if caller is vault creator)
+     * @dev Not applicable to distributionId:0 which is the staking power distribution
+     * @custom:throws InvalidVaultId if vaultId is 0
+     * @custom:throws StakingPowerDistribution if distributionId is 0
+     * @custom:emits RewardsClaimed when rewards are successfully claimed
+     */
+    function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted {
+        if(isFrozen == 1) revert IsFrozen();
+    
+        if(vaultId == 0) revert InvalidVaultId();
+        if(distributionId == 0) revert StakingPowerDistribution();
+
+        address onBehalfOf = msg.sender;
+
+        // cache vault and user data, reverts if vault does not exist
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+
+        // Update vault and user accounting across all active reward distributions
+        // _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+
+        // get corresponding user+vault account for this active distribution 
+        DataTypes.Distribution memory distribution_ = distributions[distributionId];
+        DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
+        DataTypes.UserAccount memory userAccount_ = userAccounts[onBehalfOf][vaultId][distributionId];
+
+        // alternate; update just the specified distribution
+        (DataTypes.UserAccount memory userAccount, DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateUserAccount(userVaultAssets, userAccount_, vault, vaultAccount_, distribution_);
+
+        //------- calc. and update vault and user accounts --------
+        uint256 totalUnclaimedRewards;
+        
+        // update balances: staking MOCA rewards
+        if (userAccount.accStakingRewards > userAccount.claimedStakingRewards) {
+
+            uint256 unclaimedRewards = userAccount.accStakingRewards - userAccount.claimedStakingRewards;
+            userAccount.claimedStakingRewards += unclaimedRewards;
+            vaultAccount.totalClaimedRewards += unclaimedRewards;
+
+            totalUnclaimedRewards += unclaimedRewards;
+        }
+
+        // update balances: staking RP rewards 
+        if (userAccount.accRealmPointsRewards > userAccount.claimedRealmPointsRewards) {
+
+            uint256 unclaimedRpRewards = userAccount.accRealmPointsRewards - userAccount.claimedRealmPointsRewards;
+            userAccount.claimedRealmPointsRewards += unclaimedRpRewards;
+            vaultAccount.totalClaimedRewards += unclaimedRpRewards;
+
+            totalUnclaimedRewards += unclaimedRpRewards;
+        }
+
+        // update balances: staking NFT rewards
+        if (userAccount.accNftStakingRewards > userAccount.claimedNftRewards) {
+
+            uint256 unclaimedNftRewards = userAccount.accNftStakingRewards - userAccount.claimedNftRewards;
+            userAccount.claimedNftRewards += unclaimedNftRewards;
+            vaultAccount.totalClaimedRewards += unclaimedNftRewards;
+
+            totalUnclaimedRewards += unclaimedNftRewards;
+        }
+
+        // if creator
+        if (vault.creator == onBehalfOf) {
+
+            uint256 unclaimedCreatorRewards = vaultAccount.accCreatorRewards - userAccount.claimedCreatorRewards;
+            userAccount.claimedCreatorRewards += unclaimedCreatorRewards;
+            vaultAccount.totalClaimedRewards += unclaimedCreatorRewards;
+            
+            totalUnclaimedRewards += unclaimedCreatorRewards;
+        }
+
+        // ---------------------------------------------------------------
+
+        // update storage: accounts and distributions
+        distributions[distributionId] = distribution;     
+        vaultAccounts[vaultId][distributionId] = vaultAccount;  
+        userAccounts[onBehalfOf][vaultId][distributionId] = userAccount;
+
+        emit RewardsClaimed(vaultId, onBehalfOf, totalUnclaimedRewards);
+
+        // transfer rewards to user, from rewardsVault
+        REWARDS_VAULT.payRewards(distributionId, totalUnclaimedRewards, onBehalfOf);
+    }
 
     /**
         add checks:
@@ -800,6 +803,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 //-------------------------------internal------------------------------------------- 
   
     function _updateDistributionIndex(DataTypes.Distribution memory distribution) internal returns (DataTypes.Distribution memory) {
+        // if contract is paused, do not update distribution index
+        if(paused()) return distribution;
+
         // distribution already updated
         if(distribution.lastUpdateTimeStamp == block.timestamp) return distribution;
 
@@ -1102,7 +1108,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     }
 
 
-    ///@dev cache vault and user structs from storage to memory. checks that vault exists and hasn't ended, else reverts.
+    ///@dev cache vault and user structs from storage to memory. checks that vault exists, else reverts.
     function _cache(bytes32 vaultId, address onBehalfOf) internal view returns(DataTypes.User memory, DataTypes.Vault memory) {
         // ensure vault exists
         DataTypes.Vault memory vault = vaults[vaultId];
@@ -1515,29 +1521,50 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
 
     /**
-     * @notice Pause pool
+     * @notice Pauses all contract operations and updates distribution indexes
+     * @dev Updates all active distribution indexes to current timestamp before pausing
+     * @dev This ensures all rewards are properly calculated and booked up to pause time
+     * @custom:throws NoActiveDistributions if there are no active distributions
+     * @custom:emits DistributionsUpdated when distribution indexes are updated
+     * @custom:emits Paused when contract is paused (from OpenZeppelin)
      */
     function pause() external onlyOwner {
+
+        // at least staking power should have been setup on deployment
+        if(activeDistributions.length == 0) revert NoActiveDistributions(); 
+
+        uint256 numOfDistributions = activeDistributions.length;
+        
+        // mark to date: update all distributions so that rewards are calculated and booked to present time        
+        for(uint256 i; i < numOfDistributions; ++i) {
+
+            // update storage
+            distributions[activeDistributions[i]] = _updateDistributionIndex(distributions[activeDistributions[i]]);
+        }
+
+        emit DistributionsUpdated(activeDistributions);
+
         _pause();
     }
 
     /**
-     * @notice Unpause pool
+     * @notice Unpause pool. Cannot unpause once frozen
      */
     function unpause() external onlyOwner {
+        if(isFrozen == 1) revert IsFrozen(); 
         _unpause();
     }
 
     /**
-     * @notice To freeze the pool in the event of something untoward occuring
+     * @notice To freeze the pool in the event of something untoward occurring
      * @dev Only callable from a paused state, affirming that staking should not resume
      *      Nothing to be updated. Freeze as is.
-            Enables emergencyExit() to be called.
+     *      Enables emergencyExit() to be called.
      */
     function freeze() external whenPaused onlyOwner {
-        require(isFrozen == false, "Pool is frozen");
+        if(isFrozen == 1) revert IsFrozen();
         
-        isFrozen = true;
+        isFrozen = 1;
 
         emit PoolFrozen(block.timestamp);
     }  
@@ -1547,86 +1574,89 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
                                 RECOVER
     //////////////////////////////////////////////////////////////*/
     
-    /**
-     * @notice For users to recover their principal assets in a black swan event
-     * @dev Rewards and fees are not withdrawn; indexes are not updated
-     * @param vaultId Address of token contract
-     * @param onBehalfOf Recepient of tokens
+    /** note: do we want to cover rewards and fees? - no. why? cos then we have to iterate through distributions and update indexes.
+     * @notice Allows users to recover their principal assets in a black swan event
+     * @dev Rewards and fees are not withdrawn; indexes are not updated. Preserves state history at time of failure.
+     * @param vaultIds Array of vault IDs to recover assets from
+     * @param onBehalfOf Address to receive the recovered assets
+     * @custom:throws NotFrozen if contract is not in frozen state  
+     * @custom:throws InvalidArray if vaultIds array is empty
+     * @custom:throws UserHasNothingStaked if user has no staked assets in a vault
+     * @custom:emits UnstakedTokens when ERC20 tokens are recovered
+     * @custom:emits UnstakedNfts when NFTs are recovered
      */
-    function emergencyExit(bytes32 vaultId, address onBehalfOf) external whenStarted whenPaused onlyOwner {
-    /*  
-        require(isFrozen, "Pool not frozen");
-        require(vaultId > 0, "Invalid vaultId");
+    function emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted whenPaused {
+        if(isFrozen == 0) revert NotFrozen();
+        if(vaultIds.length == 0) revert InvalidArray();
+      
+        uint256 userTotalStakedNfts;
+        uint256 userTotalStakedTokens;
+        uint256[] memory userTotalTokenIds;
+        for(uint256 i; i < vaultIds.length; ++i){
 
-        // get vault + check if has been created
-       (DataTypes.UserInfo memory userInfo, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+            // get vault + check if has been created            
+            bytes32 vaultId = vaultIds[i];
+            (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
 
-        // check user has non-zero holdings
-        uint256 stakedNfts = userInfo.tokenIds.length;
-        uint256 stakedTokens = userInfo.stakedTokens;       
-        if(stakedNfts == 0 && stakedTokens == 0) revert UserHasNothingStaked(vaultId, onBehalfOf);
-       
-        // update balances: user + vault
-        if(stakedNfts > 0){
+            // check user has non-zero holdings
+            uint256 stakedNfts = userVaultAssets.tokenIds.length;
+            uint256 stakedTokens = userVaultAssets.stakedTokens;       
+            if(stakedNfts == 0 && stakedTokens == 0) revert UserHasNothingStaked(vaultId, onBehalfOf);
 
-            // record unstake with registry, else users cannot switch nfts to the new pool
-            NFT_REGISTRY.recordUnstake(onBehalfOf, userInfo.tokenIds, vaultId);
-            emit UnstakedMocaNft(onBehalfOf, vaultId, userInfo.tokenIds);       
+            // update balances: user + vault
+            if(stakedTokens > 0){
 
-            // update vault and user
-            vault.stakedNfts -= stakedNfts;
-            delete userInfo.tokenIds;
+                // decrement
+                vault.stakedTokens -= stakedTokens;
+                delete userVaultAssets.stakedTokens;
+                
+                
+                // track total
+                totalStakedTokens += stakedTokens;
+            }
+
+            // update balances: user + vault
+            if(stakedNfts > 0){
+
+                // track total
+                userTotalTokenIds = _concatArrays(userTotalTokenIds, userVaultAssets.tokenIds);
+                userTotalStakedNfts += stakedNfts;
+
+                // decrement
+                vault.stakedNfts -= stakedNfts;
+                delete userVaultAssets.tokenIds;
+            }
+
+            // update storage 
+            vaults[vaultId] = vault;
+            users[onBehalfOf][vaultId] = userVaultAssets;
         }
 
-        if(stakedTokens > 0){
+        // update global
+        totalStakedNfts -= userTotalStakedNfts;
+        totalStakedTokens -= userTotalStakedTokens;
 
-            vault.stakedTokens -= stakedTokens;
-            delete userInfo.stakedTokens;
-            
-            // burn stkMOCA
-            //_burn(onBehalfOf, stakedTokens);
+        // return total principal staked
+        if(userTotalStakedTokens > 0) STAKED_TOKEN.safeTransfer(onBehalfOf, userTotalStakedTokens); 
+        emit UnstakedTokens(onBehalfOf, vaultIds, userTotalStakedTokens);      
 
-            emit UnstakedMoca(onBehalfOf, vaultId, stakedTokens);       
-        }
+        // record unstake with registry, else users nfts will be locked in locker
+        NFT_REGISTRY.recordUnstake(onBehalfOf, userTotalTokenIds, vaultIds);
+        emit UnstakedNfts(onBehalfOf, vaultIds, userTotalTokenIds);        
 
         /**
             Note:
-            we do not zero out or decrement the following values: 
-                1. vault.allocPoints 
-                2. vault.multiplier
-                3. pool.totalAllocPoints
+            we do not zero out/decrement/re-calculate the following values: 
+                1. totalBoostedRealmPoints
+                2. totalBoostedStakedTokens
+                3. vault.totalBoostFactor
+                4. vault.boostedRealmPoints
+                5. vault.boostedStakedTokens
             These values are retained to preserve state history at time of failure.
             This can serve as useful reference during post-mortem and potentially assist with any remediative actions.
          */
-
-        // update storage 
-        //vaults[vaultId] = vault;
-        //users[onBehalfOf][vaultId] = userInfo;
-
-        // return principal stake
-        //if(stakedTokens > 0) STAKED_TOKEN.safeTransfer(onBehalfOf, stakedTokens); 
-    
     }
 
-
-    /**  NOTE: Consider dropping to avoid admin abuse
-     * @notice Recover random tokens accidentally sent to the vault
-     * @param tokenAddress Address of token contract
-     * @param receiver Recepient of tokens
-     * @param amount Amount to retrieve
-     */
-    function recoverERC20(address tokenAddress, address receiver, uint256 amount) external onlyOwner {
-        require(tokenAddress != address(STAKED_TOKEN), "StakedToken: Not allowed");
-
-        emit RecoveredTokens(tokenAddress, receiver, amount);
-
-        IERC20(tokenAddress).safeTransfer(receiver, amount);
-    }
-
-    // for users to unstake their assets when contract is paused
-    function emergencyUnstake(bytes32 vaultId, address onBehalfOf) external onlyOwner whenStarted whenPaused {
-
-    }
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
