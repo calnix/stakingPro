@@ -19,11 +19,10 @@ contract StakingPro is Pausable, Ownable2Step {
     using SafeERC20 for IERC20;
 
     // external interfaces
-    IERC20 public immutable STAKED_TOKEN;  
     INftRegistry public immutable NFT_REGISTRY;
-    IRewardsVault public REWARDS_VAULT;
-    
-    address public REALM_POINTS;
+    IERC20 public immutable STAKED_TOKEN;  
+    IRewardsVault public REWARDS_VAULT; 
+    address public RP_CONTRACT;
 
     uint256 public immutable startTime; 
 
@@ -275,7 +274,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:emits StakedRealmPoints when realm points are successfully staked with (staker, vaultId, amount, boostedAmount)
      */
     function stakeRP(bytes32 vaultId, uint256 amount, address onBehalfOf) external whenStarted whenNotPaused {
-        if(msg.sender != REALM_POINTS) revert Errors.InvalidSender();
+        if(msg.sender != RP_CONTRACT) revert Errors.InvalidSender();
 
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
@@ -1427,7 +1426,12 @@ contract StakingPro is Pausable, Ownable2Step {
         REWARDS_VAULT = IRewardsVault(newRewardsVault);    
     }
 
+    function setRealmPoints(address newRealmPoints) external onlyOwner {
+        if(newRealmPoints == address(0)) revert Errors.InvalidAddress();
 
+        emit RPContractSet(RP_CONTRACT, newRealmPoints);
+        RP_CONTRACT = newRealmPoints;
+    }
 
 //------------------------------- risk ----------------------------------------------------
 

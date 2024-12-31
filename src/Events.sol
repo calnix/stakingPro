@@ -83,3 +83,4 @@ event UnstakedNfts(address indexed user, bytes32[] indexed vaultIds, uint256[] t
 //---------------- Realm Points contract ----------------
 event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 amount);
 event PoolSet(address indexed poolAddress);
+event RPContractSet(address indexed oldRPContract, address indexed newRPContract);
