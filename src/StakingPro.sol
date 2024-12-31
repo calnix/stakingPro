@@ -11,8 +11,8 @@ import {SafeERC20, IERC20} from "openzeppelin-contracts/contracts/token/ERC20/ut
 import {Pausable} from "openzeppelin-contracts/contracts/utils/Pausable.sol";
 import {Ownable2Step, Ownable} from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
-import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
-import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
+import {ECDSA} from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import {EIP712} from "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 
 // interfaces
 import {INftRegistry} from "./interfaces/INftRegistry.sol";
@@ -1622,6 +1622,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
                                MODIFIERS
     //////////////////////////////////////////////////////////////*/
 
+    //REDUCES CONTRACT SIZE
     function _whenStarted() internal view {
         if(block.timestamp < startTime) revert Errors.NotStarted();    
     }
