@@ -20,7 +20,8 @@ library Errors {
     error MinimumRpRequired();
     error SignatureAlreadyExecuted();
     error InvalidSignature();
-
+    error InvalidSender();
+    
     // updateVaultFees
     error UserIsNotCreator();
     error NftFeeCanOnlyBeIncreased();

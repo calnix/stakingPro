@@ -78,3 +78,8 @@ event DistributionsUpdated(uint256[] distributionIds);
 // emergencyExit
 event UnstakedTokens(address indexed user, bytes32[] indexed vaultIds, uint256 amount);
 event UnstakedNfts(address indexed user, bytes32[] indexed vaultIds, uint256[] tokenIds);
+
+
+//---------------- Realm Points contract ----------------
+event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 amount);
+event PoolSet(address indexed poolAddress);
