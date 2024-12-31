@@ -71,7 +71,7 @@ contract StakingPro is Pausable, Ownable2Step {
 
 //-------------------------------constructor------------------------------------------
 
-    constructor(address registry, address stakedToken, address storedSigner, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
+    constructor(address registry, address stakedToken, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
         address owner) payable Ownable(owner) {
 
         // sanity check input data: time, period, rewards

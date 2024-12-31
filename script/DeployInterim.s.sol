@@ -17,32 +17,26 @@ contract DeployInterim is Script {
         // constructor params
         address registry = 0x5D4D4b620488DC5CeB13a73a6e700925F7682b02;
         address stakedToken = 0x03946287b52B88C8357E813fbA3F472c60FaE727;
-        address storedSigner = address(0);
         
         // Set start time to 24 hours in the future
         uint256 startTime_ = block.timestamp + 24 hours;
-        uint256 nftMultiplier = 1000;
-        uint256 creationNftsRequired = 1000;
+        uint256 nftMultiplier = 1000; // 10% boost
+        uint256 creationNftsRequired = 1;
         uint256 vaultCoolDownDuration = 7 days;
         address owner = 0x8C9C001F821c04513616fd7962B2D8c62f925fD2;
-        string memory name = "StakingPro";
-        string memory version = "1.0.0";
 
         console.log("Current timestamp:", block.timestamp);
         console.log("Start time:", startTime_);
         console.log("Time difference:", startTime_ - block.timestamp);
 
-        pool = new StakingPro(
+        pool = new StakingPro{salt: bytes32(uint256(1))}(
             registry,
-            stakedToken,
-            storedSigner,
+            stakedToken, 
             startTime_,
             nftMultiplier,
             creationNftsRequired,
             vaultCoolDownDuration,
-            owner,
-            name,
-            version
+            owner
         );
 
         console.log("Deployed StakingPro at:", address(pool));
