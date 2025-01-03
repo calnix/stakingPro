@@ -74,6 +74,8 @@ event BoostedBalancesUpdated(bytes32[] vaultIds);
 // pause
 event DistributionsUpdated(uint256[] distributionIds);
 
+// endTime
+event EndTimeSet(uint256 endTime);
 
 // emergencyExit
 event UnstakedTokens(address indexed user, bytes32[] indexed vaultIds, uint256 amount);

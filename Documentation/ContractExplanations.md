@@ -656,21 +656,29 @@ The expectation is that we call endVaults() on all the vaults that have come to 
 
 [!!!]: confirm that _udpateVaultsAndAccounts() is failing after endtime. consider a removed check?
 
-## 6. How to end stakingPro and/or migrate to a new stakingPro
+## 6. Updating NFT_MULTIPLIER
 
-1. pause contract
-2. when paused, users can only call: `unstakeAll` and `claimRewards`
+Process:
 
-So to end the current instance of stakingPro, we simply pause the contract and have users call `unstakeAll` and `claimRewards` to exit.
-It is not possible to nest claimRewards within unstakeAll, as claimRewards operates on a per-distribution basis. Hence, 2 functions are needed.
+1. call `pause()`: closes all the books; update indexes to NOW; then pauses contract.
+2. update NFT multiplier: `updateNftMultiplier()`
+3. recalculate boostedBalance: `updateBoostedBalances()`
+4. call `unpause()`: unpauses contract.
 
-> - If paused, _updateDistributionIndex() will not update and just return.
-> - Must update it before pausing; so rewards are calculated up to the point of NOW, to be paused.
-> - This is done atomically with `pause()`
+During this process, no one should be able to call any functions, including `unstakeAll`.
+Cos if a user unstakes, boosted balances could be incorrectly calculated and updated.
 
+Easier, to lockdown the contract, update, verify that the updated totalBoosted global values tally with the expected values.
+Else, end the contract and redeploy.
 
+## 7. How to end stakingPro and/or migrate to a new stakingPro contract
 
-## 7. Emergency Exit
+Set endTime global variable.
+Users will be able to call: `unstakeAll` and `claimRewards` after endTime.
+
+It is not possible to nest `claimRewards` within `unstakeAll`, as `claimRewards` operates on a per-distribution basis. Hence, 2 functions are needed.
+
+## 8. Emergency Exit
 
 Assuming black swan event, we can call `emergencyExit` to allow users to exit.
 Function is callable by anyone, but only after the contract has been paused and frozen.
@@ -691,7 +699,7 @@ emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf)
 - This allows users to recover their principal assets in a black swan event.
 - It does not allow users to recover their rewards or fees.
 
-**This is the contrasting point versus calling `unstakeAll` and `claimRewards`. Why?**
+**This is the contrasting point versus calling `unstakeAll` and `emergencyExit`. Why?**
 
 - The assumption here is that the contract can no longer be trusted, and calculations and updates should not be trusted or engaged with.
 - So we only look to recover the principal assets.

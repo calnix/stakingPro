@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 library Errors {
     // generic (used across multiple functions)
     error NotStarted();
+    error StakingEnded();
     error InvalidAmount();
     error InvalidVaultId();
     error InvalidAddress();
@@ -67,4 +68,5 @@ library Errors {
     error IsFrozen();
     error NotFrozen();
 
+    // endTime
 }

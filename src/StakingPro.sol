@@ -24,7 +24,9 @@ contract StakingPro is Pausable, Ownable2Step {
     IRewardsVault public REWARDS_VAULT; 
     address public RP_CONTRACT;
 
+    // duration
     uint256 public immutable startTime; 
+    uint256 public endTime; 
 
     // staked assets
     uint256 public totalStakedNfts;     // disregards creation NFTs
@@ -110,7 +112,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * - Contract must not be paused and staking must have started
      * @custom:emits VaultCreated event with creator address and vault ID
      */
-    function createVault(uint256[] calldata tokenIds, DataTypes.Fees calldata fees) external whenStarted whenNotPaused {
+    function createVault(uint256[] calldata tokenIds, DataTypes.Fees calldata fees) external whenStartedAndNotEnded whenNotPaused {
         
         // must commit unstaked NFTs to create vaults: these do not count towards stakedNFTs
         uint256 incomingNfts = tokenIds.length;
@@ -164,7 +166,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws InvalidVaultId if vaultId is 0
      * @custom:emits StakedMoca when tokens are staked successfully
      */
-    function stakeTokens(bytes32 vaultId, uint256 amount) external whenStarted whenNotPaused {
+    function stakeTokens(bytes32 vaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused {
         if(amount == 0) revert Errors.InvalidAmount();
         if(vaultId == 0) revert Errors.InvalidVaultId();
 
@@ -211,7 +213,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:emits StakedNfts when NFTs are staked successfully
      * @custom:emits VaultMultiplierUpdated when vault's boosted balances are updated
      */
-    function stakeNfts(bytes32 vaultId, uint256[] calldata tokenIds) external whenStarted whenNotPaused {
+    function stakeNfts(bytes32 vaultId, uint256[] calldata tokenIds) external whenStartedAndNotEnded whenNotPaused {
         uint256 incomingNfts = tokenIds.length;
 
         if(vaultId == 0) revert Errors.InvalidVaultId();
@@ -273,7 +275,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws VaultAlreadyEnded if vault cooldown is active
      * @custom:emits StakedRealmPoints when realm points are successfully staked with (staker, vaultId, amount, boostedAmount)
      */
-    function stakeRP(bytes32 vaultId, uint256 amount, address onBehalfOf) external whenStarted whenNotPaused {
+    function stakeRP(bytes32 vaultId, uint256 amount, address onBehalfOf) external whenStartedAndNotEnded whenNotPaused {
         if(msg.sender != RP_CONTRACT) revert Errors.InvalidSender();
 
         // cache vault and user data, reverts if vault does not exist
@@ -323,7 +325,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:emits NftFeeFactorUpdated when NFT fee is updated
      * @custom:emits RealmPointsFeeFactorUpdated when realm points fee is updated
      */
-    function updateVaultFees(bytes32 vaultId, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStarted whenNotPaused {
+    function updateVaultFees(bytes32 vaultId, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused {
         if(vaultId == 0) revert Errors.InvalidVaultId();
         
         // cache vault and user data, reverts if vault does not exist
@@ -371,7 +373,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:emits VaultRemoved when vault is immediately removed (zero cooldown)
      * @custom:emits VaultCooldownInitiated when cooldown period begins
      */
-    function activateCooldown(bytes32 vaultId) external whenStarted whenNotPaused {
+    function activateCooldown(bytes32 vaultId) external whenStartedAndNotEnded whenNotPaused {
         if(vaultId == 0) revert Errors.InvalidVaultId();
 
         // cache vault and user data, reverts if vault does not exist
@@ -416,7 +418,7 @@ contract StakingPro is Pausable, Ownable2Step {
         NFT_REGISTRY.recordUnstake(msg.sender, vault.creationTokenIds, vaultId);
     }
 
-    function endVaults(bytes32[] calldata vaultIds) external whenStarted whenNotPaused {
+    function endVaults(bytes32[] calldata vaultIds) external whenStartedAndNotEnded whenNotPaused {
         uint256 numOfVaults = vaultIds.length;
         if(numOfVaults == 0) revert Errors.InvalidArray();
 
@@ -501,7 +503,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:emits StakedNfts when NFTs are staked in new vault
      * @custom:emits VaultMigrated when migration is complete
      */
-    function migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStarted whenNotPaused {
+    function migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStartedAndNotEnded whenNotPaused {
         if(oldVaultId == 0) revert Errors.InvalidVaultId();
         if(newVaultId == 0) revert Errors.InvalidVaultId();
 
@@ -574,7 +576,7 @@ contract StakingPro is Pausable, Ownable2Step {
         );
     }
 
-// ------ can be called when paused -----
+// ------ can be called AFTER ENDED -----
 
     /**
      * @notice Unstakes all tokens and NFTs from a vault
@@ -621,6 +623,9 @@ contract StakingPro is Pausable, Ownable2Step {
             // return MOCA
             STAKED_TOKEN.safeTransfer(msg.sender, stakedTokens);
         }
+
+        // note: unstake nft, but totalBoostedRealmPoints not updated
+        // edge case: only nft unstaked. so totalBoosted for tokens RP must be be updated within in nft case
 
         // update nfts
         if(numOfNfts > 0){
@@ -1087,7 +1092,16 @@ contract StakingPro is Pausable, Ownable2Step {
                             POOL MANAGEMENT
     //////////////////////////////////////////////////////////////*/
 
-    function stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOf, uint256[] calldata amounts) external onlyOwner {
+    function setEndTime(uint256 endTime_) external onlyOwner {
+        if(endTime_ == 0) revert Errors.InvalidEndTime();
+        if(endTime_ <= block.timestamp) revert Errors.InvalidEndTime();
+
+        endTime = endTime_;
+
+        emit EndTimeSet(endTime_);
+    }
+
+    function stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOf, uint256[] calldata amounts) external  whenStartedAndNotEnded onlyOwner {
         uint256 length = amounts.length;
         if(length == 0) revert Errors.InvalidAmount();
         if(vaultIds.length != length) revert Errors.InvalidVaultId();
@@ -1447,7 +1461,7 @@ contract StakingPro is Pausable, Ownable2Step {
         REWARDS_VAULT = IRewardsVault(newRewardsVault);    
     }
 
-    function setRealmPoints(address newRealmPoints) external onlyOwner {
+    function setRealmPoints(address newRealmPoints) external onlyOwner whenNotPaused {
         if(newRealmPoints == address(0)) revert Errors.InvalidAddress();
 
         emit RPContractSet(RP_CONTRACT, newRealmPoints);
@@ -1603,9 +1617,19 @@ contract StakingPro is Pausable, Ownable2Step {
         if(block.timestamp < startTime) revert Errors.NotStarted();    
     }
 
+    //note > or >= ?
+    function _whenNotEnded() internal view {
+        if(endTime > 0 && block.timestamp >= endTime) revert Errors.StakingEnded();
+    }
+
+    modifier whenStartedAndNotEnded() {
+        _whenStarted();
+        _whenNotEnded();
+        _;
+    }
+
     modifier whenStarted() {
         _whenStarted();
         _;
     }
-
 }
