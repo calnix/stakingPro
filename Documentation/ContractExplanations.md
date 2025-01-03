@@ -644,13 +644,19 @@ Note that the rewardsVault only supports local, other remote evm chains and sola
 
 Upon calling activateCooldown(), the creation NFTs are unlocked, allowing the creator to create new vaults.
 
-### endVaults()
+### endVaults() [!!!]
 
-- endVaults() is called when the vault's end time is reached and the weight of its staked assets must be removed from the system, to they do not accrue rewards nor dilute the rewards of the other active vaults
+- endVaults() is called when the vault's end time is reached and the weight of its staked assets must be removed from the system; so they do not accrue rewards nor dilute the rewards of the other active vaults
 - this is necessary as there is no automated manner for this to occur without drift
+- currently this is callable by anyone, with no access control restrictions
+- vault's staked assets are removed from the system
+- global boosted balances are also decremented
 
+The expectation is that we call endVaults() on all the vaults that have come to an end, via script.
 
-## 5. How to end stakingPro and/or migrate to a new stakingPro
+[!!!]: confirm that _udpateVaultsAndAccounts() is failing after endtime. consider a removed check?
+
+## 6. How to end stakingPro and/or migrate to a new stakingPro
 
 1. pause contract
 2. when paused, users can only call: `unstakeAll` and `claimRewards`
@@ -664,7 +670,7 @@ It is not possible to nest claimRewards within unstakeAll, as claimRewards opera
 
 
 
-## 6. Emergency Exit
+## 7. Emergency Exit
 
 Assuming black swan event, we can call `emergencyExit` to allow users to exit.
 Function is callable by anyone, but only after the contract has been paused and frozen.

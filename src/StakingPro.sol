@@ -747,8 +747,6 @@ contract StakingPro is Pausable, Ownable2Step {
 //-------------------------------internal------------------------------------------- 
   
     function _updateDistributionIndex(DataTypes.Distribution memory distribution) internal returns (DataTypes.Distribution memory) {
-        // if contract is paused, do not update distribution index
-        if(paused()) return distribution;
 
         // distribution already updated
         if(distribution.lastUpdateTimeStamp == block.timestamp) return distribution;
