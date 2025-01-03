@@ -66,4 +66,5 @@ library Errors {
     // freeze
     error IsFrozen();
     error NotFrozen();
+
 }

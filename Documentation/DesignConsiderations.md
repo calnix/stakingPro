@@ -13,7 +13,6 @@ This is because `_updateUserAccounts` gets distribution from storage. So we don'
             DataTypes.UserAccount memory userAccount_ = userAccounts[user][vaultId][distributionId];
 ```
 
-
 ## 2. StakeRP and Signature verification
 
 Has to be spun off into a separate contract; since the monolithic contract is already too big.

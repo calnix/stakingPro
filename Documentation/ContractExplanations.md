@@ -632,8 +632,25 @@ Note that the rewardsVault only supports local, other remote evm chains and sola
 
 ![alt text](image.png)
 
+## 5. Cooldown & Ending vaults: activateCooldown() and endVaults()
 
-## 5. How to end stakingPro and/or migrate to a new stakingPro 
+### activateCooldown()
+
+- activateCooldown() is called when the vault creator wants to activate the cooldown period of a vault
+- this signifies that the vault will come to an end in the near future
+- `vault.endTime` is set to `block.timestamp` + `VAULT_COOLDOWN_DURATION`
+- once `vault.endTime` is a non-zero value, users would not be able to stake anymore
+- however user can continue to claim rewards and unstake at their leisure
+
+Upon calling activateCooldown(), the creation NFTs are unlocked, allowing the creator to create new vaults.
+
+### endVaults()
+
+- endVaults() is called when the vault's end time is reached and the weight of its staked assets must be removed from the system, to they do not accrue rewards nor dilute the rewards of the other active vaults
+- this is necessary as there is no automated manner for this to occur without drift
+
+
+## 5. How to end stakingPro and/or migrate to a new stakingPro
 
 1. pause contract
 2. when paused, users can only call: `unstakeAll` and `claimRewards`
@@ -644,6 +661,8 @@ It is not possible to nest claimRewards within unstakeAll, as claimRewards opera
 > - If paused, _updateDistributionIndex() will not update and just return.
 > - Must update it before pausing; so rewards are calculated up to the point of NOW, to be paused.
 > - This is done atomically with `pause()`
+
+
 
 ## 6. Emergency Exit
 

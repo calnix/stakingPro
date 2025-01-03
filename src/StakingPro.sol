@@ -198,7 +198,7 @@ contract StakingPro is Pausable, Ownable2Step {
         emit StakedTokens(msg.sender, vaultId, amount);
 
         // grab MOCA
-        STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
+        STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), amount);   
     }
 
     /**
@@ -382,6 +382,9 @@ contract StakingPro is Pausable, Ownable2Step {
 
         // vault cooldown already activated: cannot activate again
         if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
+        
+        // only creator can activate the cooldown
+        if(vault.creator != msg.sender) revert Errors.UserIsNotCreator();
 
         // if zero cooldown, remove vault from circulation immediately 
         if(VAULT_COOLDOWN_DURATION == 0) {
@@ -408,6 +411,9 @@ contract StakingPro is Pausable, Ownable2Step {
 
         // update storage
         vaults[vaultId] = vault;
+
+        // return creator NFs
+        NFT_REGISTRY.recordUnstake(msg.sender, vault.creationTokenIds, vaultId);
     }
 
     function endVaults(bytes32[] calldata vaultIds) external whenStarted whenNotPaused {
@@ -1082,7 +1088,55 @@ contract StakingPro is Pausable, Ownable2Step {
     /*//////////////////////////////////////////////////////////////
                             POOL MANAGEMENT
     //////////////////////////////////////////////////////////////*/
-    
+
+    function stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOf, uint256[] calldata amounts) external onlyOwner {
+        uint256 length = amounts.length;
+        if(length == 0) revert Errors.InvalidAmount();
+        if(vaultIds.length != length) revert Errors.InvalidVaultId();
+        if(onBehalfOf.length != length) revert Errors.InvalidAddress();
+
+        uint256 totalAmount;
+        for(uint256 i; i < length; ++i) {
+            bytes32 vaultId = vaultIds[i];
+            address user = onBehalfOf[i];
+            uint256 amount = amounts[i];
+
+            // cache vault and user data, reverts if vault does not exist
+            (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, user);
+            
+            // vault cooldown activated: cannot stake
+            if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
+
+            // storage update: vault and user accounting across all active reward distributions
+            _updateUserAccounts(user, vaultId, vault, userVaultAssets);
+
+            // calc. boostedStakedTokens
+            uint256 incomingBoostedStakedTokens = (amount * vault.totalBoostFactor) / PRECISION_BASE;
+            
+            // increment: vault
+            vault.stakedTokens += amount;
+            vault.boostedStakedTokens += incomingBoostedStakedTokens;
+
+            //increment: userVaultAssets
+            userVaultAssets.stakedTokens += amount;
+
+            // update storage: mappings 
+            vaults[vaultId] = vault;
+            users[user][vaultId] = userVaultAssets;
+
+            // update storage: variables
+            totalStakedTokens += amount;
+            totalBoostedStakedTokens += incomingBoostedStakedTokens;
+            
+            emit StakedTokens(user, vaultId, amount);
+
+            totalAmount += amount;
+        }
+        
+        // grab MOCA: from msg.sender to this contract
+        STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), totalAmount);
+    }
+
 
     //--------------  NFT MULTIPLIER  ----------------------------
     /**    
@@ -1189,37 +1243,6 @@ contract StakingPro is Pausable, Ownable2Step {
 
         emit BoostedBalancesUpdated(vaultIds);
     }
-
-/*
-        uint256 numOfVaults = numberOfVaults;
-        uint256 numOfDistributions = activeDistributions.length; // always >= 1; staking power
-
-
-        // close the books: for each distribution, update all vaultAccounts
-        // no need to update userAccounts and their indexes, since users within a vault operate w/ the same boost
-        for(uint256 i; i < numOfVaults; ++i) {
-
-            DataTypes.Vault memory vault = vaults[i];
-            
-            // Update vault account for each active distribution
-            for(uint256 j; j < numOfDistributions; ++j) {
-                uint256 distributionId = activeDistributions[j];
-
-                DataTypes.Distribution memory distribution_ = distributions[distributionId];
-                DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[i][distributionId];
-
-                // returns memory structs
-                (DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateVaultAccount(vault, vaultAccount_, distribution_);
-
-                // Update storage
-                vaultAccounts[i][distributionId] = vaultAccount;
-                if(distribution.lastUpdateTimeStamp < distribution_.lastUpdateTimeStamp){
-                    distributions[distributionId] = distribution;
-                }
-
-            }
-        }
-*/
   
     //--------------  NFT MULTIPLIER OVER  ----------------------------
 
