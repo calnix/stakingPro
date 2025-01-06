@@ -15,6 +15,8 @@ import {Ownable2Step, Ownable} from "openzeppelin-contracts/contracts/access/Own
 import {INftRegistry} from "./interfaces/INftRegistry.sol";
 import {IRewardsVault} from "./interfaces/IRewardsVault.sol";
 
+import {PoolLogic} from "./PoolLogic.sol";
+
 contract StakingPro is Pausable, Ownable2Step {
     using SafeERC20 for IERC20;
 
@@ -47,7 +49,6 @@ contract StakingPro is Pausable, Ownable2Step {
 
     // distributions
     uint256[] public activeDistributions;    // array stores key values for distributions mapping; includes not yet started distributions
-    uint256 public completedDistributions;   // updated when distribution has ended and removed from activeDistributions
 
     // pool emergency state
     uint256 public isFrozen;
@@ -97,22 +98,21 @@ contract StakingPro is Pausable, Ownable2Step {
 //-------------------------------external---------------------------------------------
 
     /**
-     * @notice Creates a new vault for staking assets
-     * @dev NFTs must be committed to create a vault.
+     * @notice Creates a new vault for staking assets by committing NFTs
+     * @dev Creates a new vault with specified fee configuration and NFT commitments
      * @param tokenIds Array of NFT token IDs to commit for vault creation
-     * @param fees Fee configuration for the vault containing:
-     *            - nftFeeFactor: Percentage of rewards allocated to NFT stakers
-     *            - creatorFeeFactor: Percentage of rewards allocated to vault creator
-     *            - realmPointsFeeFactor: Percentage of rewards allocated to realm points
+     * @param nftFeeFactor Percentage of rewards allocated to NFT stakers (basis points)
+     * @param creatorFeeFactor Percentage of rewards allocated to vault creator (basis points)
+     * @param realmPointsFeeFactor Percentage of rewards allocated to realm points (basis points)
      * @custom:requirements
      * - Caller must own all NFTs being committed
      * - NFTs must not be already staked in another vault
      * - Number of NFTs must match CREATION_NFTS_REQUIRED
-     * - Total fee factors must not exceed 50% (5000/10000)
+     * - Total fee factors must not exceed 50% (5000 basis points)
      * - Contract must not be paused and staking must have started
-     * @custom:emits VaultCreated event with creator address and vault ID
+     * @custom:emits VaultCreated event with vault ID, creator address and fee factors
      */
-    function createVault(uint256[] calldata tokenIds, DataTypes.Fees calldata fees) external whenStartedAndNotEnded whenNotPaused {
+    function createVault(uint256[] calldata tokenIds, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused {
         
         // must commit unstaked NFTs to create vaults: these do not count towards stakedNFTs
         uint256 incomingNfts = tokenIds.length;
@@ -122,7 +122,7 @@ contract StakingPro is Pausable, Ownable2Step {
         if(check > 0) revert Errors.InvalidNfts(tokenIds);
     
         //note: MOCA stakers must receive at least 50% of rewards
-        uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
+        uint256 totalFeeFactor = nftFeeFactor + creatorFeeFactor + realmPointsFeeFactor;
         if(totalFeeFactor > 5000) revert Errors.TotalFeeFactorExceeded();
 
         // vaultId generation
@@ -141,9 +141,9 @@ contract StakingPro is Pausable, Ownable2Step {
             vault.startTime = block.timestamp; 
 
             // fees
-            vault.nftFeeFactor = fees.nftFeeFactor;
-            vault.creatorFeeFactor = fees.creatorFeeFactor;
-            vault.realmPointsFeeFactor = fees.realmPointsFeeFactor;
+            vault.nftFeeFactor = nftFeeFactor;
+            vault.creatorFeeFactor = creatorFeeFactor;
+            vault.realmPointsFeeFactor = realmPointsFeeFactor;
             
             // boost factor: Initialize to 100%, "1"
             vault.totalBoostFactor = PRECISION_BASE; 
@@ -151,7 +151,7 @@ contract StakingPro is Pausable, Ownable2Step {
         // update storage
         vaults[vaultId] = vault;
 
-        emit VaultCreated(vaultId, msg.sender, fees.nftFeeFactor, fees.creatorFeeFactor, fees.realmPointsFeeFactor);
+        emit VaultCreated(vaultId, msg.sender, nftFeeFactor, creatorFeeFactor, realmPointsFeeFactor);
 
         // record NFT commitment on registry contract
         NFT_REGISTRY.recordStake(msg.sender, tokenIds, vaultId);
@@ -167,40 +167,23 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:emits StakedMoca when tokens are staked successfully
      */
     function stakeTokens(bytes32 vaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused {
-        if(amount == 0) revert Errors.InvalidAmount();
-        if(vaultId == 0) revert Errors.InvalidVaultId();
+        DataTypes.ExecuteStakeTokensParams memory params;
+            params.user = msg.sender;
+            params.amount = amount;
+            params.vaultId = vaultId;
+            params.PRECISION_BASE = PRECISION_BASE;
 
-        // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
-        
-        // vault cooldown activated: cannot stake
-        if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
-
-        // storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
-
-        // calc. boostedStakedTokens
-        uint256 incomingBoostedStakedTokens = (amount * vault.totalBoostFactor) / PRECISION_BASE;
-        
-        // increment: vault
-        vault.stakedTokens += amount;
-        vault.boostedStakedTokens += incomingBoostedStakedTokens;
-
-        //increment: userVaultAssets
-        userVaultAssets.stakedTokens += amount;
-
-        // update storage: mappings 
-        vaults[vaultId] = vault;
-        users[msg.sender][vaultId] = userVaultAssets;
+        uint256 incomingBoostedStakedTokens = PoolLogic.executeStakeTokens(activeDistributions, vaults, users, distributions, vaultAccounts, userAccounts, params);
 
         // update storage: variables
         totalStakedTokens += amount;
         totalBoostedStakedTokens += incomingBoostedStakedTokens;
-        
+
+        // emit
         emit StakedTokens(msg.sender, vaultId, amount);
 
         // grab MOCA
-        STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), amount);   
+        STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), amount);  
     }
 
     /**
@@ -784,7 +767,6 @@ contract StakingPro is Pausable, Ownable2Step {
                     }
                 }
 
-                ++completedDistributions;
                 emit DistributionCompleted(distribution.distributionId, distribution.endTime, distribution.totalEmitted);
             }
             
