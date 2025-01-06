@@ -74,7 +74,15 @@ event BoostedBalancesUpdated(bytes32[] vaultIds);
 // pause
 event DistributionsUpdated(uint256[] distributionIds);
 
+// endTime
+event EndTimeSet(uint256 endTime);
 
 // emergencyExit
 event UnstakedTokens(address indexed user, bytes32[] indexed vaultIds, uint256 amount);
 event UnstakedNfts(address indexed user, bytes32[] indexed vaultIds, uint256[] tokenIds);
+
+
+//---------------- Realm Points contract ----------------
+event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 amount);
+event PoolSet(address indexed poolAddress);
+event RPContractSet(address indexed oldRPContract, address indexed newRPContract);

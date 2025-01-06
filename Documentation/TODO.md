@@ -5,13 +5,11 @@
 - check gas savings of using internal+getters vs public variables
 - and then again if its immutable
 
-## 2. Errors to be a library containing all errors
-
-## 3. endVaults and updateAllVaultsAndAccounts
+## 2. endVaults and updateAllVaultsAndAccounts
 
 consider if there is a way to simplify the logic of these functions.
 
-### 3.1 endVaults and updateAllVaultsAndAccounts use a different approach compared to other functions
+### 2.1 endVaults and updateAllVaultsAndAccounts use a different approach compared to other functions
 
 Does not call `_updateUserAccounts`, like the other functions.
 Instead, it updates a single distribution then calls `_updateVaultAccount` to update the related vault accounts.
@@ -26,7 +24,7 @@ This is because `_updateUserAccounts` gets distribution from storage. So we don'
 
 ---
 
-## 7. add streamingOwnerCheck() to NftLocker
+## NftLocker: add streamingOwnerCheck()
 
 - streaming contract is deployed on ethereum, as will the NftLocker
 - streamingOwnerCheck() will check if the msg.sender is the owner of tokenId
