@@ -47,8 +47,7 @@ contract StakingPro is Pausable, Ownable2Step {
 
     // distributions
     uint256[] public activeDistributions;    // array stores key values for distributions mapping; includes not yet started distributions
-    uint256 public completedDistributions;   // updated when distribution has ended and removed from activeDistributions
-
+    
     // pool emergency state
     uint256 public isFrozen;
 
@@ -784,7 +783,6 @@ contract StakingPro is Pausable, Ownable2Step {
                     }
                 }
 
-                ++completedDistributions;
                 emit DistributionCompleted(distribution.distributionId, distribution.endTime, distribution.totalEmitted);
             }
             
