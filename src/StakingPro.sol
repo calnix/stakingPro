@@ -157,6 +157,8 @@ contract StakingPro is Pausable, Ownable2Step {
         NFT_REGISTRY.recordStake(msg.sender, tokenIds, vaultId);
     }  
 
+// --- refactored 
+
     /**
      * @notice Stakes tokens into a vault
      * @dev No staking limits on staking assets
@@ -167,13 +169,37 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:emits StakedMoca when tokens are staked successfully
      */
     function stakeTokens(bytes32 vaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused {
-        DataTypes.ExecuteStakeTokensParams memory params;
-            params.user = msg.sender;
-            params.amount = amount;
-            params.vaultId = vaultId;
-            params.PRECISION_BASE = PRECISION_BASE;
+        if(amount == 0) revert Errors.InvalidAmount();
+        if(vaultId == 0) revert Errors.InvalidVaultId();
 
-        uint256 incomingBoostedStakedTokens = PoolLogic.executeStakeTokens(activeDistributions, vaults, users, distributions, vaultAccounts, userAccounts, params);
+        // cache vault and user data, reverts if vault does not exist
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
+        // vault cooldown activated: cannot stake
+        if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
+
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory params = DataTypes.ExecuteUpdateAccountsIndexesParams({
+            user: msg.sender,
+            vaultId: vaultId,
+            PRECISION_BASE: PRECISION_BASE,
+            totalBoostedRealmPoints: totalBoostedRealmPoints,
+            totalBoostedStakedTokens: totalBoostedStakedTokens
+        });
+               
+        PoolLogic.executeUpdateAccountsForAllDistributions(activeDistributions, distributions, vaultAccounts, userAccounts, userVaultAssets, vault, params);
+
+        // calc. boostedStakedTokens
+        uint256 incomingBoostedStakedTokens = (amount * vault.totalBoostFactor) / PRECISION_BASE;
+        
+        // increment: vault
+        vault.stakedTokens += amount;
+        vault.boostedStakedTokens += incomingBoostedStakedTokens;
+
+        // increment: user's vault assets
+        userVaultAssets.stakedTokens += amount;
+
+        // update storage: mappings 
+        vaults[vaultId] = vault;
+        users[msg.sender][vaultId] = userVaultAssets;   
 
         // update storage: variables
         totalStakedTokens += amount;
@@ -201,36 +227,44 @@ contract StakingPro is Pausable, Ownable2Step {
 
         if(vaultId == 0) revert Errors.InvalidVaultId();
         if(incomingNfts == 0) revert Errors.InvalidAmount();
-
+        
         // check if NFTs are unassigned and owned by msg.sender
         uint256 check = NFT_REGISTRY.checkIfUnassignedAndOwned(msg.sender, tokenIds);
-        if(check > 0) revert Errors.InvalidNfts(tokenIds);
+        if(check == 0) revert Errors.InvalidNfts(tokenIds);
 
         // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
-
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);       
         // vault cooldown activated: cannot stake
         if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
 
-        // storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
+
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory params = DataTypes.ExecuteUpdateAccountsIndexesParams({
+            user: msg.sender,
+            vaultId: vaultId,
+            PRECISION_BASE: PRECISION_BASE,
+            totalBoostedRealmPoints: totalBoostedRealmPoints,
+            totalBoostedStakedTokens: totalBoostedStakedTokens
+        });
+
+        PoolLogic.executeUpdateAccountsForAllDistributions(activeDistributions, distributions, vaultAccounts, userAccounts, userVaultAssets, vault, params);
+        
+        // increment: vault's nfts 
+        vault.stakedNfts += incomingNfts;
 
         // cache
         uint256 oldBoostedRealmPoints = vault.boostedRealmPoints;
         uint256 oldBoostedStakedTokens = vault.boostedStakedTokens;
 
-        // increment: vault's nfts 
-        vault.stakedNfts += incomingNfts;
-               
         // increment: total boost factor
         vault.totalBoostFactor += (incomingNfts * NFT_MULTIPLIER); 
+        emit VaultBoostFactorUpdated(vaultId, vault.totalBoostFactor);
 
-        // recalc. boosted balances with new boost factor 
+        // update vault's boosted balances: recalc with new boost factor 
         if (vault.stakedTokens > 0) vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;            
         if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;
 
-        // update: user's tokenIds + boostedBalances
-        userVaultAssets.tokenIds = _concatArrays(userVaultAssets.tokenIds, tokenIds);   //note: what does concat an empty arr do -- on first instance?
+        // update: user's tokenIds
+        userVaultAssets.tokenIds = _concatArrays(userVaultAssets.tokenIds, tokenIds); 
 
         // update storage: mappings 
         vaults[vaultId] = vault;
@@ -242,7 +276,6 @@ contract StakingPro is Pausable, Ownable2Step {
         totalBoostedStakedTokens += (vault.boostedStakedTokens - oldBoostedStakedTokens);
 
         emit StakedNfts(msg.sender, vaultId, tokenIds);
-        emit VaultBoostFactorUpdated(vaultId, vault.totalBoostFactor);
 
         // record stake with registry
         NFT_REGISTRY.recordStake(msg.sender, tokenIds, vaultId);
@@ -262,13 +295,20 @@ contract StakingPro is Pausable, Ownable2Step {
         if(msg.sender != RP_CONTRACT) revert Errors.InvalidSender();
 
         // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
-        
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);       
         // vault cooldown activated: cannot stake
         if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
 
-        // storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(onBehalfOf, vaultId, vault, userVaultAssets);
+
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory params = DataTypes.ExecuteUpdateAccountsIndexesParams({
+            user: msg.sender,
+            vaultId: vaultId,
+            PRECISION_BASE: PRECISION_BASE,
+            totalBoostedRealmPoints: totalBoostedRealmPoints,
+            totalBoostedStakedTokens: totalBoostedStakedTokens
+        });
+               
+        PoolLogic.executeUpdateAccountsForAllDistributions(activeDistributions, distributions, vaultAccounts, userAccounts, userVaultAssets, vault, params);
 
         // calc. boostedStakedRealmPoints
         uint256 incomingBoostedStakedRealmPoints = (amount * vault.totalBoostFactor) / PRECISION_BASE;
@@ -312,8 +352,7 @@ contract StakingPro is Pausable, Ownable2Step {
         if(vaultId == 0) revert Errors.InvalidVaultId();
         
         // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
-
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);       
         // vault cooldown activated: cannot update fees
         if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
 
@@ -325,9 +364,17 @@ contract StakingPro is Pausable, Ownable2Step {
         uint256 totalFeeFactor = nftFeeFactor + creatorFeeFactor + realmPointsFeeFactor;
         if(totalFeeFactor > 5000) revert Errors.TotalFeeFactorExceeded();     // 50% = 5000/10_000 = 5000/PRECISION_BASE
 
-        // storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
-                
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory params = DataTypes.ExecuteUpdateAccountsIndexesParams({
+            user: msg.sender,
+            vaultId: vaultId,
+            PRECISION_BASE: PRECISION_BASE,
+            totalBoostedRealmPoints: totalBoostedRealmPoints,
+            totalBoostedStakedTokens: totalBoostedStakedTokens
+        });
+
+        PoolLogic.executeUpdateAccountsForAllDistributions(activeDistributions, distributions, vaultAccounts, userAccounts, userVaultAssets, vault, params);
+
+
         // cache old fees for events
         uint256 oldCreatorFeeFactor = vault.creatorFeeFactor;
         uint256 oldNftFeeFactor = vault.nftFeeFactor;
@@ -360,12 +407,9 @@ contract StakingPro is Pausable, Ownable2Step {
         if(vaultId == 0) revert Errors.InvalidVaultId();
 
         // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
-
-        // storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
-
-        // vault cooldown already activated: cannot activate again
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);       
+        
+        // vault cooldown activated: cannot activate again
         if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
         
         // only creator can activate the cooldown
@@ -373,7 +417,17 @@ contract StakingPro is Pausable, Ownable2Step {
 
         // if zero cooldown, remove vault from circulation immediately 
         if(VAULT_COOLDOWN_DURATION == 0) {
-            
+
+            DataTypes.ExecuteUpdateAccountsIndexesParams memory params = DataTypes.ExecuteUpdateAccountsIndexesParams({
+                user: msg.sender,
+                vaultId: vaultId,
+                PRECISION_BASE: PRECISION_BASE,
+                totalBoostedRealmPoints: totalBoostedRealmPoints,
+                totalBoostedStakedTokens: totalBoostedStakedTokens
+            });
+               
+            PoolLogic.executeUpdateAccountsForAllDistributions(activeDistributions, distributions, vaultAccounts, userAccounts, userVaultAssets, vault, params);
+
             // set endTime + removed
             vault.endTime = block.timestamp;
             vault.removed = 1;
@@ -401,165 +455,61 @@ contract StakingPro is Pausable, Ownable2Step {
         NFT_REGISTRY.recordUnstake(msg.sender, vault.creationTokenIds, vaultId);
     }
 
-    function endVaults(bytes32[] calldata vaultIds) external whenStartedAndNotEnded whenNotPaused {
-        uint256 numOfVaults = vaultIds.length;
-        if(numOfVaults == 0) revert Errors.InvalidArray();
+    function stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOf, uint256[] calldata amounts) external  whenStartedAndNotEnded onlyOwner {
+        uint256 length = amounts.length;
+        if(length == 0) revert Errors.InvalidAmount();
+        if(vaultIds.length != length) revert Errors.InvalidVaultId();
+        if(onBehalfOf.length != length) revert Errors.InvalidAddress();
 
-        uint256 numOfDistributions = activeDistributions.length;
+        uint256 totalAmount;
+        for(uint256 i; i < length; ++i) {
+            bytes32 vaultId = vaultIds[i];
+            address user = onBehalfOf[i];
+            uint256 amount = amounts[i];
 
-        // Track total assets to remove from global state
-        uint256 totalNftsToRemove;
-        uint256 totalTokensToRemove; 
-        uint256 totalRealmPointsToRemove;
-        uint256 totalBoostedTokensToRemove;
-        uint256 totalBoostedRealmPointsToRemove;
+            // cache vault and user data, reverts if vault does not exist
+            (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, user);
+            
+            // vault cooldown activated: cannot stake
+            if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
 
-        uint256 vaultsEnded;
+            DataTypes.ExecuteUpdateAccountsIndexesParams memory params = DataTypes.ExecuteUpdateAccountsIndexesParams({
+                user: user,
+                vaultId: vaultId,
+                PRECISION_BASE: PRECISION_BASE,
+                totalBoostedRealmPoints: totalBoostedRealmPoints,
+                totalBoostedStakedTokens: totalBoostedStakedTokens
+            });
 
-        // For each distribution
-        for(uint256 i; i < numOfDistributions; ++i) {
-            uint256 distributionId = activeDistributions[i];
-            DataTypes.Distribution memory distribution_ = distributions[distributionId];
+            PoolLogic.executeUpdateAccountsForAllDistributions(activeDistributions, distributions, vaultAccounts, userAccounts, userVaultAssets, vault, params);
+            
+            // calc. boostedStakedTokens
+            uint256 incomingBoostedStakedTokens = (amount * vault.totalBoostFactor) / PRECISION_BASE;
+            
+            // increment: vault
+            vault.stakedTokens += amount;
+            vault.boostedStakedTokens += incomingBoostedStakedTokens;
 
-            // Update distribution first
-            DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_);
+            //increment: userVaultAssets
+            userVaultAssets.stakedTokens += amount;
 
-            // Then update all vault accounts for this distribution
-            for(uint256 j; j < numOfVaults; ++j) {
-                
-                // get vault and vault account from storage
-                bytes32 vaultId = vaultIds[j];
-                DataTypes.Vault memory vault = vaults[vaultId];
-                DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
+            // update storage: mappings 
+            vaults[vaultId] = vault;
+            users[user][vaultId] = userVaultAssets;
 
-                // cooldown NOT activated; cannot end vault: skip
-                if(vault.endTime == 0) continue;
-                // vault has been removed from circulation: skip
-                if(vault.removed == 1) continue;
+            // update storage: variables
+            totalStakedTokens += amount;
+            totalBoostedStakedTokens += incomingBoostedStakedTokens;
+            
+            emit StakedTokens(user, vaultId, amount);
 
-                // Update storage: vault account 
-                (DataTypes.VaultAccount memory vaultAccount,) = _updateVaultAccount(vault, vaultAccount_, distribution);
-                vaultAccounts[vaultId][distributionId] = vaultAccount;
-
-                // Track assets to remove (only need to do this once per vault)
-                if(i == 0) {
-                    totalNftsToRemove += vault.stakedNfts;
-                    totalTokensToRemove += vault.stakedTokens;
-                    totalRealmPointsToRemove += vault.stakedRealmPoints;
-                    totalBoostedTokensToRemove += vault.boostedStakedTokens;
-                    totalBoostedRealmPointsToRemove += vault.boostedRealmPoints;
-
-                    // Mark vault as removed
-                    vault.removed = 1;
-                    ++vaultsEnded;
-
-                    // update storage 
-                    vaults[vaultId] = vault;
-                }
-            }
-
-            // Update distribution storage if changed
-            if(distribution.lastUpdateTimeStamp > distribution_.lastUpdateTimeStamp) {
-                distributions[distributionId] = distribution;
-            }
+            totalAmount += amount;
         }
-
-        // Update global state
-        totalStakedNfts -= totalNftsToRemove;
-        totalStakedTokens -= totalTokensToRemove;
-        totalStakedRealmPoints -= totalRealmPointsToRemove;
-        totalBoostedStakedTokens -= totalBoostedTokensToRemove;
-        totalBoostedRealmPoints -= totalBoostedRealmPointsToRemove;
-
-        // emit
-        uint256 vaultsNotEnded = numOfVaults - vaultsEnded;
-        emit VaultsRemoved(vaultIds, vaultsNotEnded);
+        
+        // grab MOCA: from msg.sender to this contract
+        STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), totalAmount);
     }
 
-    /**
-     * @notice Migrates user's assets from one vault to another
-     * @dev Updates accounting for both vaults and user's assets, including NFT boost factors
-     * @param oldVaultId ID of the vault to migrate assets from
-     * @param newVaultId ID of the vault to migrate assets to
-     * @custom:throws InvalidVaultId if either vault ID is 0
-     * @custom:emits UnstakedNfts when NFTs are unstaked from old vault
-     * @custom:emits StakedNfts when NFTs are staked in new vault
-     * @custom:emits VaultMigrated when migration is complete
-     */
-    function migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStartedAndNotEnded whenNotPaused {
-        if(oldVaultId == 0) revert Errors.InvalidVaultId();
-        if(newVaultId == 0) revert Errors.InvalidVaultId();
-
-        // cache vault and user data for both vaults, reverts if vault does not exist
-        (DataTypes.User memory oldUserVaultAssets, DataTypes.Vault memory oldVault) = _cache(oldVaultId, msg.sender);
-        (DataTypes.User memory newUserVaultAssets, DataTypes.Vault memory newVault) = _cache(newVaultId, msg.sender);
-
-        // vault cooldown activated: cannot migrate
-        if(newVault.endTime > 0) revert Errors.VaultAlreadyEnded(newVaultId);
-
-        // oldVault: storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(msg.sender, oldVaultId, oldVault, oldUserVaultAssets);
-        
-        // note: user may have assets already staked in the new vault
-        // newVault: storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(msg.sender, newVaultId, newVault, newUserVaultAssets);
-
-        // increment new vault: base assets (including existing assets)
-        newVault.stakedNfts += oldUserVaultAssets.tokenIds.length;
-        newVault.stakedTokens += oldUserVaultAssets.stakedTokens;
-        newVault.stakedRealmPoints += oldUserVaultAssets.stakedRealmPoints;
-        
-        // boostFactor delta
-        uint256 boostFactorDelta = oldUserVaultAssets.tokenIds.length * NFT_MULTIPLIER;
-
-        // update boost on newVault
-        newVault.totalBoostFactor += boostFactorDelta;
-        newVault.boostedStakedTokens = (newVault.stakedTokens * newVault.totalBoostFactor) / PRECISION_BASE; 
-        newVault.boostedRealmPoints = (newVault.stakedRealmPoints * newVault.totalBoostFactor) / PRECISION_BASE; 
-
-        // decrement oldVault
-        oldVault.stakedNfts -= oldUserVaultAssets.tokenIds.length;
-        oldVault.stakedTokens -= oldUserVaultAssets.stakedTokens;
-        oldVault.stakedRealmPoints -= oldUserVaultAssets.stakedRealmPoints;
-        
-        // update boost on oldVault
-        oldVault.totalBoostFactor -= boostFactorDelta;
-        oldVault.boostedStakedTokens = (oldVault.stakedTokens * oldVault.totalBoostFactor) / PRECISION_BASE; 
-        oldVault.boostedRealmPoints = (oldVault.stakedRealmPoints * oldVault.totalBoostFactor) / PRECISION_BASE; 
-
-        // NFT management
-        NFT_REGISTRY.recordUnstake(msg.sender, oldUserVaultAssets.tokenIds, oldVaultId);
-        NFT_REGISTRY.recordStake(msg.sender, oldUserVaultAssets.tokenIds, newVaultId);
-        
-        // Update new user assets: combine NFTs and add migrated assets
-        newUserVaultAssets.tokenIds = _concatArrays(newUserVaultAssets.tokenIds, oldUserVaultAssets.tokenIds);
-        newUserVaultAssets.stakedTokens += oldUserVaultAssets.stakedTokens;
-        newUserVaultAssets.stakedRealmPoints += oldUserVaultAssets.stakedRealmPoints;
-
-        // Update storage for both vaults
-        vaults[oldVaultId] = oldVault;
-        vaults[newVaultId] = newVault;
-
-        // Clear old user assets and update new user assets
-        delete users[msg.sender][oldVaultId];
-        users[msg.sender][newVaultId] = newUserVaultAssets;
-
-        // Update global boosted totals
-        totalBoostedStakedTokens = totalBoostedStakedTokens - oldVault.boostedStakedTokens + newVault.boostedStakedTokens;
-        totalBoostedRealmPoints = totalBoostedRealmPoints - oldVault.boostedRealmPoints + newVault.boostedRealmPoints;
-
-        // Emit migrated assets only (not including existing assets in new vault)
-        emit VaultMigrated(
-            msg.sender, 
-            oldVaultId, 
-            newVaultId,
-            oldUserVaultAssets.stakedTokens,  // Only migrated tokens
-            oldUserVaultAssets.stakedRealmPoints,  // Only migrated realm points
-            oldUserVaultAssets.tokenIds  // Only migrated NFTs
-        );
-    }
-
-// ------ can be called AFTER ENDED -----
 
     /**
      * @notice Unstakes all tokens and NFTs from a vault
@@ -574,8 +524,15 @@ contract StakingPro is Pausable, Ownable2Step {
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender);
 
-        // storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(msg.sender, vaultId, vault, userVaultAssets);
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory params = DataTypes.ExecuteUpdateAccountsIndexesParams({
+            user: msg.sender,
+            vaultId: vaultId,
+            PRECISION_BASE: PRECISION_BASE,
+            totalBoostedRealmPoints: totalBoostedRealmPoints,
+            totalBoostedStakedTokens: totalBoostedStakedTokens
+        });
+               
+        PoolLogic.executeUpdateAccountsForAllDistributions(activeDistributions, distributions, vaultAccounts, userAccounts, userVaultAssets, vault, params);
 
         // get user staked assets: old values for events
         uint256 numOfNfts = userVaultAssets.tokenIds.length;
@@ -666,8 +623,19 @@ contract StakingPro is Pausable, Ownable2Step {
         DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
         DataTypes.UserAccount memory userAccount_ = userAccounts[msg.sender][vaultId][distributionId];
 
-        // alternate; update just the specified distribution
-        (DataTypes.UserAccount memory userAccount, DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateUserAccount(userVaultAssets, userAccount_, vault, vaultAccount_, distribution_);
+
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory params = DataTypes.ExecuteUpdateAccountsIndexesParams({
+            user: msg.sender,
+            vaultId: vaultId,
+            PRECISION_BASE: PRECISION_BASE,
+            totalBoostedRealmPoints: totalBoostedRealmPoints,
+            totalBoostedStakedTokens: totalBoostedStakedTokens
+        });
+
+        // update just the specified distribution
+        (DataTypes.UserAccount memory userAccount, 
+        DataTypes.VaultAccount memory vaultAccount, 
+        DataTypes.Distribution memory distribution) = PoolLogic.executeUpdateAccountsForOneDistribution(activeDistributions, distribution_, vault, userVaultAssets, userAccount_, vaultAccount_, params);
 
         //------- calc. and update vault and user accounts --------
         uint256 totalUnclaimedRewards;
@@ -725,311 +693,203 @@ contract StakingPro is Pausable, Ownable2Step {
         REWARDS_VAULT.payRewards(distributionId, totalUnclaimedRewards, msg.sender);
     }
 
+// ---- refactored:done
+
+    function endVaults(bytes32[] calldata vaultIds) external whenStartedAndNotEnded whenNotPaused {
+        uint256 numOfVaults = vaultIds.length;
+        if(numOfVaults == 0) revert Errors.InvalidArray();
+
+        uint256 numOfDistributions = activeDistributions.length;
+
+        // Track total assets to remove from global state
+        uint256 totalNftsToRemove;
+        uint256 totalTokensToRemove; 
+        uint256 totalRealmPointsToRemove;
+        uint256 totalBoostedTokensToRemove;
+        uint256 totalBoostedRealmPointsToRemove;
+
+        uint256 vaultsEnded;
+
+        // For each distribution
+        for(uint256 i; i < numOfDistributions; ++i) {
+            uint256 distributionId = activeDistributions[i];
+            DataTypes.Distribution memory distribution_ = distributions[distributionId];
+
+            // Update distribution first
+            DataTypes.Distribution memory distribution = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distribution_, totalBoostedRealmPoints, totalBoostedStakedTokens);
+
+            // Then update all vault accounts for this distribution
+            for(uint256 j; j < numOfVaults; ++j) {
+                
+                // get vault and vault account from storage
+                bytes32 vaultId = vaultIds[j];
+                DataTypes.Vault memory vault = vaults[vaultId];
+                DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
+
+                // cooldown NOT activated; cannot end vault: skip
+                if(vault.endTime == 0) continue;
+                // vault has been removed from circulation: skip
+                if(vault.removed == 1) continue;
+
+                // _updateVaultAccount only needs params: PRECISION_BASE, totalBoostedRealmPoints, totalBoostedStakedTokens. rest unused.
+                DataTypes.ExecuteUpdateAccountsIndexesParams memory params = DataTypes.ExecuteUpdateAccountsIndexesParams({
+                    user: address(0),
+                    vaultId: bytes32(0),
+                    PRECISION_BASE: PRECISION_BASE,
+                    totalBoostedRealmPoints: totalBoostedRealmPoints,
+                    totalBoostedStakedTokens: totalBoostedStakedTokens
+                });
+                
+                // Update storage: vault account     
+                (DataTypes.VaultAccount memory vaultAccount,) = PoolLogic.executeUpdateVaultAccount(vault, vaultAccount_, distribution, activeDistributions, params);
+                vaultAccounts[vaultId][distributionId] = vaultAccount;
+
+                // Track assets to remove (only need to do this once per vault)
+                if(i == 0) {
+                    totalNftsToRemove += vault.stakedNfts;
+                    totalTokensToRemove += vault.stakedTokens;
+                    totalRealmPointsToRemove += vault.stakedRealmPoints;
+                    totalBoostedTokensToRemove += vault.boostedStakedTokens;
+                    totalBoostedRealmPointsToRemove += vault.boostedRealmPoints;
+
+                    // Mark vault as removed
+                    vault.removed = 1;
+                    ++vaultsEnded;
+
+                    // update storage 
+                    vaults[vaultId] = vault;
+                }
+            }
+
+            // Update distribution storage if changed
+            if(distribution.lastUpdateTimeStamp > distribution_.lastUpdateTimeStamp) {
+                distributions[distributionId] = distribution;
+            }
+        }
+
+        // Update global state
+        totalStakedNfts -= totalNftsToRemove;
+        totalStakedTokens -= totalTokensToRemove;
+        totalStakedRealmPoints -= totalRealmPointsToRemove;
+        totalBoostedStakedTokens -= totalBoostedTokensToRemove;
+        totalBoostedRealmPoints -= totalBoostedRealmPointsToRemove;
+
+        // emit
+        uint256 vaultsNotEnded = numOfVaults - vaultsEnded;
+        emit VaultsRemoved(vaultIds, vaultsNotEnded);
+    }
+
+    /**
+     * @notice Migrates user's assets from one vault to another
+     * @dev Updates accounting for both vaults and user's assets, including NFT boost factors
+     * @param oldVaultId ID of the vault to migrate assets from
+     * @param newVaultId ID of the vault to migrate assets to
+     * @custom:throws InvalidVaultId if either vault ID is 0
+     * @custom:emits UnstakedNfts when NFTs are unstaked from old vault
+     * @custom:emits StakedNfts when NFTs are staked in new vault
+     * @custom:emits VaultMigrated when migration is complete
+     */
+    function migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStartedAndNotEnded whenNotPaused {
+        if(oldVaultId == 0) revert Errors.InvalidVaultId();
+        if(newVaultId == 0) revert Errors.InvalidVaultId();
+
+        // cache vault and user data for both vaults, reverts if vault does not exist
+        (DataTypes.User memory oldUserVaultAssets, DataTypes.Vault memory oldVault) = _cache(oldVaultId, msg.sender);
+        (DataTypes.User memory newUserVaultAssets, DataTypes.Vault memory newVault) = _cache(newVaultId, msg.sender);
+
+        // vault cooldown activated: cannot migrate
+        if(newVault.endTime > 0) revert Errors.VaultAlreadyEnded(newVaultId);
+
+        // oldVault: storage update: vault and user accounting across all active reward distributions
+        // _updateUserAccounts(msg.sender, oldVaultId, oldVault, oldUserVaultAssets);
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory oldVaultParams = DataTypes.ExecuteUpdateAccountsIndexesParams({
+            user: msg.sender,
+            vaultId: oldVaultId,
+            PRECISION_BASE: PRECISION_BASE,
+            totalBoostedRealmPoints: totalBoostedRealmPoints,
+            totalBoostedStakedTokens: totalBoostedStakedTokens
+        });
+               
+        PoolLogic.executeUpdateAccountsForAllDistributions(activeDistributions, distributions, vaultAccounts, userAccounts, oldUserVaultAssets, oldVault, oldVaultParams);
+
+        
+        // note: user may have assets already staked in the new vault
+        // newVault: storage update: vault and user accounting across all active reward distributions
+        // _updateUserAccounts(msg.sender, newVaultId, newVault, newUserVaultAssets);
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory newVaultParams = DataTypes.ExecuteUpdateAccountsIndexesParams({
+            user: msg.sender,
+            vaultId: newVaultId,
+            PRECISION_BASE: PRECISION_BASE,
+            totalBoostedRealmPoints: totalBoostedRealmPoints,
+            totalBoostedStakedTokens: totalBoostedStakedTokens
+        });
+               
+        PoolLogic.executeUpdateAccountsForAllDistributions(activeDistributions, distributions, vaultAccounts, userAccounts, newUserVaultAssets, newVault, newVaultParams);
+
+        // increment new vault: base assets (including existing assets)
+        newVault.stakedNfts += oldUserVaultAssets.tokenIds.length;
+        newVault.stakedTokens += oldUserVaultAssets.stakedTokens;
+        newVault.stakedRealmPoints += oldUserVaultAssets.stakedRealmPoints;
+        
+        // boostFactor delta
+        uint256 boostFactorDelta = oldUserVaultAssets.tokenIds.length * NFT_MULTIPLIER;
+
+        // update boost on newVault
+        newVault.totalBoostFactor += boostFactorDelta;
+        newVault.boostedStakedTokens = (newVault.stakedTokens * newVault.totalBoostFactor) / PRECISION_BASE; 
+        newVault.boostedRealmPoints = (newVault.stakedRealmPoints * newVault.totalBoostFactor) / PRECISION_BASE; 
+
+        // decrement oldVault
+        oldVault.stakedNfts -= oldUserVaultAssets.tokenIds.length;
+        oldVault.stakedTokens -= oldUserVaultAssets.stakedTokens;
+        oldVault.stakedRealmPoints -= oldUserVaultAssets.stakedRealmPoints;
+        
+        // update boost on oldVault
+        oldVault.totalBoostFactor -= boostFactorDelta;
+        oldVault.boostedStakedTokens = (oldVault.stakedTokens * oldVault.totalBoostFactor) / PRECISION_BASE; 
+        oldVault.boostedRealmPoints = (oldVault.stakedRealmPoints * oldVault.totalBoostFactor) / PRECISION_BASE; 
+
+        // NFT management
+        NFT_REGISTRY.recordUnstake(msg.sender, oldUserVaultAssets.tokenIds, oldVaultId);
+        NFT_REGISTRY.recordStake(msg.sender, oldUserVaultAssets.tokenIds, newVaultId);
+        
+        // Update new user assets: combine NFTs and add migrated assets
+        newUserVaultAssets.tokenIds = _concatArrays(newUserVaultAssets.tokenIds, oldUserVaultAssets.tokenIds);
+        newUserVaultAssets.stakedTokens += oldUserVaultAssets.stakedTokens;
+        newUserVaultAssets.stakedRealmPoints += oldUserVaultAssets.stakedRealmPoints;
+
+        // Update storage for both vaults
+        vaults[oldVaultId] = oldVault;
+        vaults[newVaultId] = newVault;
+
+        // Clear old user assets and update new user assets
+        delete users[msg.sender][oldVaultId];
+        users[msg.sender][newVaultId] = newUserVaultAssets;
+
+        // Update global boosted totals
+        totalBoostedStakedTokens = totalBoostedStakedTokens - oldVault.boostedStakedTokens + newVault.boostedStakedTokens;
+        totalBoostedRealmPoints = totalBoostedRealmPoints - oldVault.boostedRealmPoints + newVault.boostedRealmPoints;
+
+        // Emit migrated assets only (not including existing assets in new vault)
+        emit VaultMigrated(
+            msg.sender, 
+            oldVaultId, 
+            newVaultId,
+            oldUserVaultAssets.stakedTokens,  // Only migrated tokens
+            oldUserVaultAssets.stakedRealmPoints,  // Only migrated realm points
+            oldUserVaultAssets.tokenIds  // Only migrated NFTs
+        );
+    }
+
+
     /**
         add checks:
         - check if vault should stop earning rewards - if so do not update; or update as per last
 
      */
 
-
 //-------------------------------internal------------------------------------------- 
   
-    function _updateDistributionIndex(DataTypes.Distribution memory distribution) internal returns (DataTypes.Distribution memory) {
-
-        // distribution already updated
-        if(distribution.lastUpdateTimeStamp == block.timestamp) return distribution;
-
-        // distribution has not started
-        if(block.timestamp < distribution.startTime) return distribution;
-
-        // distribution has ended: does not apply to staking power, distributionId == 0
-        if (distribution.endTime > 0 && block.timestamp >= distribution.endTime) {
-
-            // If this is the first update after distribution ended, do final update to endTime
-            if (distribution.lastUpdateTimeStamp < distribution.endTime) {
-                
-                // distributions w/ endTimes involve tokens, not realmPoints: use totalBoostedStakedTokens
-                (uint256 finalIndex, /*currentTimestamp*/, uint256 finalEmitted) = _calculateDistributionIndex(distribution, totalBoostedStakedTokens);
-
-                distribution.index = finalIndex;
-                distribution.totalEmitted += finalEmitted;
-                distribution.lastUpdateTimeStamp = distribution.endTime;
-                
-                emit DistributionIndexUpdated(distribution.distributionId, distribution.lastUpdateTimeStamp, distribution.index, finalIndex);
-                
-                // Remove from active distributions and mark as completed
-                for (uint256 i; i < activeDistributions.length; ++i) {
-                    if (activeDistributions[i] == distribution.distributionId) {
-                        // Move last element to current position and pop
-                        activeDistributions[i] = activeDistributions[activeDistributions.length - 1];
-                        activeDistributions.pop();
-                        break;
-                    }
-                }
-
-                emit DistributionCompleted(distribution.distributionId, distribution.endTime, distribution.totalEmitted);
-            }
-            
-            return distribution;
-        }    
-
-        // ..... Normal update for active distributions: could be for both tokens and realmPoints .....
-
-        uint256 totalBoostedBalance = distribution.distributionId == 0 ? totalBoostedRealmPoints : totalBoostedStakedTokens;
-        (uint256 nextIndex, uint256 currentTimestamp, uint256 emittedRewards) = _calculateDistributionIndex(distribution, totalBoostedBalance);
-        
-        if (nextIndex > distribution.index) {
-
-            distribution.index = nextIndex;
-            distribution.totalEmitted += emittedRewards;
-            distribution.lastUpdateTimeStamp = currentTimestamp;
-
-            emit DistributionIndexUpdated(distribution.distributionId, distribution.lastUpdateTimeStamp, distribution.index, nextIndex);
-        }
-
-        return distribution;
-    }
-
-    /**
-     * @dev Calculates the latest distribution index and emitted rewards since last update
-     * @param distribution The distribution struct containing current state
-     * @param totalBalance Total boosted balance (either tokens or realm points) for the distribution
-     * @return nextIndex The updated distribution index
-     * @return currentTimestamp The timestamp used for the calculation (capped by distribution/contract end time)
-     * @return emittedRewards The total rewards emitted since last update
-     */
-    function _calculateDistributionIndex(DataTypes.Distribution memory distribution, uint256 totalBalance) internal view returns (uint256, uint256, uint256) {
-        if (
-            totalBalance == 0                                              // nothing has been staked
-            || distribution.emissionPerSecond == 0                         // 0 emissions. no rewards setup.
-            || distribution.lastUpdateTimeStamp == block.timestamp         // distribution already updated
-        ) {
-            return (distribution.index, distribution.lastUpdateTimeStamp, 0);                       
-        }
-
-        uint256 currentTimestamp;
-        
-        // Token distributions will have endTime set; use it as the cap
-        if(distribution.endTime > 0) {
-            currentTimestamp = block.timestamp > distribution.endTime ? distribution.endTime : block.timestamp;
-        }
-        // Staking Power will not have endTime set; use current block timestamp
-        else {
-            currentTimestamp = block.timestamp;
-        }
-
-        uint256 timeDelta = currentTimestamp - distribution.lastUpdateTimeStamp;
-        
-        // emissionPerSecond expressed w/ full token precision 
-        uint256 emittedRewards;
-        unchecked {
-            // Overflow is unlikely as timeDelta is bounded by block times
-            emittedRewards = distribution.emissionPerSecond * timeDelta;
-        }
-
-        /* note: totalBalance is expressed 1e18. 
-                 emittedRewards is variable as per distribution.TOKEN_PRECISION
-                 normalize totalBalance to reward token's native precision
-                 why: paying out rewards token, standardize to that */
-        uint256 totalBalanceRebased = (totalBalance * distribution.TOKEN_PRECISION) / 1E18;
-    
-        //note: indexes are denominated in the distribution's precision
-        uint256 nextDistributionIndex = ((emittedRewards * distribution.TOKEN_PRECISION) / totalBalanceRebased) + distribution.index; 
-
-        return (nextDistributionIndex, currentTimestamp, emittedRewards);
-    }
-
-
-    // update specified vault account
-    // returns updated vault account and updated distribution structs 
-    function _updateVaultAccount(
-        DataTypes.Vault memory vault, 
-        DataTypes.VaultAccount memory vaultAccount, 
-        DataTypes.Distribution memory distribution_) internal returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
-
-        // get latest distributionIndex, if not already updated
-        DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_);
-        
-        // vault already been updated by a prior txn; skip updating vaultAccount
-        if(distribution.index == vaultAccount.index) return (vaultAccount, distribution);
-
-        // vault has been removed from circulation: final update done by endVaults()
-        if(vault.removed == 1) return (vaultAccount, distribution);
-
-        // If vault has ended, vaultIndex should not be updated, beyond the final update.
-        /** note:
-            - vaults are removed from circulation via endVaults
-            - endVaults is responsible for the final update and setting `vault.removed = 1`
-            - final update involves updating all vault accounts, indexes and removing assets from global state
-            - we cannot be sure that endVaults would be called precisely at the endTime for each vault
-            - therefore we must allow for some drift
-            - as such, the check below cannot be implemented. 
-         */
-        //if(vault.endTime > 0 && block.timestamp >= vault.endTime) return (vaultAccount, distribution);
-        
-        /**note:
-            - what about implementing the check with a buffer? 
-            - e.g. if(vault.endTime > 0 && block.timestamp + 7 days >= vault.endTime)
-            - this would allow for some drift, but not too much
-
-            smart over/under updates (?)
-            - under: update distri to vault.Endtime and update the vault indexes till endTime
-            - over: update distri to block.timestamp and update the vault indexes till endTime
-         */
-
-        
-        // update vault rewards + fees
-        uint256 totalAccRewards; 
-        uint256 accCreatorFee; 
-        uint256 accTotalNftFee;
-        uint256 accRealmPointsFee;
-
-        // STAKING POWER: staked realm points | TOKENS: staked moca tokens
-        uint256 boostedBalance = distribution.distributionId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
-        uint256 totalBalanceRebased = (boostedBalance * distribution.TOKEN_PRECISION) / 1E18;  
-        // note: rewards calc. in reward token precision
-        totalAccRewards = _calculateRewards(totalBalanceRebased, distribution.index, vaultAccount.index, distribution.TOKEN_PRECISION);
-
-        // calc. creator fees
-        if(vault.creatorFeeFactor > 0) {
-            accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / PRECISION_BASE;
-        }
-
-        // nft fees accrued only if there were staked NFTs
-        if(vault.stakedNfts > 0) {
-            if(vault.nftFeeFactor > 0) {
-
-                accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / PRECISION_BASE;
-                vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);              // nftIndex: rewardsAccPerNFT
-            }
-        }
-
-        // rp fees accrued only if there were staked RP 
-        if(vault.stakedRealmPoints > 0) {
-            if(vault.realmPointsFeeFactor > 0) {
-                accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / PRECISION_BASE;
-
-                // accRealmPointsFee is in reward token precision
-                uint256 stakedRealmPointsRebased = (vault.stakedRealmPoints * distribution.TOKEN_PRECISION) / 1E18;  
-                vaultAccount.rpIndex += (accRealmPointsFee / stakedRealmPointsRebased);              // rpIndex: rewardsAccPerRP
-            }
-        } 
-        
-        // book rewards: total, Creator, NFT, RealmPoints | expressed in distri token precision
-        vaultAccount.totalAccRewards += totalAccRewards;
-        vaultAccount.accCreatorRewards += accCreatorFee;
-        vaultAccount.accNftStakingRewards += accTotalNftFee;
-        vaultAccount.accRealmPointsRewards += accRealmPointsFee;
-
-        // reference for moca stakers to calc. rewards net of fees
-        uint256 totalStakedRebased = (vault.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
-        vaultAccount.rewardsAccPerUnitStaked += (totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) / totalStakedRebased;  
-
-        // update vaultIndex
-        vaultAccount.index = distribution.index;
-
-        // emit VaultIndexUpdated    
-
-        return (vaultAccount, distribution);
-    }
-
-    function _updateUserAccount(
-        DataTypes.User memory user, DataTypes.UserAccount memory userAccount, 
-        DataTypes.Vault memory vault, DataTypes.VaultAccount memory vaultAccount_, DataTypes.Distribution memory distribution_) internal returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
-        
-        // get updated vaultAccount and distribution
-        (DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateVaultAccount(vault, vaultAccount_, distribution_);
-        
-        uint256 newUserIndex = vaultAccount.rewardsAccPerUnitStaked;
-
-        // if this index has not been updated, the subsequent ones would not have. check once here, no need repeat
-        if(userAccount.index != newUserIndex) { 
-
-            if(user.stakedTokens > 0) {
-                // users whom staked tokens are eligible for rewards less of fees
-                uint256 balanceRebased = (user.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
-                uint256 accruedRewards = _calculateRewards(balanceRebased, newUserIndex, userAccount.index, distribution.TOKEN_PRECISION);
-                userAccount.accStakingRewards += accruedRewards;
-
-                // emit RewardsAccrued(user, accruedRewards, distributionPrecision);
-            }
-
-
-            uint256 userStakedNfts = user.tokenIds.length;
-            if(userStakedNfts > 0) {
-
-                // total accrued rewards from staking NFTs
-                uint256 accNftStakingRewards = (vaultAccount.nftIndex - userAccount.nftIndex) * userStakedNfts;
-                userAccount.accNftStakingRewards += accNftStakingRewards;
-
-                //emit NftRewardsAccrued(user, accNftStakingRewards);
-            }
-
-
-            if(user.stakedRealmPoints > 0){
-                
-                // users whom staked RP are eligible for a portion of RP fees
-                uint256 totalStakedRpRebased = (vault.stakedRealmPoints * distribution.TOKEN_PRECISION) / 1E18;
-
-                uint256 accRealmPointsRewards = (vaultAccount.rpIndex - userAccount.rpIndex) * totalStakedRpRebased;
-                userAccount.accRealmPointsRewards += accRealmPointsRewards;
-
-                //emit something
-            }
-        }
-
-        // update user indexes
-        userAccount.index = vaultAccount.rewardsAccPerUnitStaked;   // less of fees
-        userAccount.nftIndex = vaultAccount.nftIndex;
-        userAccount.rpIndex = vaultAccount.rpIndex;
-
-        // emit UserIndexesUpdated(user, vault.vaultId, newUserIndex, newUserNftIndex, userInfo.accStakingRewards);
-
-        return (userAccount, vaultAccount, distribution);
-    }
-
-    /// called prior to affecting any state change to a user
-    /// applies fees onto the vaultIndex to return the userIndex
-    function _updateUserAccounts(address user, bytes32 vaultId, DataTypes.Vault memory vault, DataTypes.User memory userVaultAssets) internal {
-
-        /** user -> vaultId (stake)
-            - this changes the composition for both the user and vault
-            - before booking the change we must update all vault and user accounts
-            -- distr_0: distriData, vaultAccount, userAccount
-            -- distr_1: distriData, vaultAccount, userAccount
-
-            loop thru userAccounts -> vaultAccounts -> distri
-         */
-
-        // always > 0, staking power is setup on deployment
-        uint256 numOfDistributions = activeDistributions.length;
-        
-        // update each user account, looping thru distributions
-        for (uint256 i; i < numOfDistributions; ++i) {
-             
-            uint256 distributionId = activeDistributions[i];   
-
-            // get corresponding user+vault account for this active distribution 
-            DataTypes.Distribution memory distribution_ = distributions[distributionId];
-            DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
-            DataTypes.UserAccount memory userAccount_ = userAccounts[user][vaultId][distributionId];
-
-            
-            (DataTypes.UserAccount memory userAccount, DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateUserAccount(userVaultAssets, userAccount_, vault, vaultAccount_, distribution_);
-
-            //update storage: accounts and distributions
-            distributions[distributionId] = distribution;     
-            vaultAccounts[vaultId][distributionId] = vaultAccount;  
-            userAccounts[user][vaultId][distributionId] = userAccount;
-        }
-    }
-
-    // for calc. rewards from index deltas. assumes tt indexes are expressed in the distribution's precision. therefore balance must be rebased to the same precision
-    function _calculateRewards(uint256 balanceRebased, uint256 currentIndex, uint256 priorIndex, uint256 PRECISION) internal pure returns (uint256) {
-        return (balanceRebased * (currentIndex - priorIndex)) / PRECISION;
-    }
-
-
     ///@dev cache vault and user structs from storage to memory. checks that vault exists, else reverts.
     function _cache(bytes32 vaultId, address user) internal view returns(DataTypes.User memory, DataTypes.Vault memory) {
         // ensure vault exists
@@ -1083,53 +943,7 @@ contract StakingPro is Pausable, Ownable2Step {
         emit EndTimeSet(endTime_);
     }
 
-    function stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOf, uint256[] calldata amounts) external  whenStartedAndNotEnded onlyOwner {
-        uint256 length = amounts.length;
-        if(length == 0) revert Errors.InvalidAmount();
-        if(vaultIds.length != length) revert Errors.InvalidVaultId();
-        if(onBehalfOf.length != length) revert Errors.InvalidAddress();
 
-        uint256 totalAmount;
-        for(uint256 i; i < length; ++i) {
-            bytes32 vaultId = vaultIds[i];
-            address user = onBehalfOf[i];
-            uint256 amount = amounts[i];
-
-            // cache vault and user data, reverts if vault does not exist
-            (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, user);
-            
-            // vault cooldown activated: cannot stake
-            if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
-
-            // storage update: vault and user accounting across all active reward distributions
-            _updateUserAccounts(user, vaultId, vault, userVaultAssets);
-
-            // calc. boostedStakedTokens
-            uint256 incomingBoostedStakedTokens = (amount * vault.totalBoostFactor) / PRECISION_BASE;
-            
-            // increment: vault
-            vault.stakedTokens += amount;
-            vault.boostedStakedTokens += incomingBoostedStakedTokens;
-
-            //increment: userVaultAssets
-            userVaultAssets.stakedTokens += amount;
-
-            // update storage: mappings 
-            vaults[vaultId] = vault;
-            users[user][vaultId] = userVaultAssets;
-
-            // update storage: variables
-            totalStakedTokens += amount;
-            totalBoostedStakedTokens += incomingBoostedStakedTokens;
-            
-            emit StakedTokens(user, vaultId, amount);
-
-            totalAmount += amount;
-        }
-        
-        // grab MOCA: from msg.sender to this contract
-        STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), totalAmount);
-    }
 
 
     //--------------  NFT MULTIPLIER  ----------------------------
@@ -1162,7 +976,8 @@ contract StakingPro is Pausable, Ownable2Step {
             DataTypes.Distribution memory distribution_ = distributions[distributionId];
 
             // Update distribution first
-            DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_);
+            DataTypes.Distribution memory distribution 
+                = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distribution_, totalBoostedRealmPoints, totalBoostedStakedTokens);
 
             // Then update all vault accounts for this distribution
             for(uint256 j; j < numOfVaults; ++j) {
@@ -1175,8 +990,17 @@ contract StakingPro is Pausable, Ownable2Step {
                 // vault has been removed from circulation: skip
                 if(vault.removed == 1) continue;
 
+                // _updateVaultAccount only needs params: PRECISION_BASE, totalBoostedRealmPoints, totalBoostedStakedTokens. rest unused.
+                DataTypes.ExecuteUpdateAccountsIndexesParams memory params = DataTypes.ExecuteUpdateAccountsIndexesParams({
+                    user: address(0),
+                    vaultId: bytes32(0),
+                    PRECISION_BASE: PRECISION_BASE,
+                    totalBoostedRealmPoints: totalBoostedRealmPoints,
+                    totalBoostedStakedTokens: totalBoostedStakedTokens
+                });
+                
                 // Update storage: vault account 
-                (DataTypes.VaultAccount memory vaultAccount,) = _updateVaultAccount(vault, vaultAccount_, distribution);
+                (DataTypes.VaultAccount memory vaultAccount,) = PoolLogic.executeUpdateVaultAccount(vault, vaultAccount_, distribution, activeDistributions, params);
                 vaultAccounts[vaultId][distributionId] = vaultAccount;
             }
 
@@ -1365,7 +1189,8 @@ contract StakingPro is Pausable, Ownable2Step {
 
         if(block.timestamp >= distribution.endTime) revert Errors.DistributionOver();
         
-        _updateDistributionIndex(distribution);
+        //_updateDistributionIndex(distribution);
+        distribution = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distribution, totalBoostedRealmPoints, totalBoostedStakedTokens);
 
         // startTime modification
         if(newStartTime > 0) {
@@ -1397,6 +1222,7 @@ contract StakingPro is Pausable, Ownable2Step {
         // emissionPerSecond modification 
         if(newEmissionPerSecond > 0) distribution.emissionPerSecond = newEmissionPerSecond;
 
+        // update storage
         distributions[distributionId] = distribution;
 
         emit DistributionUpdated(distributionId, distribution.startTime, distribution.endTime, distribution.emissionPerSecond);
@@ -1416,7 +1242,7 @@ contract StakingPro is Pausable, Ownable2Step {
         if(block.timestamp >= distribution.endTime) revert Errors.DistributionOver();
         if(distribution.manuallyEnded == 1) revert Errors.DistributionManuallyEnded();
         
-        _updateDistributionIndex(distribution);
+        distribution = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distribution, totalBoostedRealmPoints, totalBoostedStakedTokens);
         
         distribution.endTime = block.timestamp;
         distribution.manuallyEnded = 1;
@@ -1472,7 +1298,7 @@ contract StakingPro is Pausable, Ownable2Step {
         for(uint256 i; i < numOfDistributions; ++i) {
 
             // update storage
-            distributions[activeDistributions[i]] = _updateDistributionIndex(distributions[activeDistributions[i]]);
+            distributions[activeDistributions[i]] = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distributions[activeDistributions[i]], totalBoostedRealmPoints, totalBoostedStakedTokens);
         }
 
         emit DistributionsUpdated(activeDistributions);

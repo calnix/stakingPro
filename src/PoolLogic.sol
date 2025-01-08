@@ -10,54 +10,60 @@ import {SafeERC20, IERC20} from "openzeppelin-contracts/contracts/token/ERC20/ut
 library PoolLogic {
     using SafeERC20 for IERC20;
 
-
-    function executeStakeTokens(
+    function executeUpdateAccountsForAllDistributions(
         uint256[] storage activeDistributions,
-        mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
-        mapping(address user => mapping(bytes32 vaultId => DataTypes.User userVaultAssets)) storage users,
         mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
-        DataTypes.ExecuteStakeTokensParams memory params
-        ) external returns (uint256) {
-
-        if(params.amount == 0) revert Errors.InvalidAmount();
-        if(params.vaultId == 0) revert Errors.InvalidVaultId();
-
-        // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, msg.sender, vaults, users);
-        
-        // vault cooldown activated: cannot stake
-        if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(params.vaultId);
+        DataTypes.User memory user,
+        DataTypes.Vault memory vault,
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory params
+    ) external {
 
         // storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, vault, userVaultAssets, params);
+        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, vault, user, params);
 
-        // calc. boostedStakedTokens
-        uint256 incomingBoostedStakedTokens = (params.amount * vault.totalBoostFactor) / params.PRECISION_BASE;
-        
-        // increment: vault
-        vault.stakedTokens += params.amount;
-        vault.boostedStakedTokens += incomingBoostedStakedTokens;
-
-        //increment: userVaultAssets
-        userVaultAssets.stakedTokens += params.amount;
-
-        // update storage: mappings 
-        vaults[params.vaultId] = vault;
-        users[msg.sender][params.vaultId] = userVaultAssets;        
-
-        return incomingBoostedStakedTokens;
     }
 
+    function executeUpdateAccountsForOneDistribution(
+        uint256[] storage activeDistributions,
+        DataTypes.Distribution memory distribution,
+        DataTypes.Vault memory vault,
+        DataTypes.User memory user,
+        DataTypes.UserAccount memory userAccount,
+        DataTypes.VaultAccount memory vaultAccount,
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory params
+    ) external returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory){
 
+        return _updateUserAccount(activeDistributions, user, userAccount, vault, vaultAccount, distribution, params);
+    }
 
+    // note: does not update storage, only returns the updated distribution
+    function executeUpdateDistributionIndex(
+        uint256[] storage activeDistributions,
+        DataTypes.Distribution memory distribution,
+        uint256 totalBoostedRealmPoints,
+        uint256 totalBoostedStakedTokens
+    ) external returns (DataTypes.Distribution memory) {
 
+        return _updateDistributionIndex(distribution, activeDistributions, totalBoostedRealmPoints, totalBoostedStakedTokens);
+    }
 
+    function executeUpdateVaultAccount(        
+        DataTypes.Vault memory vault, 
+        DataTypes.VaultAccount memory vaultAccount, 
+        DataTypes.Distribution memory distribution_,
+        uint256[] storage activeDistributions,
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory params)
+        external returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
+
+        return _updateVaultAccount(vault, vaultAccount, distribution_, activeDistributions, params);
+    }
 
 
 //-----------------------------------internal-------------------------------------------
 
+    //note: does not update storage, only returns the updated distribution
     function _updateDistributionIndex(DataTypes.Distribution memory distribution, uint256[] storage activeDistributions, uint256 totalBoostedRealmPoints, uint256 totalBoostedStakedTokens) internal returns (DataTypes.Distribution memory) {
 
         // distribution already updated
@@ -171,7 +177,7 @@ library PoolLogic {
         DataTypes.VaultAccount memory vaultAccount, 
         DataTypes.Distribution memory distribution_,
         uint256[] storage activeDistributions,
-        DataTypes.ExecuteStakeTokensParams memory params
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory params
         ) internal returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
 
         // get latest distributionIndex, if not already updated
@@ -267,7 +273,7 @@ library PoolLogic {
         DataTypes.Vault memory vault, 
         DataTypes.VaultAccount memory vaultAccount_, 
         DataTypes.Distribution memory distribution_,
-        DataTypes.ExecuteStakeTokensParams memory params
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory params
         ) internal returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
         
         // get updated vaultAccount and distribution
@@ -331,7 +337,7 @@ library PoolLogic {
         
         DataTypes.Vault memory vault, 
         DataTypes.User memory userVaultAssets,
-        DataTypes.ExecuteStakeTokensParams memory params
+        DataTypes.ExecuteUpdateAccountsIndexesParams memory params
         ) internal {
 
         /** user -> vaultId (stake)
@@ -388,26 +394,4 @@ library PoolLogic {
 
         return (userVaultAssets, vault);
     }
-
-    ///@dev concat two uint256 arrays: [1,2,3],[4,5] -> [1,2,3,4,5]
-    function _concatArrays(uint256[] memory arr1, uint256[] memory arr2) internal pure returns(uint256[] memory) {
-        
-        // create resulting arr
-        uint256 len1 = arr1.length;
-        uint256 len2 = arr2.length;
-        uint256[] memory resArr = new uint256[](len1 + len2);
-        
-        uint256 i;
-        for (; i < len1; i++) {
-            resArr[i] = arr1[i];
-        }
-        
-        uint256 j;
-        while (j < len2) {
-            resArr[i++] = arr2[j++];
-        }
-
-        return resArr;
-    }
-
 }

@@ -115,17 +115,12 @@ contract DataTypes {
                                 INPUTS 
     //////////////////////////////////////////////////////////////*/
 
-
-    struct ExecuteStakeTokensParams {
+    struct ExecuteUpdateAccountsIndexesParams {
         address user;
-        uint256 amount;
         bytes32 vaultId;
-        
+        uint256 PRECISION_BASE;
         uint256 totalBoostedRealmPoints;
         uint256 totalBoostedStakedTokens;
-
-        uint256 PRECISION_BASE;
     }
-
 
 }
