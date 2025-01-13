@@ -115,12 +115,43 @@ contract DataTypes {
                                 INPUTS 
     //////////////////////////////////////////////////////////////*/
 
-    struct ExecuteUpdateAccountsIndexesParams {
-        address user;
-        bytes32 vaultId;
-        uint256 PRECISION_BASE;
+    struct Pool {
+        // staked assets
+        uint256 totalStakedNfts;     // disregards creation NFTs
+        uint256 totalStakedTokens;
+        uint256 totalStakedRealmPoints;
+
+        // boosted balances
         uint256 totalBoostedRealmPoints;
         uint256 totalBoostedStakedTokens;
     }
+
+
+
+
+    struct UpdateAccountsIndexesParams {
+        address user;
+        bytes32 vaultId;       
+        uint256 PRECISION_BASE;
+
+        // boosted balances
+        uint256 totalBoostedRealmPoints;
+        uint256 totalBoostedStakedTokens;
+    }
+
+    struct GenericParams {
+        uint256 amount;
+        uint256 NFT_MULTIPLIER;
+
+        uint256[] tokenIds;
+    }
+
+    // ignored for now
+    struct ExecuteStakeNftsParams {
+        uint256[] tokenIds;
+        uint256 incomingNfts;
+        uint256 NFT_MULTIPLIER;
+    }
+
 
 }

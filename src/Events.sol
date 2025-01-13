@@ -77,6 +77,9 @@ event DistributionsUpdated(uint256[] distributionIds);
 // endTime
 event EndTimeSet(uint256 endTime);
 
+// stakeOnBehalfOf
+//event StakedOnBehalfOf(address indexed user, bytes32[] indexed vaultIds, uint256[] amounts);
+
 // emergencyExit
 event UnstakedTokens(address indexed user, bytes32[] indexed vaultIds, uint256 amount);
 event UnstakedNfts(address indexed user, bytes32[] indexed vaultIds, uint256[] tokenIds);
