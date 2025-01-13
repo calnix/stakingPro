@@ -796,50 +796,9 @@ contract StakingPro is Pausable, Ownable2Step {
     function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external onlyOwner whenNotPaused {
 
         if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert Errors.InvalidDistributionParameters(); 
-/*
-        DataTypes.Distribution memory distribution = distributions[distributionId];
-        
-        // Check distribution exists
-        if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
 
-        if(block.timestamp >= distribution.endTime) revert Errors.DistributionOver();
-        
-        _updateDistributionIndex(distribution);
 
-        // startTime modification
-        if(newStartTime > 0) {
-            // Cannot update if distribution has already started
-            if(block.timestamp >= distribution.startTime) revert Errors.DistributionStarted();
-            
-            // newStartTime must be a future time
-            if(newStartTime <= block.timestamp) revert Errors.InvalidStartTime();
-
-            distribution.startTime = newStartTime;
-        }
-        
-        // endTime modification
-        if(newEndTime > 0) {
-
-            // cannot be in the past
-            if(newEndTime < block.timestamp) revert Errors.InvalidEndTime();
-
-            // If only endTime is being updated, ensure it's after existing startTime
-            if(newStartTime == 0 && newEndTime <= distribution.startTime) revert Errors.InvalidDistributionEndTime();
-            
-            // If both times are being updated, ensure end is after start
-            if(newStartTime > 0 && newEndTime <= newStartTime) revert Errors.InvalidDistributionEndTime();
-
-            // update endTime
-            distribution.endTime = newEndTime;
-        }
-
-        // emissionPerSecond modification 
-        if(newEmissionPerSecond > 0) distribution.emissionPerSecond = newEmissionPerSecond;
-
-        distributions[distributionId] = distribution;
-
-        emit DistributionUpdated(distributionId, distribution.startTime, distribution.endTime, distribution.emissionPerSecond);
-*/
+        PoolLogic.executeUpdateDistribution(activeDistributions, distributions, distributionId, newStartTime, newEndTime, newEmissionPerSecond, totalBoostedRealmPoints, totalBoostedStakedTokens);
     }
 
     /**
@@ -855,15 +814,19 @@ contract StakingPro is Pausable, Ownable2Step {
         if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
         if(block.timestamp >= distribution.endTime) revert Errors.DistributionOver();
         if(distribution.manuallyEnded == 1) revert Errors.DistributionManuallyEnded();
-   /*     
-        _updateDistributionIndex(distribution);
-        
+   
+        // update distribution index
+        distribution = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distribution, totalBoostedRealmPoints, totalBoostedStakedTokens);
+
+        // end now
         distribution.endTime = block.timestamp;
         distribution.manuallyEnded = 1;
+
+        // update storage   
         distributions[distributionId] = distribution;
 
-        emit DistributionEnded(distributionId);
-*/
+        emit DistributionEnded(distributionId, distribution.endTime, distribution.totalEmitted);
+
         // REWARDS_VAULT endDistributionImmediately: only for token distributions
         if(distributionId > 0) REWARDS_VAULT.endDistributionImmediately(distributionId);
     }
@@ -873,8 +836,6 @@ contract StakingPro is Pausable, Ownable2Step {
      * @notice Updates the rewards vault address
      * @dev Only callable by owner when contract is not paused
      * @param newRewardsVault The address of the new rewards vault contract
-     * @custom:throws InvalidAddress if newRewardsVault is zero address
-     * @custom:emits RewardsVaultSet when vault address is updated
      */
     function setRewardsVault(address newRewardsVault) external onlyOwner whenNotPaused {
         if(newRewardsVault == address(0)) revert Errors.InvalidAddress();       
@@ -907,14 +868,13 @@ contract StakingPro is Pausable, Ownable2Step {
         if(activeDistributions.length == 0) revert Errors.NoActiveDistributions(); 
 
         uint256 numOfDistributions = activeDistributions.length;
-/*        
-        // mark to date: update all distributions so that rewards are calculated and booked to present time        
-        for(uint256 i; i < numOfDistributions; ++i) {
 
-            // update storage
-            distributions[activeDistributions[i]] = _updateDistributionIndex(distributions[activeDistributions[i]]);
+        for(uint256 i; i < numOfDistributions; ++i) {
+            // update distribution index
+            distributions[activeDistributions[i]] 
+                = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distributions[activeDistributions[i]], totalBoostedRealmPoints, totalBoostedStakedTokens);
         }
-*/
+
         emit DistributionsUpdated(activeDistributions);
 
         _pause();

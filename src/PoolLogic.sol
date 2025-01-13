@@ -612,6 +612,75 @@ library PoolLogic {
 
     }
 
+    function executeUpdateDistribution(
+        uint256[] storage activeDistributions,
+        mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
+        uint256 distributionId, 
+        uint256 newStartTime, 
+        uint256 newEndTime, 
+        uint256 newEmissionPerSecond,
+        uint256 totalBoostedRealmPoints,
+        uint256 totalBoostedStakedTokens
+    ) external {
+        
+        DataTypes.Distribution memory distribution = distributions[distributionId];
+
+        // Check distribution exists + not ended
+        if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
+        if(block.timestamp >= distribution.endTime) revert Errors.DistributionOver();
+
+        // update distribution index
+        distribution = _updateDistributionIndex(distribution, activeDistributions, totalBoostedRealmPoints, totalBoostedStakedTokens);
+
+        // startTime modification
+        if(newStartTime > 0) {
+            // Cannot update if distribution has already started
+            if(block.timestamp >= distribution.startTime) revert Errors.DistributionStarted();
+            
+            // newStartTime must be a future time
+            if(newStartTime <= block.timestamp) revert Errors.InvalidStartTime();
+
+            distribution.startTime = newStartTime;
+        }
+
+        // endTime modification
+        if(newEndTime > 0) {
+
+            // cannot be in the past
+            if(newEndTime < block.timestamp) revert Errors.InvalidEndTime();
+
+            // If only endTime is being updated, ensure it's after existing startTime
+            if(newStartTime == 0 && newEndTime <= distribution.startTime) revert Errors.InvalidDistributionEndTime();
+            
+            // If both times are being updated, ensure end is after start
+            if(newStartTime > 0 && newEndTime <= newStartTime) revert Errors.InvalidDistributionEndTime();
+
+            // update endTime
+            distribution.endTime = newEndTime;
+        }
+
+        // emissionPerSecond modification 
+        if(newEmissionPerSecond > 0) distribution.emissionPerSecond = newEmissionPerSecond;
+        
+        // update storage
+        distributions[distributionId] = distribution;
+
+        emit DistributionUpdated(distributionId, distribution.startTime, distribution.endTime, distribution.emissionPerSecond);
+    }
+
+    function executeUpdateDistributionIndex(
+        uint256[] storage activeDistributions,
+        DataTypes.Distribution memory distribution,
+        uint256 totalBoostedRealmPoints,
+        uint256 totalBoostedStakedTokens
+    ) external returns(DataTypes.Distribution memory) {
+
+        // update distribution index
+        distribution = _updateDistributionIndex(distribution, activeDistributions, totalBoostedRealmPoints, totalBoostedStakedTokens);
+
+        return distribution;
+    }
+
 //-----------------------------------internal-------------------------------------------
 
     function _updateDistributionIndex(DataTypes.Distribution memory distribution, uint256[] storage activeDistributions, uint256 totalBoostedRealmPoints, uint256 totalBoostedStakedTokens) internal returns (DataTypes.Distribution memory) {

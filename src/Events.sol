@@ -57,7 +57,7 @@ event DistributionUpdated(uint256 indexed distributionId, uint256 startTime, uin
 event DistributionIndexUpdated(uint256 indexed distributionId, uint256 lastUpdateTimestamp, uint256 oldIndex, uint256 newIndex);
 event DistributionCompleted(uint256 indexed distributionId, uint256 endTime, uint256 totalEmitted);
 
-event DistributionEnded(uint256 indexed distributionId);
+event DistributionEnded(uint256 indexed distributionId, uint256 endTime, uint256 totalEmitted);
 
 // admin configuration
 event RewardsVaultSet(address indexed oldVault, address indexed newVault);
