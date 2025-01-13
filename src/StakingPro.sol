@@ -31,13 +31,14 @@ contract StakingPro is Pausable, Ownable2Step {
     uint256 public endTime; 
 
     // staked assets
-    uint256 totalStakedNfts;     // disregards creation NFTs
-    uint256 totalStakedTokens;
-    uint256 totalStakedRealmPoints;
+    uint256 public totalCreationNfts;
+    uint256 public totalStakedNfts;     // disregards creation NFTs
+    uint256 public totalStakedTokens;
+    uint256 public totalStakedRealmPoints;
 
     // boosted balances
-    uint256 totalBoostedRealmPoints;
-    uint256 totalBoostedStakedTokens;
+    uint256 public totalBoostedRealmPoints;
+    uint256 public totalBoostedStakedTokens;
 
     // nft multiplier
     uint256 public NFT_MULTIPLIER;                     // 10% = 1000/10_000 = 1000/PERCENTAGE_BASE 
@@ -150,6 +151,9 @@ contract StakingPro is Pausable, Ownable2Step {
 
         // update storage
         vaults[vaultId] = vault;
+
+        // update state vars
+        totalCreationNfts += incomingNfts;
 
         emit VaultCreated(vaultId, msg.sender, nftFeeFactor, creatorFeeFactor, realmPointsFeeFactor);
 
@@ -438,7 +442,7 @@ contract StakingPro is Pausable, Ownable2Step {
     function unstakeAll(bytes32 vaultId) external whenStarted {
         if(isFrozen == 1) revert Errors.IsFrozen();
         if(vaultId == 0) revert Errors.InvalidVaultId();
-/*
+
         DataTypes.UpdateAccountsIndexesParams memory params;
             //params.user = msg.sender; -> NOT USED
             params.PRECISION_BASE = PRECISION_BASE;
@@ -451,7 +455,9 @@ contract StakingPro is Pausable, Ownable2Step {
             uint256 deltaVaultBoostedRealmPoints,
             uint256 deltaVaultBoostedStakedTokens,
             uint256[] memory userTokenIds
-        ) = PoolLogic.executeUnstakeTokens(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, params);
+        ) 
+            = PoolLogic.executeUnstakeTokens(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params
+                , NFT_MULTIPLIER);
 
         // decrement user's staked tokens and boosted staked tokens
         if(userStakedTokens > 0){
@@ -476,7 +482,7 @@ contract StakingPro is Pausable, Ownable2Step {
             NFT_REGISTRY.recordUnstake(msg.sender, userTokenIds, vaultId);
             emit UnstakedNfts(msg.sender, vaultId, userTokenIds);   
         }
-*/
+
     }
 
     /**
@@ -522,18 +528,6 @@ contract StakingPro is Pausable, Ownable2Step {
 
 
 //-------------------------------internal------------------------------------------- 
-
-    ///@dev cache vault and user structs from storage to memory. checks that vault exists, else reverts.
-    function _cache(bytes32 vaultId, address user) internal view returns(DataTypes.User memory, DataTypes.Vault memory) {
-        // ensure vault exists
-        DataTypes.Vault memory vault = vaults[vaultId];
-        if(vault.creator == address(0)) revert Errors.NonExistentVault(vaultId);
-
-        // get vault level user data
-        DataTypes.User memory userVaultAssets = users[user][vaultId];
-
-        return (userVaultAssets, vault);
-    }
 
     ///@dev concat two uint256 arrays: [1,2,3],[4,5] -> [1,2,3,4,5]
     function _concatArrays(uint256[] memory arr1, uint256[] memory arr2) internal pure returns(uint256[] memory) {
@@ -810,7 +804,7 @@ contract StakingPro is Pausable, Ownable2Step {
         if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert Errors.InvalidDistributionParameters(); 
 
 
-        PoolLogic.executeUpdateDistribution(activeDistributions, distributions, distributionId, newStartTime, newEndTime, newEmissionPerSecond, totalBoostedRealmPoints, totalBoostedStakedTokens);
+        PoolLogic.executeUpdateDistributionParams(activeDistributions, distributions, distributionId, newStartTime, newEndTime, newEmissionPerSecond, totalBoostedRealmPoints, totalBoostedStakedTokens);
     }
 
     /**
@@ -871,8 +865,6 @@ contract StakingPro is Pausable, Ownable2Step {
      * @dev Updates all active distribution indexes to current timestamp before pausing
      * @dev This ensures all rewards are properly calculated and booked up to pause time
      * @custom:throws NoActiveDistributions if there are no active distributions
-     * @custom:emits DistributionsUpdated when distribution indexes are updated
-     * @custom:emits Paused when contract is paused (from OpenZeppelin)
      */
     function pause() external onlyOwner {
 
@@ -936,12 +928,17 @@ contract StakingPro is Pausable, Ownable2Step {
       
         uint256 userTotalStakedNfts;
         uint256 userTotalStakedTokens;
-        uint256[] memory userTotalTokenIds;
+        uint256 userTotalCreationNfts;
+
         for(uint256 i; i < vaultIds.length; ++i){
 
             // get vault + check if has been created            
             bytes32 vaultId = vaultIds[i];
-            (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, onBehalfOf);
+            DataTypes.Vault storage vault = vaults[vaultId];
+            if(vault.creator == address(0)) revert Errors.NonExistentVault(vaultId);
+
+            // get user data for vault
+            DataTypes.User storage userVaultAssets = users[onBehalfOf][vaultId];
 
             // check user has non-zero holdings
             uint256 stakedNfts = userVaultAssets.tokenIds.length;
@@ -955,10 +952,11 @@ contract StakingPro is Pausable, Ownable2Step {
                 vault.stakedTokens -= stakedTokens;
                 delete userVaultAssets.stakedTokens;
                 
-                
                 // track total
-                totalStakedTokens += stakedTokens;
+                userTotalStakedTokens += stakedTokens;
             }
+
+            uint256[] memory userTotalTokenIds;
 
             // update balances: user + vault
             if(stakedNfts > 0){
@@ -972,22 +970,28 @@ contract StakingPro is Pausable, Ownable2Step {
                 delete userVaultAssets.tokenIds;
             }
 
-            // update storage 
-            vaults[vaultId] = vault;
-            users[onBehalfOf][vaultId] = userVaultAssets;
+            // creation nfts
+            if(vault.creator == onBehalfOf){
+
+                userTotalTokenIds = _concatArrays(userTotalTokenIds, vault.creationTokenIds);
+                userTotalCreationNfts += vault.creationTokenIds.length;
+
+                delete vault.creationTokenIds;
+            }
+
+            // record unstake with registry, else users nfts will be locked in locker
+            NFT_REGISTRY.recordUnstake(onBehalfOf, userTotalTokenIds, vaultId);
+            emit UnstakedNfts(onBehalfOf, vaultId, userTotalTokenIds);        
         }
 
         // update global
         totalStakedNfts -= userTotalStakedNfts;
         totalStakedTokens -= userTotalStakedTokens;
+        totalCreationNfts -= userTotalCreationNfts;
 
         // return total principal staked
         if(userTotalStakedTokens > 0) STAKED_TOKEN.safeTransfer(onBehalfOf, userTotalStakedTokens); 
         emit UnstakedTokens(onBehalfOf, vaultIds, userTotalStakedTokens);      
-
-        // record unstake with registry, else users nfts will be locked in locker
-        NFT_REGISTRY.recordUnstake(onBehalfOf, userTotalTokenIds, vaultIds);
-        emit UnstakedNfts(onBehalfOf, vaultIds, userTotalTokenIds);        
 
         /**
             Note:

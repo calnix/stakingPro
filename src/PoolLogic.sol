@@ -354,7 +354,7 @@ library PoolLogic {
 
         return(oldVault.boostedStakedTokens, newVault.boostedStakedTokens, oldVault.boostedRealmPoints, newVault.boostedRealmPoints, oldUserVaultAssets.tokenIds, newUserVaultAssets.tokenIds);
     }
-/*
+
     function executeUnstakeTokens(
         uint256[] storage activeDistributions,
         mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
@@ -363,7 +363,8 @@ library PoolLogic {
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
-        DataTypes.UpdateAccountsIndexesParams memory params
+        DataTypes.UpdateAccountsIndexesParams memory params,
+        uint256 nftMultiplier
     ) external returns (uint256, uint256, uint256, uint256, uint256[] memory) {
 
         // cache vault and user data, reverts if vault does not exist
@@ -378,7 +379,6 @@ library PoolLogic {
 
         // storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, vault, userVaultAssets, params);
-
 
         uint256 userBoostedStakedTokens; 
         uint256 deltaVaultBoostedRealmPoints;
@@ -405,7 +405,7 @@ library PoolLogic {
         if(numOfNfts > 0){
             
             // calc. deltas for vault
-            uint256 deltaBoostFactor = numOfNfts * NFT_MULTIPLIER;
+            uint256 deltaBoostFactor = numOfNfts * nftMultiplier;
             deltaVaultBoostedRealmPoints = deltaBoostFactor * vault.stakedTokens;
             deltaVaultBoostedStakedTokens = deltaBoostFactor * vault.stakedRealmPoints;
 
@@ -427,7 +427,7 @@ library PoolLogic {
         users[msg.sender][params.vaultId] = userVaultAssets;
 
         return (stakedTokens, userBoostedStakedTokens, deltaVaultBoostedRealmPoints, deltaVaultBoostedStakedTokens, userTokenIds);
-    } */
+    } 
 
     function executeClaimRewards(        
         uint256[] storage activeDistributions,
@@ -612,7 +612,7 @@ library PoolLogic {
 
     }
 
-    function executeUpdateDistribution(
+    function executeUpdateDistributionParams(
         uint256[] storage activeDistributions,
         mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
         uint256 distributionId, 
