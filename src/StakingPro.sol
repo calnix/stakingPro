@@ -522,7 +522,19 @@ contract StakingPro is Pausable, Ownable2Step {
 
 
 //-------------------------------internal------------------------------------------- 
-  
+
+    ///@dev cache vault and user structs from storage to memory. checks that vault exists, else reverts.
+    function _cache(bytes32 vaultId, address user) internal view returns(DataTypes.User memory, DataTypes.Vault memory) {
+        // ensure vault exists
+        DataTypes.Vault memory vault = vaults[vaultId];
+        if(vault.creator == address(0)) revert Errors.NonExistentVault(vaultId);
+
+        // get vault level user data
+        DataTypes.User memory userVaultAssets = users[user][vaultId];
+
+        return (userVaultAssets, vault);
+    }
+
     ///@dev concat two uint256 arrays: [1,2,3],[4,5] -> [1,2,3,4,5]
     function _concatArrays(uint256[] memory arr1, uint256[] memory arr2) internal pure returns(uint256[] memory) {
         
@@ -921,7 +933,7 @@ contract StakingPro is Pausable, Ownable2Step {
     function emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted whenPaused {
         if(isFrozen == 0) revert Errors.NotFrozen();
         if(vaultIds.length == 0) revert Errors.InvalidArray();
-/*      
+      
         uint256 userTotalStakedNfts;
         uint256 userTotalStakedTokens;
         uint256[] memory userTotalTokenIds;
