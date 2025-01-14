@@ -119,6 +119,7 @@ contract DataTypes {
         address user;
         bytes32 vaultId;       
         uint256 PRECISION_BASE;
+        bool isPaused;
 
         // boosted balances
         uint256 totalBoostedRealmPoints;

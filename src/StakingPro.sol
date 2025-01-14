@@ -178,6 +178,7 @@ contract StakingPro is Pausable, Ownable2Step {
             params.user = msg.sender;
             params.vaultId = vaultId;
             params.PRECISION_BASE = PRECISION_BASE;
+            //params.isPaused = paused();
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
@@ -221,6 +222,7 @@ contract StakingPro is Pausable, Ownable2Step {
             params.user = msg.sender;
             params.vaultId = vaultId;
             params.PRECISION_BASE = PRECISION_BASE;
+            //params.isPaused = paused();
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
@@ -256,6 +258,7 @@ contract StakingPro is Pausable, Ownable2Step {
             params.user = onBehalfOf;
             params.vaultId = vaultId;
             params.PRECISION_BASE = PRECISION_BASE;
+            //params.isPaused = paused();
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
@@ -294,6 +297,7 @@ contract StakingPro is Pausable, Ownable2Step {
             //params.user = msg.sender; -> CALL MSG.SENDER DIRECTLY IN DELEGATECALL
             params.vaultId = vaultId;
             params.PRECISION_BASE = PRECISION_BASE;
+            //params.isPaused = paused();
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
@@ -317,6 +321,7 @@ contract StakingPro is Pausable, Ownable2Step {
             //params.user = msg.sender; -> CALL MSG.SENDER DIRECTLY IN DELEGATECALL
             params.vaultId = vaultId;
             params.PRECISION_BASE = PRECISION_BASE;
+            //params.isPaused = paused();
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
@@ -360,6 +365,7 @@ contract StakingPro is Pausable, Ownable2Step {
         DataTypes.UpdateAccountsIndexesParams memory params;
             //params.user = msg.sender; -> NOT USED
             params.PRECISION_BASE = PRECISION_BASE;
+            //params.isPaused = paused();
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
@@ -398,6 +404,7 @@ contract StakingPro is Pausable, Ownable2Step {
         DataTypes.UpdateAccountsIndexesParams memory params;
             //params.user = msg.sender; -> NOT USED
             params.PRECISION_BASE = PRECISION_BASE;
+            //params.isPaused = paused();
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
@@ -431,21 +438,20 @@ contract StakingPro is Pausable, Ownable2Step {
         );
     }
 
-// ------ can be called AFTER ENDED -----
-
     /**
      * @notice Unstakes all tokens and NFTs from a vault
      * @dev Updates accounting, transfers tokens, and records NFT unstaking
      * @param vaultId The ID of the vault to unstake from
      * @custom:emits UnstakedTokens, UnstakedNfts
      */
-    function unstakeAll(bytes32 vaultId) external whenStarted {
+    function unstakeAll(bytes32 vaultId) external whenStarted whenNotPaused {
         if(isFrozen == 1) revert Errors.IsFrozen();
         if(vaultId == 0) revert Errors.InvalidVaultId();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
             //params.user = msg.sender; -> NOT USED
             params.PRECISION_BASE = PRECISION_BASE;
+            //params.isPaused = paused();
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
@@ -500,7 +506,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws StakingPowerDistribution if distributionId is 0
      * @custom:emits RewardsClaimed when rewards are successfully claimed
      */
-    function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted {
+    function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted whenNotPaused {
         if(isFrozen == 1) revert Errors.IsFrozen();
     
         if(vaultId == 0) revert Errors.InvalidVaultId();
@@ -509,6 +515,7 @@ contract StakingPro is Pausable, Ownable2Step {
         DataTypes.UpdateAccountsIndexesParams memory params;
             //params.user = msg.sender; -> NOT USED
             params.PRECISION_BASE = PRECISION_BASE;
+            //params.isPaused = paused();
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
@@ -602,13 +609,40 @@ contract StakingPro is Pausable, Ownable2Step {
 
     //--------------  NFT MULTIPLIER  ----------------------------
     /**    
-        1. pause contract
-        2. close all the books: distributions, vaultAccounts [updateAllVaultsAndAccounts]
-        3. update Nft Multiplier [updateNftMultiplier]
-        4. totalBoosted values and vault boosted values are now different: update all vault and user Structs. [updateBoostedBalances]
+        1. updateDistributionsAndPause
+        2. updateAllVaultAccounts
+        3. updateNftMultiplier
+        4. updateBoostedBalances
         5. unpause
-
      */
+
+
+    /**
+     * @notice Pauses all contract operations and updates distribution indexes
+     * @dev Updates all active distribution indexes to current timestamp before pausing
+     * @dev This ensures all rewards are properly calculated and booked up to pause time
+     * @custom:throws NoActiveDistributions if there are no active distributions
+     */
+    function updateDistributionsAndPause() external onlyOwner whenNotPaused {
+        if(isFrozen == 1) revert Errors.IsFrozen(); 
+
+        // at least staking power should have been setup on deployment
+        if(activeDistributions.length == 0) revert Errors.NoActiveDistributions(); 
+
+        uint256 numOfDistributions = activeDistributions.length;
+
+        for(uint256 i; i < numOfDistributions; ++i) {
+            // update distribution index
+            distributions[activeDistributions[i]] 
+                = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distributions[activeDistributions[i]], totalBoostedRealmPoints, totalBoostedStakedTokens, paused());
+        }
+
+        emit DistributionsUpdated(activeDistributions);
+
+        _pause();
+    }
+
+
 
     // note: onlyOwner? if ended remove?
     /**
@@ -617,7 +651,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @param vaultIds Array of vault IDs to update
      * @custom:throws InvalidArray if vaultIds array is empty
      */
-    function updateAllVaultsAndAccounts(bytes32[] calldata vaultIds) external {
+    function updateAllVaultAccounts(bytes32[] calldata vaultIds) external {
         uint256 numOfVaults = vaultIds.length;
         if(numOfVaults == 0) revert Errors.InvalidArray();
 
@@ -707,8 +741,7 @@ contract StakingPro is Pausable, Ownable2Step {
      */
     function updateVaultCooldown(uint256 newDuration) external onlyOwner {
         
-        emit VaultCooldownDurationUpdated(VAULT_COOLDOWN_DURATION, newDuration);
-        
+        emit VaultCooldownDurationUpdated(VAULT_COOLDOWN_DURATION, newDuration);     
         VAULT_COOLDOWN_DURATION = newDuration;
     }
 
@@ -803,8 +836,8 @@ contract StakingPro is Pausable, Ownable2Step {
 
         if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert Errors.InvalidDistributionParameters(); 
 
-
-        PoolLogic.executeUpdateDistributionParams(activeDistributions, distributions, distributionId, newStartTime, newEndTime, newEmissionPerSecond, totalBoostedRealmPoints, totalBoostedStakedTokens);
+        PoolLogic.executeUpdateDistributionParams(activeDistributions, distributions, distributionId, newStartTime, newEndTime, newEmissionPerSecond, 
+            totalBoostedRealmPoints, totalBoostedStakedTokens, paused());
     }
 
     /**
@@ -822,7 +855,7 @@ contract StakingPro is Pausable, Ownable2Step {
         if(distribution.manuallyEnded == 1) revert Errors.DistributionManuallyEnded();
    
         // update distribution index
-        distribution = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distribution, totalBoostedRealmPoints, totalBoostedStakedTokens);
+        distribution = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distribution, totalBoostedRealmPoints, totalBoostedStakedTokens, paused());
 
         // end now
         distribution.endTime = block.timestamp;
@@ -859,35 +892,18 @@ contract StakingPro is Pausable, Ownable2Step {
 
 //------------------------------- risk ----------------------------------------------------
 
-
     /**
-     * @notice Pauses all contract operations and updates distribution indexes
-     * @dev Updates all active distribution indexes to current timestamp before pausing
-     * @dev This ensures all rewards are properly calculated and booked up to pause time
-     * @custom:throws NoActiveDistributions if there are no active distributions
+     * @notice Pause pool. Cannot pause once frozen
      */
-    function pause() external onlyOwner {
-
-        // at least staking power should have been setup on deployment
-        if(activeDistributions.length == 0) revert Errors.NoActiveDistributions(); 
-
-        uint256 numOfDistributions = activeDistributions.length;
-
-        for(uint256 i; i < numOfDistributions; ++i) {
-            // update distribution index
-            distributions[activeDistributions[i]] 
-                = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distributions[activeDistributions[i]], totalBoostedRealmPoints, totalBoostedStakedTokens);
-        }
-
-        emit DistributionsUpdated(activeDistributions);
-
+    function pause() external onlyOwner whenNotPaused {
+        if(isFrozen == 1) revert Errors.IsFrozen(); 
         _pause();
     }
 
     /**
      * @notice Unpause pool. Cannot unpause once frozen
      */
-    function unpause() external onlyOwner {
+    function unpause() external onlyOwner whenPaused {
         if(isFrozen == 1) revert Errors.IsFrozen(); 
         _unpause();
     }
@@ -898,7 +914,7 @@ contract StakingPro is Pausable, Ownable2Step {
      *      Nothing to be updated. Freeze as is.
      *      Enables emergencyExit() to be called.
      */
-    function freeze() external whenPaused onlyOwner {
+    function freeze() external onlyOwner whenPaused {
         if(isFrozen == 1) revert Errors.IsFrozen();
         
         isFrozen = 1;

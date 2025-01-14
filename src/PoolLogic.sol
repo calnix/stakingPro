@@ -241,7 +241,7 @@ library PoolLogic {
             DataTypes.Distribution memory distribution_ = distributions[distributionId];
 
             // Update distribution first
-            DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_, activeDistributions, params.totalBoostedRealmPoints, params.totalBoostedStakedTokens);
+            DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_, activeDistributions, params.totalBoostedRealmPoints, params.totalBoostedStakedTokens, params.isPaused);
             
             // Then update all vault accounts for this distribution
             for(uint256 j; j < numOfVaults; ++j) {
@@ -586,7 +586,7 @@ library PoolLogic {
             DataTypes.Distribution memory distribution_ = distributions[distributionId];
 
             // Update distribution first
-            DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_, activeDistributions, params.totalBoostedRealmPoints, params.totalBoostedStakedTokens);
+            DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_, activeDistributions, params.totalBoostedRealmPoints, params.totalBoostedStakedTokens, params.isPaused);
 
             // Then update all vault accounts for this distribution
             for(uint256 j; j < numOfVaults; ++j) {
@@ -620,7 +620,8 @@ library PoolLogic {
         uint256 newEndTime, 
         uint256 newEmissionPerSecond,
         uint256 totalBoostedRealmPoints,
-        uint256 totalBoostedStakedTokens
+        uint256 totalBoostedStakedTokens,
+        bool isPaused
     ) external {
         
         DataTypes.Distribution memory distribution = distributions[distributionId];
@@ -630,7 +631,7 @@ library PoolLogic {
         if(block.timestamp >= distribution.endTime) revert Errors.DistributionOver();
 
         // update distribution index
-        distribution = _updateDistributionIndex(distribution, activeDistributions, totalBoostedRealmPoints, totalBoostedStakedTokens);
+        distribution = _updateDistributionIndex(distribution, activeDistributions, totalBoostedRealmPoints, totalBoostedStakedTokens, isPaused);
 
         // startTime modification
         if(newStartTime > 0) {
@@ -672,18 +673,28 @@ library PoolLogic {
         uint256[] storage activeDistributions,
         DataTypes.Distribution memory distribution,
         uint256 totalBoostedRealmPoints,
-        uint256 totalBoostedStakedTokens
+        uint256 totalBoostedStakedTokens,
+        bool isPaused
     ) external returns(DataTypes.Distribution memory) {
 
         // update distribution index
-        distribution = _updateDistributionIndex(distribution, activeDistributions, totalBoostedRealmPoints, totalBoostedStakedTokens);
+        distribution = _updateDistributionIndex(distribution, activeDistributions, totalBoostedRealmPoints, totalBoostedStakedTokens, isPaused);
 
         return distribution;
     }
 
 //-----------------------------------internal-------------------------------------------
 
-    function _updateDistributionIndex(DataTypes.Distribution memory distribution, uint256[] storage activeDistributions, uint256 totalBoostedRealmPoints, uint256 totalBoostedStakedTokens) internal returns (DataTypes.Distribution memory) {
+    function _updateDistributionIndex(
+        DataTypes.Distribution memory distribution, 
+        uint256[] storage activeDistributions, 
+        uint256 totalBoostedRealmPoints, 
+        uint256 totalBoostedStakedTokens,
+        bool isPaused
+    ) internal returns (DataTypes.Distribution memory) {
+        
+        // if paused, do not update distribution
+        if(isPaused) return distribution;
 
         // distribution already updated
         if(distribution.lastUpdateTimeStamp == block.timestamp) return distribution;
@@ -797,10 +808,17 @@ library PoolLogic {
         DataTypes.Distribution memory distribution_,
         uint256[] storage activeDistributions,
         DataTypes.UpdateAccountsIndexesParams memory params
-        ) internal returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
+
+    ) internal returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
 
         // get latest distributionIndex, if not already updated
-        DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_, activeDistributions, params.totalBoostedRealmPoints, params.totalBoostedStakedTokens);
+        DataTypes.Distribution memory distribution = _updateDistributionIndex(
+            distribution_, 
+            activeDistributions, 
+            params.totalBoostedRealmPoints, 
+            params.totalBoostedStakedTokens,
+            params.isPaused
+        );
         
         // vault already been updated by a prior txn; skip updating vaultAccount
         if(distribution.index == vaultAccount.index) return (vaultAccount, distribution);

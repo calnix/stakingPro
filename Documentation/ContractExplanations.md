@@ -380,22 +380,10 @@ On deployment, the following must be defined:
 4. creationNftsRequired: number of creation nfts required per vault
 5. vaultCoolDownDuration: cooldown period of vault before ending permanently
 
-
-
 # Owner functions
 
 ## updateNftMultiplier [!!!]
 
-When all the vaults have been updated to use the latest `NFT_MULTIPLIER` value, `totalBoostedStakedTokens` and `totalBoostedRealmPoints` should match up.
-This serves as a sanity check to ensure that the multiplier is updated correctly, as well as the vaults are updated correctly.
-
-Process:
-
-1. pause contract
-2. close all the books: distributions, vaultAccounts [updateAllVaultsAndAccounts]
-3. update Nft Multiplier [updateNftMultiplier]
-4. totalBoosted values and vault boosted values are now different: update all vault and user Structs. [updateBoostedBalances]
-5. unpause
 
 ## updateCreationNfts
 
@@ -573,6 +561,8 @@ The only thing an operator should do it pause the contract.
         // - update user's account
 
 ```
+## 2. how rewards are calculated: distribution, vault, user
+
 
 # Execution Flow
 
@@ -656,41 +646,44 @@ The expectation is that we call endVaults() on all the vaults that have come to 
 
 [!!!]: confirm that _udpateVaultsAndAccounts() is failing after endtime. consider a removed check?
 
-## 6. Updating NFT_MULTIPLIER
+## 6. Updating NFT_MULTIPLIER (pause, update, unpause)
 
 Process:
 
-1. call `pause()`: closes all the books; update indexes to NOW; then pauses contract.
-2. update NFT multiplier: `updateNftMultiplier()`
-3. recalculate boostedBalance: `updateBoostedBalances()`
-4. call `unpause()`: unpauses contract.
+1. call `updateDistributionsAndPause()`: updates all distribution indexes, then pauses contract.
+2. call `updateAllVaultAccounts()`: updates all vault indexes
+3. update NFT multiplier: `updateNftMultiplier()`
+4. recalculate boostedBalance: `updateBoostedBalances(bytes32[] calldata vaultIds)`
+5. call `unpause()`: unpauses contract.
 
-During this process, no one should be able to call any functions, including `unstakeAll`.
-Cos if a user unstakes, boosted balances could be incorrectly calculated and updated.
+We will need to call `updateBoostedBalances()` multiple times for all vaults that have been updated.
+During this process, user functions are disabled, as calling them during this process will result in incorrect calculations.
 
-Easier, to lockdown the contract, update, verify that the updated totalBoosted global values tally with the expected values.
-Else, end the contract and redeploy.
+E.g. an unstake() could slip in btw `updateBoostedBalances()` calls and wreck havoc on calculations.
 
-## 7. How to end stakingPro and/or migrate to a new stakingPro contract
+Hence, lock the contract, update, verify that the updated totalBoosted global values tally with the expected values.
+If verification fails, end the contract and redeploy.
+
+When all the vaults have been updated to use the latest `NFT_MULTIPLIER` value, `totalBoostedStakedTokens` and `totalBoostedRealmPoints` should match up.
+This serves as a sanity check to ensure that the multiplier is updated correctly, as well as the vaults are updated correctly.
+
+Note: `_updateDistributionIndex` returns if paused. This prevents multiple updates to distribution indexes during `updateAllVaultAccounts()`.
+
+## 7. How to end stakingPro and/or migrate to a new stakingPro contract (endTime)
 
 Set endTime global variable.
 Users will be able to call: `unstakeAll` and `claimRewards` after endTime.
 
 It is not possible to nest `claimRewards` within `unstakeAll`, as `claimRewards` operates on a per-distribution basis. Hence, 2 functions are needed.
 
-## 8. Emergency Exit
+## 8. Emergency Exit (whenPaused, Frozen)
 
 Assuming black swan event, we can call `emergencyExit` to allow users to exit.
 Function is callable by anyone, but only after the contract has been paused and frozen.
 
-1. pause() -> only unstake
-2. freeze() -> cannot unpause
-3. emergencyExit() -> only unstake
-
-After pausing, users can only call `unstakeAll` and `claimRewards`.
-However, once **frozen**, users can no longer call `unstakeAll` or `claimRewards`.
-
-They can only call `emergencyExit` to recover their tokens.
+1. pause(): all user fns are disabled
+2. freeze(): cannot unpause; only emergencyExit() can be called
+3. emergencyExit(): exfil all principal assets
 
 ```solidity
 emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf)
@@ -709,3 +702,21 @@ emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf)
 
 - This is done by checking the `onBehalfOf` address.
 - The reason for this is to allow both users and us to call the function, to allow for a swift exit.
+
+## 9. States
+
+unpaused
+- all normal fns
+
+paused
+- claimRewards
+
+frozen
+- emergencyExit
+
+
+why disallow unstake when paused?
+- so that can update NFT multipliers w/o distruption
+- if users can unstake - this impacts base staked assets as well as boosted staked assets - causing drift in calcualtions
+- remember updateAllVaultsAndAccounts() is to executed repeatedly, and an unstake() could slip in btw calls the wreck havoc on calculations.  
+

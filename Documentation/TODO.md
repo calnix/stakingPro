@@ -22,25 +22,9 @@ This is because `_updateUserAccounts` gets distribution from storage. So we don'
 
 # NftLocker
 
-## 1. add streamingOwnerCheck()
-
-- streaming contract is deployed on ethereum, as will the NftLocker
-- streamingOwnerCheck() will check if the msg.sender is the owner of tokenId
-- if not, revert with error
-
-```solidity
-        IModule(module).streamingOwnerCheck(msg.sender, tokenIds);
-```
-
-## 2. use of storage pointers
-
-- use of storage pointers for structs
+## 1. test new functions
 
 ---
-
-## 8. document: 
-        - how rewards are calculated: distribution, vault, user
-
 
 # Super nice to have: likely too much added complexity
 
