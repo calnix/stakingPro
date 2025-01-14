@@ -25,10 +25,3 @@ This is because `_updateUserAccounts` gets distribution from storage. So we don'
 ## 1. test new functions
 
 ---
-
-# Super nice to have: likely too much added complexity
-
-## 1. After pausing the contract to update nft multiplier, can i put a lock on calculations for distribution, vault, user?
-
-- can update nft multiplier without affecting the calculations for distribution, vault, user
-- there won't be drift between batchs of update vaults and boosted values.

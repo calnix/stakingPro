@@ -731,8 +731,6 @@ contract StakingPro is Pausable, Ownable2Step {
 
         emit CreationNftRequirementUpdated(oldAmount, newAmount);
     }
-    
-
 
     /**
      * @notice Updates the cooldown duration for vaults
@@ -744,7 +742,6 @@ contract StakingPro is Pausable, Ownable2Step {
         emit VaultCooldownDurationUpdated(VAULT_COOLDOWN_DURATION, newDuration);     
         VAULT_COOLDOWN_DURATION = newDuration;
     }
-
 
     /**
      * @notice Sets up a new token distribution schedule
