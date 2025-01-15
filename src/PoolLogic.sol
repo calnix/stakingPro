@@ -532,10 +532,10 @@ library PoolLogic {
                 }
             }
         }
-
-        // emit
-        uint256 vaultsNotEnded = numOfVaults - vaultsEnded;
-        emit VaultsRemoved(vaultIds, vaultsNotEnded);
+        
+        // num. of vaults skipped 
+        uint256 vaultsSkipped = numOfVaults - vaultsEnded; 
+        emit VaultsRemoved(vaultIds, vaultsSkipped);
 
         return (totalNftsToRemove, totalTokensToRemove, totalRealmPointsToRemove, totalBoostedTokensToRemove, totalBoostedRealmPointsToRemove);
     }
