@@ -366,7 +366,7 @@ contract StakingPro is Pausable, Ownable2Step {
     }
 
     /**
-     * @notice Claims all pending token rewards for a user from a specific vault and distribution
+     * @notice Claims all pending TOKEN rewards for a user from a specific vault and distribution
      * @param vaultId The ID of the vault to claim rewards from
      * @param distributionId The ID of the reward distribution to claim from
      * @dev Updates vault and user accounting across all active distributions before claiming
@@ -420,10 +420,9 @@ contract StakingPro is Pausable, Ownable2Step {
         if(vaultId == 0) revert Errors.InvalidVaultId();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
-            //params.user = msg.sender; -> CALL MSG.SENDER DIRECTLY IN DELEGATECALL
+            params.user = msg.sender; 
             params.vaultId = vaultId;
             params.PRECISION_BASE = PRECISION_BASE;
-            //params.isPaused = paused();
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
@@ -435,7 +434,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @notice Activates the cooldown period for a vault
      * @dev If VAULT_COOLDOWN_DURATION is 0, vault is immediately removed from circulation
      * @dev When removed, all vault's staked assets are deducted from global totals
-     * @param vaultId The ID of the vault to activate cooldown for
+     * @param vaultId The ID of the vault to activate cooldown
      * @custom:throws InvalidVaultId if vaultId is 0
      * @custom:emits VaultRemoved when vault is immediately removed (zero cooldown)
      * @custom:emits VaultCooldownInitiated when cooldown period begins
@@ -444,10 +443,9 @@ contract StakingPro is Pausable, Ownable2Step {
         if(vaultId == 0) revert Errors.InvalidVaultId();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
-            //params.user = msg.sender; -> CALL MSG.SENDER DIRECTLY IN DELEGATECALL
+            params.user = msg.sender; 
             params.vaultId = vaultId;
             params.PRECISION_BASE = PRECISION_BASE;
-            //params.isPaused = paused();
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
@@ -472,6 +470,7 @@ contract StakingPro is Pausable, Ownable2Step {
             emit VaultRemoved(vaultId);
 
         } else {
+
             // set endTime       
             vault.endTime = block.timestamp + VAULT_COOLDOWN_DURATION;
             emit VaultCooldownInitiated(vaultId);
@@ -484,14 +483,19 @@ contract StakingPro is Pausable, Ownable2Step {
         NFT_REGISTRY.recordUnstake(msg.sender, vault.creationTokenIds, vaultId);
     }
 
+    /**
+     * @notice Ends multiple vaults
+     * @dev Removes all staked assets from circulation and updates global totals
+     * @param vaultIds Array of vault IDs to end
+     * @custom:throws InvalidArray if vaultIds array is empty
+     * @custom:emits VaultsEnded when all specified vaults are ended
+     */
     function endVaults(bytes32[] calldata vaultIds) external whenStartedAndNotEnded whenNotPaused {
         uint256 numOfVaults = vaultIds.length;
         if(numOfVaults == 0) revert Errors.InvalidArray();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
-            //params.user = msg.sender; -> NOT USED
             params.PRECISION_BASE = PRECISION_BASE;
-            //params.isPaused = paused();
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 

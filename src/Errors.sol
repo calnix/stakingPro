@@ -9,7 +9,7 @@ library Errors {
     error InvalidVaultId();
     error InvalidAddress();
     error InvalidArray();
-    error VaultAlreadyEnded(bytes32 vaultId);   // note
+    error VaultEndTimeSet(bytes32 vaultId);
 
     // createVault
     error IncorrectCreationNfts();
@@ -30,7 +30,6 @@ library Errors {
 
     // _cache
     error NonExistentVault(bytes32 vaultId);
-    error VaultEndTimeSet(bytes32 vaultId);
 
     // updateDistribution
     error InvalidDistributionParameters();

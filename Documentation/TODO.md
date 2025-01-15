@@ -32,6 +32,9 @@ This is because `_updateUserAccounts` gets distribution from storage. So we don'
 1. NFT_Multiplier vs NFT_BOOST_FACTOR: naming
 2. RP can be uint128; struct packing
 3. struct packing for fees, as input params: createVault + updateVaultFees
-4. check internal fns in library, make sure no extra inputs/mappings/outputs
+4. pack library return variables into struct: gas savings?
+5. check internal fns in library, make sure no extra inputs/mappings/outputs
+6. Passing _concatArrays from library to stakingPro via function selector:
+        https://ethereum.stackexchange.com/questions/3342/pass-a-function-as-a-parameter-in-solidity
 
 Check dups in errors,events and remove.

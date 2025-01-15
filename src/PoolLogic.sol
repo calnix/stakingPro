@@ -409,10 +409,10 @@ library PoolLogic {
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
         
         // vault cooldown activated: cannot update fees
-        if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(params.vaultId);
+        if(vault.endTime > 0) revert Errors.VaultEndTimeSet(params.vaultId);
 
         // sanity check: user must be creator + incoming creatorFeeFactor must be lower than current
-        if(vault.creator != msg.sender) revert Errors.UserIsNotCreator();
+        if(vault.creator != params.user) revert Errors.UserIsNotCreator();
         if(creatorFeeFactor > vault.creatorFeeFactor) revert Errors.CreatorFeeCanOnlyBeDecreased();
 
         // sanity check: new fee compositions cannot exceed 50%
@@ -456,9 +456,10 @@ library PoolLogic {
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
         
         // vault cooldown activated: cannot stake
-        if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(params.vaultId);
+        if(vault.endTime > 0) revert Errors.VaultEndTimeSet(params.vaultId);
+
         // only creator can activate cooldown
-        if(vault.creator != msg.sender) revert Errors.UserIsNotCreator();
+        if(vault.creator != params.user) revert Errors.UserIsNotCreator();
 
         // storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, vault, userVaultAssets, params);
@@ -487,16 +488,18 @@ library PoolLogic {
         uint256 totalRealmPointsToRemove;
         uint256 totalBoostedTokensToRemove;
         uint256 totalBoostedRealmPointsToRemove;
-
+            
         uint256 vaultsEnded;
 
         // For each distribution
         for(uint256 i; i < numOfDistributions; ++i) {
+            
             uint256 distributionId = activeDistributions[i];
-            DataTypes.Distribution memory distribution_ = distributions[distributionId];
+            DataTypes.Distribution memory distribution = distributions[distributionId];
 
             // Update distribution first
-            DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_, activeDistributions, params.totalBoostedRealmPoints, params.totalBoostedStakedTokens, params.isPaused);
+            distribution = _updateDistributionIndex(distribution, activeDistributions, params.totalBoostedRealmPoints, params.totalBoostedStakedTokens, params.isPaused);
+            distributions[distributionId] = distribution;
             
             // Then update all vault accounts for this distribution
             for(uint256 j; j < numOfVaults; ++j) {
@@ -504,15 +507,15 @@ library PoolLogic {
                 // get vault and vault account from storage
                 bytes32 vaultId = vaultIds[j];
                 DataTypes.Vault memory vault = vaults[vaultId];
-                DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
 
                 // cooldown NOT activated; cannot end vault: skip
                 if(vault.endTime == 0) continue;
                 // vault has been removed from circulation: skip
                 if(vault.removed == 1) continue;
 
-                // Update storage: vault account 
-                (DataTypes.VaultAccount memory vaultAccount,) = _updateVaultAccount(vault, vaultAccount_, distribution, activeDistributions, params);
+                // Update vault account 
+                DataTypes.VaultAccount memory vaultAccount = vaultAccounts[vaultId][distributionId];
+                (vaultAccount, ) = _updateVaultAccount(vault, vaultAccount, distribution, activeDistributions, params);
                 vaultAccounts[vaultId][distributionId] = vaultAccount;
 
                 // Track assets to remove (only need to do this once per vault)
@@ -528,11 +531,6 @@ library PoolLogic {
                     ++vaultsEnded;
                 }
             }
-
-            // Update distribution storage if changed
-            if(distribution.lastUpdateTimeStamp > distribution_.lastUpdateTimeStamp) {
-                distributions[distributionId] = distribution;
-            }
         }
 
         // emit
@@ -541,8 +539,6 @@ library PoolLogic {
 
         return (totalNftsToRemove, totalTokensToRemove, totalRealmPointsToRemove, totalBoostedTokensToRemove, totalBoostedRealmPointsToRemove);
     }
-
-
 
     function executeStakeOnBehalfOf(
         uint256[] storage activeDistributions,
@@ -572,7 +568,7 @@ library PoolLogic {
             (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender, vaults, users);
 
             // vault cooldown activated: cannot stake
-            if(vault.endTime > 0) revert Errors.VaultAlreadyEnded(vaultId);
+            if(vault.endTime > 0) revert Errors.VaultEndTimeSet(vaultId);
 
             // storage update: vault and user accounting across all active reward distributions
             _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, vault, userVaultAssets, params);
