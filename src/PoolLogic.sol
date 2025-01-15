@@ -220,13 +220,12 @@ library PoolLogic {
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
         DataTypes.UpdateAccountsIndexesParams memory params,
-        bytes32 oldVaultId,
         bytes32 newVaultId,
         uint256 NFT_MULTIPLIER
     ) external returns (uint256, uint256, uint256, uint256, uint256[] memory oldVaultTokenIds, uint256[] memory newVaultTokenIds) {
 
         // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory oldUserVaultAssets, DataTypes.Vault memory oldVault) = _cache(oldVaultId, params.user, vaults, users);
+        (DataTypes.User memory oldUserVaultAssets, DataTypes.Vault memory oldVault) = _cache(params.vaultId, params.user, vaults, users);
         (DataTypes.User memory newUserVaultAssets, DataTypes.Vault memory newVault) = _cache(newVaultId, params.user, vaults, users);
 
         // vault cooldown activated: cannot migrate
@@ -236,7 +235,7 @@ library PoolLogic {
         if (oldUserVaultAssets.stakedTokens == 0 && 
             oldUserVaultAssets.tokenIds.length == 0 && 
             oldUserVaultAssets.stakedRealmPoints == 0) {
-            revert Errors.UserHasNothingStaked(oldVaultId, params.user);
+            revert Errors.UserHasNothingStaked(params.vaultId, params.user);
         }
 
         // storage update: vault and user accounting across all active reward distributions
@@ -264,7 +263,7 @@ library PoolLogic {
         newVault.boostedRealmPoints = (newVault.stakedRealmPoints * newVault.totalBoostFactor) / params.PRECISION_BASE; 
 
         // emit events: new vault
-        emit VaultMigrated(params.user, oldVaultId, newVaultId, oldUserVaultAssets.stakedTokens, oldUserVaultAssets.stakedRealmPoints, oldUserVaultAssets.tokenIds);
+        emit VaultMigrated(params.user, params.vaultId, newVaultId, oldUserVaultAssets.stakedTokens, oldUserVaultAssets.stakedRealmPoints, oldUserVaultAssets.tokenIds);
         emit VaultBoostFactorUpdated(newVaultId, newVaultTotalBoostFactor, newVault.totalBoostFactor);
 
         // decrement oldVault
@@ -278,7 +277,7 @@ library PoolLogic {
         oldVault.boostedRealmPoints = (oldVault.stakedRealmPoints * oldVault.totalBoostFactor) / params.PRECISION_BASE; 
         
         // emit events: old vault
-        emit VaultBoostFactorUpdated(oldVaultId, oldVaultTotalBoostFactor, oldVault.totalBoostFactor);
+        emit VaultBoostFactorUpdated(params.vaultId, oldVaultTotalBoostFactor, oldVault.totalBoostFactor);
 
 
         // ---------------------------- update user ----------------------------------------------
@@ -291,11 +290,11 @@ library PoolLogic {
         // ---------------------------- update storage ----------------------------------------------
 
         // Update storage for both vaults
-        vaults[oldVaultId] = oldVault;
+        vaults[params.vaultId] = oldVault;
         vaults[newVaultId] = newVault;
 
         // Clear old user assets and update new user assets
-        delete users[params.user][oldVaultId];
+        delete users[params.user][params.vaultId];
         users[params.user][newVaultId] = newUserVaultAssets;
 
         return(
@@ -303,6 +302,93 @@ library PoolLogic {
                 oldVault.boostedRealmPoints, newVault.boostedRealmPoints, 
                 oldUserVaultAssets.tokenIds, newUserVaultAssets.tokenIds
                 );
+    }
+
+    function executeClaimRewards(        
+        uint256[] storage activeDistributions,
+        mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
+        mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
+        mapping(address user => mapping(bytes32 vaultId => DataTypes.User userVaultAssets)) storage users,
+        mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
+        mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
+
+        DataTypes.UpdateAccountsIndexesParams memory params,
+        uint256 distributionId
+    ) external returns (uint256) {
+        
+        // cache vault and user data, reverts if vault does not exist
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
+        
+        // get corresponding user+vault account for this active distribution 
+        DataTypes.Distribution memory distribution = distributions[distributionId];
+        DataTypes.VaultAccount memory vaultAccount = vaultAccounts[params.vaultId][distributionId];
+        DataTypes.UserAccount memory userAccount = userAccounts[params.user][params.vaultId][distributionId];
+
+        // only update specified distribution, and its accounts
+        (userAccount, vaultAccount, distribution) 
+            = _updateUserAccount(activeDistributions, userVaultAssets, userAccount, vault, vaultAccount, distribution, params);
+      
+        //----------------------- calc. and update vault and user accounts ------------------------
+
+        uint256 totalUnclaimedRewards;
+        
+        // staking MOCA rewards
+        if (userAccount.accStakingRewards > userAccount.claimedStakingRewards) {
+
+            uint256 unclaimedRewards = userAccount.accStakingRewards - userAccount.claimedStakingRewards;
+
+            userAccount.claimedStakingRewards += unclaimedRewards;
+            vaultAccount.totalClaimedRewards += unclaimedRewards;
+
+            totalUnclaimedRewards += unclaimedRewards;
+        }
+
+        // staking RP rewards 
+        if (userAccount.accRealmPointsRewards > userAccount.claimedRealmPointsRewards) {
+
+            uint256 unclaimedRpRewards = userAccount.accRealmPointsRewards - userAccount.claimedRealmPointsRewards;
+
+            userAccount.claimedRealmPointsRewards += unclaimedRpRewards;
+            vaultAccount.totalClaimedRewards += unclaimedRpRewards;
+
+            totalUnclaimedRewards += unclaimedRpRewards;
+        }
+
+        // staking NFT rewards
+        if (userAccount.accNftStakingRewards > userAccount.claimedNftRewards) {
+
+            uint256 unclaimedNftRewards = userAccount.accNftStakingRewards - userAccount.claimedNftRewards;
+
+            userAccount.claimedNftRewards += unclaimedNftRewards;
+            vaultAccount.totalClaimedRewards += unclaimedNftRewards;
+
+            totalUnclaimedRewards += unclaimedNftRewards;
+        }
+
+        // creator rewards
+        if (vault.creator == params.user) {
+
+            uint256 unclaimedCreatorRewards = vaultAccount.accCreatorRewards - userAccount.claimedCreatorRewards;
+
+            if(unclaimedCreatorRewards > 0) {
+            
+                userAccount.claimedCreatorRewards += unclaimedCreatorRewards;
+                vaultAccount.totalClaimedRewards += unclaimedCreatorRewards;
+            
+                totalUnclaimedRewards += unclaimedCreatorRewards;
+            }
+        }
+
+        // --------------------------------------------------------------------------------------
+
+        // update storage: accounts and distributions
+        distributions[distributionId] = distribution;     
+        vaultAccounts[params.vaultId][distributionId] = vaultAccount;  
+        userAccounts[params.user][params.vaultId][distributionId] = userAccount;
+
+        emit RewardsClaimed(params.vaultId, params.user, totalUnclaimedRewards);
+
+        return totalUnclaimedRewards;
     }
 
     function executeUpdateVaultFees(
@@ -456,84 +542,7 @@ library PoolLogic {
         return (totalNftsToRemove, totalTokensToRemove, totalRealmPointsToRemove, totalBoostedTokensToRemove, totalBoostedRealmPointsToRemove);
     }
 
-    function executeClaimRewards(        
-        uint256[] storage activeDistributions,
-        mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
-        mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
-        mapping(address user => mapping(bytes32 vaultId => DataTypes.User userVaultAssets)) storage users,
-        mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
-        mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
-        DataTypes.UpdateAccountsIndexesParams memory params,
-        bytes32 vaultId,
-        uint256 distributionId
-    ) external returns (uint256) {
-        
-        // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, msg.sender, vaults, users);
-        
-        // get corresponding user+vault account for this active distribution 
-        DataTypes.Distribution memory distribution_ = distributions[distributionId];
-        DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
-        DataTypes.UserAccount memory userAccount_ = userAccounts[msg.sender][vaultId][distributionId];
-
-        // update just the specified distribution
-        (DataTypes.UserAccount memory userAccount, DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateUserAccount(activeDistributions, userVaultAssets, userAccount_, vault, vaultAccount_, distribution_, params);
-      
-        //------- calc. and update vault and user accounts --------
-        uint256 totalUnclaimedRewards;
-        
-        // update balances: staking MOCA rewards
-        if (userAccount.accStakingRewards > userAccount.claimedStakingRewards) {
-
-            uint256 unclaimedRewards = userAccount.accStakingRewards - userAccount.claimedStakingRewards;
-            userAccount.claimedStakingRewards += unclaimedRewards;
-            vaultAccount.totalClaimedRewards += unclaimedRewards;
-
-            totalUnclaimedRewards += unclaimedRewards;
-        }
-
-        // update balances: staking RP rewards 
-        if (userAccount.accRealmPointsRewards > userAccount.claimedRealmPointsRewards) {
-
-            uint256 unclaimedRpRewards = userAccount.accRealmPointsRewards - userAccount.claimedRealmPointsRewards;
-            userAccount.claimedRealmPointsRewards += unclaimedRpRewards;
-            vaultAccount.totalClaimedRewards += unclaimedRpRewards;
-
-            totalUnclaimedRewards += unclaimedRpRewards;
-        }
-
-        // update balances: staking NFT rewards
-        if (userAccount.accNftStakingRewards > userAccount.claimedNftRewards) {
-
-            uint256 unclaimedNftRewards = userAccount.accNftStakingRewards - userAccount.claimedNftRewards;
-            userAccount.claimedNftRewards += unclaimedNftRewards;
-            vaultAccount.totalClaimedRewards += unclaimedNftRewards;
-
-            totalUnclaimedRewards += unclaimedNftRewards;
-        }
-
-        // if creator
-        if (vault.creator == msg.sender) {
-
-            uint256 unclaimedCreatorRewards = vaultAccount.accCreatorRewards - userAccount.claimedCreatorRewards;
-            userAccount.claimedCreatorRewards += unclaimedCreatorRewards;
-            vaultAccount.totalClaimedRewards += unclaimedCreatorRewards;
-            
-            totalUnclaimedRewards += unclaimedCreatorRewards;
-        }
-
-        // ---------------------------------------------------------------
-
-        // update storage: accounts and distributions
-        distributions[distributionId] = distribution;     
-        vaultAccounts[vaultId][distributionId] = vaultAccount;  
-        userAccounts[msg.sender][vaultId][distributionId] = userAccount;
-
-        emit RewardsClaimed(vaultId, msg.sender, totalUnclaimedRewards);
-
-        return totalUnclaimedRewards;
-    }
 
     function executeStakeOnBehalfOf(
         uint256[] storage activeDistributions,

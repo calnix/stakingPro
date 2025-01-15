@@ -175,8 +175,8 @@ contract StakingPro is Pausable, Ownable2Step {
         if(vaultId == 0) revert Errors.InvalidVaultId();
         
         DataTypes.UpdateAccountsIndexesParams memory params;
-            params.vaultId = vaultId;
             params.user = msg.sender;
+            params.vaultId = vaultId;
             params.PRECISION_BASE = PRECISION_BASE;
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
@@ -340,6 +340,7 @@ contract StakingPro is Pausable, Ownable2Step {
         
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.user = msg.sender;
+            params.vaultId = oldVaultId;
             params.PRECISION_BASE = PRECISION_BASE;
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
@@ -353,7 +354,7 @@ contract StakingPro is Pausable, Ownable2Step {
             uint256[] memory newVaultTokenIds
         ) 
             = PoolLogic.executeMigrateVaults(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
-                oldVaultId, newVaultId, NFT_MULTIPLIER);
+                newVaultId, NFT_MULTIPLIER);
         
         // Update global boosted totals
         totalBoostedStakedTokens = totalBoostedStakedTokens + newVaultBoostedStakedTokens - oldVaultBoostedStakedTokens;
@@ -365,12 +366,12 @@ contract StakingPro is Pausable, Ownable2Step {
     }
 
     /**
-     * @notice Claims all pending rewards for a user from a specific vault and distribution
+     * @notice Claims all pending token rewards for a user from a specific vault and distribution
      * @param vaultId The ID of the vault to claim rewards from
      * @param distributionId The ID of the reward distribution to claim from
      * @dev Updates vault and user accounting across all active distributions before claiming
      * @dev Calculates and claims 4 types of rewards:
-     *      1. MOCA staking rewards
+     *      1. Token staking rewards
      *      2. Realm Points staking rewards 
      *      3. NFT staking rewards
      *      4. Creator rewards (if caller is vault creator)
@@ -379,22 +380,20 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws StakingPowerDistribution if distributionId is 0
      * @custom:emits RewardsClaimed when rewards are successfully claimed
      */
-    function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted whenNotPaused {
-        if(isFrozen == 1) revert Errors.IsFrozen();
-    
+    function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted whenNotPaused {   
         if(vaultId == 0) revert Errors.InvalidVaultId();
         if(distributionId == 0) revert Errors.StakingPowerDistribution();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
-            //params.user = msg.sender; -> NOT USED
+            params.user = msg.sender;   
+            params.vaultId = vaultId;
             params.PRECISION_BASE = PRECISION_BASE;
-            //params.isPaused = paused();
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
-        (
-            uint256 totalUnclaimedRewards
-        ) = PoolLogic.executeClaimRewards(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, vaultId, distributionId);
+        uint256 totalUnclaimedRewards
+         = PoolLogic.executeClaimRewards(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
+            distributionId);
 
         // transfer rewards to user, from rewardsVault
         REWARDS_VAULT.payRewards(distributionId, totalUnclaimedRewards, msg.sender);
