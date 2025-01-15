@@ -504,16 +504,18 @@ library PoolLogic {
             // Then update all vault accounts for this distribution
             for(uint256 j; j < numOfVaults; ++j) {
                 
-                // get vault and vault account from storage
+                // get vault 
                 bytes32 vaultId = vaultIds[j];
                 DataTypes.Vault memory vault = vaults[vaultId];
 
+                // vault does not exist: skip
+                if(vault.creator == address(0)) continue;
                 // cooldown NOT activated; cannot end vault: skip
                 if(vault.endTime == 0) continue;
                 // vault has been removed from circulation: skip
                 if(vault.removed == 1) continue;
 
-                // Update vault account 
+                // vault account: get and update 
                 DataTypes.VaultAccount memory vaultAccount = vaultAccounts[vaultId][distributionId];
                 (vaultAccount, ) = _updateVaultAccount(vault, vaultAccount, distribution, activeDistributions, params);
                 vaultAccounts[vaultId][distributionId] = vaultAccount;
