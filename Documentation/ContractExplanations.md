@@ -264,6 +264,25 @@ Increasing `NFT_MULTIPLIER` beyond `10_000` changes the boost from fractional to
         uint256 incomingBoostedStakedTokens = (amount * vault.totalBoostFactor) / PRECISION_BASE;
 ```
 
+Example:
+
+```solidity
+    function ret() external pure returns(uint256) {
+        
+        uint256 PRECISION_BASE = 10_000;
+        
+        uint256 vaultTotalBoostFactor = PRECISION_BASE; //init at 100%  
+
+        uint256 NFT_MULTIPLIER = 1000;                     // 10% = 1000/10_000 = 1000/PRECISION_BASE 
+        vaultTotalBoostFactor = vaultTotalBoostFactor + (1 * NFT_MULTIPLIER);   // 10_000 + 1000 = 11_000
+        
+        uint256 amount = 10;
+        uint256 incomingBoostedStakedTokens = (amount * vaultTotalBoostFactor) / PRECISION_BASE; // amount * (11_000/10_000) = amount * 11
+
+        return incomingBoostedStakedTokens; // RETURNS 11
+    }
+```
+
 Exceeding `10_000` is acceptable for NFT_MULTIPLIER, and it can still retain 2dp precision.
 
 ```solidity
