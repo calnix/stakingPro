@@ -517,15 +517,6 @@ contract StakingPro is Pausable, Ownable2Step {
         totalBoostedRealmPoints -= totalBoostedRealmPointsToRemove;
     }
 
-
-
-    /**
-        add checks:
-        - check if vault should stop earning rewards - if so do not update; or update as per last
-
-     */
-
-
 //-------------------------------internal------------------------------------------- 
 
     ///@dev concat two uint256 arrays: [1,2,3],[4,5] -> [1,2,3,4,5]
@@ -560,23 +551,9 @@ contract StakingPro is Pausable, Ownable2Step {
                             POOL MANAGEMENT
     //////////////////////////////////////////////////////////////*/
 
-    function setEndTime(uint256 endTime_) external onlyOwner {
-        if(endTime_ == 0) revert Errors.InvalidEndTime();
-        if(endTime_ <= block.timestamp) revert Errors.InvalidEndTime();
-
-        endTime = endTime_;
-
-        emit EndTimeSet(endTime_);
-    }
-
-    function stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOf, uint256[] calldata amounts) external  whenStartedAndNotEnded onlyOwner {
-        uint256 length = amounts.length;
-        if(length == 0) revert Errors.InvalidAmount();
-        if(vaultIds.length != length) revert Errors.InvalidVaultId();
-        if(onBehalfOf.length != length) revert Errors.InvalidAddress();
+    function stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOfs, uint256[] calldata amounts) external whenStartedAndNotEnded whenNotPaused onlyOwner {
 
         DataTypes.UpdateAccountsIndexesParams memory params;
-            //params.user = msg.sender; -> NOT USED
             params.PRECISION_BASE = PRECISION_BASE;
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
@@ -597,6 +574,17 @@ contract StakingPro is Pausable, Ownable2Step {
         // grab MOCA: from msg.sender to this contract
         STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), incomingTotalStakedTokens);
     }
+
+    function setEndTime(uint256 endTime_) external onlyOwner {
+        if(endTime_ == 0) revert Errors.InvalidEndTime();
+        if(endTime_ <= block.timestamp) revert Errors.InvalidEndTime();
+
+        endTime = endTime_;
+
+        emit EndTimeSet(endTime_);
+    }
+
+
 
 
     //--------------  NFT MULTIPLIER  ----------------------------

@@ -552,22 +552,26 @@ library PoolLogic {
 
         DataTypes.UpdateAccountsIndexesParams memory params,
         bytes32[] calldata vaultIds,
-        address[] calldata onBehalfOf,
+        address[] calldata onBehalfOfs,
         uint256[] calldata amounts
     ) external returns (uint256, uint256) {
+
+        uint256 length = amounts.length;
+        if(length == 0) revert Errors.InvalidArray();
+        if(vaultIds.length != length) revert Errors.InvalidVaultId();
+        if(onBehalfOfs.length != length) revert Errors.InvalidAddress();
 
         uint256 incomingTotalStakedTokens;
         uint256 incomingTotalBoostedStakedTokens;
 
-        uint256 length = amounts.length;
         for(uint256 i; i < length; ++i) {
 
             bytes32 vaultId = vaultIds[i];
-            address user = onBehalfOf[i];
+            address user = onBehalfOfs[i];
             uint256 stakedTokens = amounts[i];
 
             // cache vault and user data, reverts if vault does not exist
-            (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, msg.sender, vaults, users);
+            (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(vaultId, user, vaults, users);
 
             // vault cooldown activated: cannot stake
             if(vault.endTime > 0) revert Errors.VaultEndTimeSet(vaultId);
@@ -842,7 +846,6 @@ library PoolLogic {
         DataTypes.Distribution memory distribution_,
         uint256[] storage activeDistributions,
         DataTypes.UpdateAccountsIndexesParams memory params
-
     ) internal returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
 
         // get latest distributionIndex, if not already updated
