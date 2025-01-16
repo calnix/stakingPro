@@ -574,8 +574,15 @@ contract StakingPro is Pausable, Ownable2Step {
         // grab MOCA: from msg.sender to this contract
         STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), incomingTotalStakedTokens);
     }
-
-    function setEndTime(uint256 endTime_) external onlyOwner {
+    
+    /**
+     * @notice Sets the end time for the staking pool
+     * @dev Only callable by owner when pool has not ended.
+     * @param endTime_ The new end time for the staking pool
+     * @custom:throws InvalidEndTime if endTime_ is 0 or not in the future
+     * @custom:emits EndTimeSet when end time is updated
+     */
+    function setEndTime(uint256 endTime_) external whenNotEnded onlyOwner {
         if(endTime_ == 0) revert Errors.InvalidEndTime();
         if(endTime_ <= block.timestamp) revert Errors.InvalidEndTime();
 
@@ -584,7 +591,25 @@ contract StakingPro is Pausable, Ownable2Step {
         emit EndTimeSet(endTime_);
     }
 
+    //note: what about setting to 0 to disable the rewards vault?
+    /**
+     * @notice Updates the rewards vault address
+     * @dev Only callable by owner when contract is not paused
+     * @param newRewardsVault The address of the new rewards vault contract
+     */
+    function setRewardsVault(address newRewardsVault) external onlyOwner whenNotPaused {
+        if(newRewardsVault == address(0)) revert Errors.InvalidAddress();       
 
+        emit RewardsVaultSet(address(REWARDS_VAULT), newRewardsVault);
+        REWARDS_VAULT = IRewardsVault(newRewardsVault);    
+    }
+
+    function setRealmPoints(address newRealmPoints) external onlyOwner whenNotPaused {
+        if(newRealmPoints == address(0)) revert Errors.InvalidAddress();
+
+        emit RPContractSet(RP_CONTRACT, newRealmPoints);
+        RP_CONTRACT = newRealmPoints;
+    }
 
 
     //--------------  NFT MULTIPLIER  ----------------------------
@@ -847,25 +872,7 @@ contract StakingPro is Pausable, Ownable2Step {
         if(distributionId > 0) REWARDS_VAULT.endDistributionImmediately(distributionId);
     }
     
-    //note: what about setting to 0 to disable the rewards vault?
-    /**
-     * @notice Updates the rewards vault address
-     * @dev Only callable by owner when contract is not paused
-     * @param newRewardsVault The address of the new rewards vault contract
-     */
-    function setRewardsVault(address newRewardsVault) external onlyOwner whenNotPaused {
-        if(newRewardsVault == address(0)) revert Errors.InvalidAddress();       
 
-        emit RewardsVaultSet(address(REWARDS_VAULT), newRewardsVault);
-        REWARDS_VAULT = IRewardsVault(newRewardsVault);    
-    }
-
-    function setRealmPoints(address newRealmPoints) external onlyOwner whenNotPaused {
-        if(newRealmPoints == address(0)) revert Errors.InvalidAddress();
-
-        emit RPContractSet(RP_CONTRACT, newRealmPoints);
-        RP_CONTRACT = newRealmPoints;
-    }
 
 //------------------------------- risk ----------------------------------------------------
 
@@ -1022,6 +1029,11 @@ contract StakingPro is Pausable, Ownable2Step {
 
     modifier whenStarted() {
         _whenStarted();
+        _;
+    }
+
+    modifier whenNotEnded() {
+        _whenNotEnded();
         _;
     }
 }

@@ -690,10 +690,20 @@ Note: `_updateDistributionIndex` returns if paused. This prevents multiple updat
 
 ## 7. How to end stakingPro and/or migrate to a new stakingPro contract (endTime)
 
-Set endTime global variable.
-Users will be able to call: `unstakeAll` and `claimRewards` after endTime.
+- Set endTime global variable via `setEndTime`.
+- Users will be able to call: `unstakeAll` and `claimRewards` after `endTime`.
+- `setEndTime` can be called repeatedly, by owner, to update `endTime`.
+- `endTime` can be moved forward or backward.
 
-It is not possible to nest `claimRewards` within `unstakeAll`, as `claimRewards` operates on a per-distribution basis. Hence, 2 functions are needed.
+**What if endTime is set, but there are still active distributions continuing beyond endTime?**
+
+- `unstake` and `claimRewards` are callable even after `endTime`.
+- Calling these functions after `endTime` would mean that if there are still active distributions, the distributions would be updated via _updateUserAccounts::_updateDistributionIndex.
+
+Hence, when calling `setEndTime`, we should check if there are still active distributions beyond endTime.
+If there are, we should end those distributions via `updateDistribution`.
+
+>It is not possible to nest `claimRewards` within `unstakeAll`, as `claimRewards` operates on a per-distribution basis. Hence, 2 functions are needed.
 
 ## 8. Emergency Exit (whenPaused, Frozen)
 
@@ -722,7 +732,10 @@ emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf)
 - This is done by checking the `onBehalfOf` address.
 - The reason for this is to allow both users and us to call the function, to allow for a swift exit.
 
-## 9. States
+## 9. Ending StakingPro
+
+
+## 10. States
 
 unpaused
 - all normal fns
@@ -738,3 +751,4 @@ why disallow unstake when paused?
 - so that can update NFT multipliers w/o distruption
 - if users can unstake - this impacts base staked assets as well as boosted staked assets - causing drift in calcualtions
 - remember updateAllVaultsAndAccounts() is to executed repeatedly, and an unstake() could slip in btw calls the wreck havoc on calculations.
+

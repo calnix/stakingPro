@@ -1,10 +1,10 @@
 # TODO
 
-## 2. endVaults and updateAllVaultsAndAccounts
+## 1. endVaults and updateAllVaultsAndAccounts
 
 consider if there is a way to simplify the logic of these functions.
 
-### 2.1 endVaults and updateAllVaultsAndAccounts use a different approach compared to other functions
+### 1.1 endVaults and updateAllVaultsAndAccounts use a different approach compared to other functions
 
 Does not call `_updateUserAccounts`, like the other functions.
 Instead, it updates a single distribution then calls `_updateVaultAccount` to update the related vault accounts.
@@ -17,6 +17,10 @@ This is because `_updateUserAccounts` gets distribution from storage. So we don'
             DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
             DataTypes.UserAccount memory userAccount_ = userAccounts[user][vaultId][distributionId];
 ```
+
+## 2. Pool endTime
+
+
 
 ---
 
