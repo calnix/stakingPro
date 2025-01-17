@@ -18,9 +18,10 @@ This is because `_updateUserAccounts` gets distribution from storage. So we don'
             DataTypes.UserAccount memory userAccount_ = userAccounts[user][vaultId][distributionId];
 ```
 
-## 2. Pool endTime
+## 2. Write a section on cross-contract calls
 
-
+- cover all cross-contract calls in the staking pro
+- consider when they may revert or fail, due to states: paused, endTime, etc.
 
 ---
 

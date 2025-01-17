@@ -585,7 +585,7 @@ The only thing an operator should do it pause the contract.
 
 # Execution Flow
 
-## 1. setupDistribution
+## 1. Creating a distribution
 
 - called on stakingPro
 - has nested call to rewardsVault to communicate necessary values: `totalRequired`, `dstEid`, `tokenAddress` (bytes32)
@@ -595,6 +595,11 @@ The only thing an operator should do it pause the contract.
 - `tokenAddress` is stored as bytes32, to standardize across evm and non-evm chains
 
 Nested call within stakingPro so that we do not have to make 2 independent txns to setup distribution; reducing human error.
+
+**The rewardsVault must be set before any distributions can be created**
+- If this address has not been set, distributions cannot be created, as the nested call to rewardsVault will revert.
+- Address cannot be set to a zero address.
+- If RewardsVault contract is paused, distributions cannot be created or ended, rewards cannot be claimed. [revert]
 
 ## 2. Deposit tokens
 
@@ -732,8 +737,12 @@ emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf)
 - This is done by checking the `onBehalfOf` address.
 - The reason for this is to allow both users and us to call the function, to allow for a swift exit.
 
-## 9. Ending StakingPro
+## 9. Ending a distribution
 
+- `endDistributionImmediately(uint256 distributionId)`
+- This function enables immediate termination of a distribution by setting its end time to the current block timestamp. 
+- This effectively stops any further rewards from being distributed while preserving all rewards earned up to that point.
+- Distribution must exist and be active (not ended).
 
 ## 10. States
 

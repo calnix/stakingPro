@@ -577,12 +577,13 @@ contract StakingPro is Pausable, Ownable2Step {
     
     /**
      * @notice Sets the end time for the staking pool
-     * @dev Only callable by owner when pool has not ended.
+     * @dev Only callable when contract is not ended or frozen
      * @param endTime_ The new end time for the staking pool
      * @custom:throws InvalidEndTime if endTime_ is 0 or not in the future
      * @custom:emits EndTimeSet when end time is updated
      */
-    function setEndTime(uint256 endTime_) external whenNotEnded onlyOwner {
+    function setEndTime(uint256 endTime_) external whenNotEnded whenNotFrozen onlyOwner {
+        if(isFrozen == 1) revert Errors.IsFrozen();
         if(endTime_ == 0) revert Errors.InvalidEndTime();
         if(endTime_ <= block.timestamp) revert Errors.InvalidEndTime();
 
@@ -591,24 +592,55 @@ contract StakingPro is Pausable, Ownable2Step {
         emit EndTimeSet(endTime_);
     }
 
-    //note: what about setting to 0 to disable the rewards vault?
     /**
      * @notice Updates the rewards vault address
      * @dev Only callable by owner when contract is not paused
+     * @dev Only callable when contract is not ended or frozen
      * @param newRewardsVault The address of the new rewards vault contract
      */
-    function setRewardsVault(address newRewardsVault) external onlyOwner whenNotPaused {
+    function setRewardsVault(address newRewardsVault) external whenNotEnded whenNotFrozen onlyOwner {
         if(newRewardsVault == address(0)) revert Errors.InvalidAddress();       
 
         emit RewardsVaultSet(address(REWARDS_VAULT), newRewardsVault);
         REWARDS_VAULT = IRewardsVault(newRewardsVault);    
     }
 
-    function setRealmPoints(address newRealmPoints) external onlyOwner whenNotPaused {
+    /**
+     * @notice Updates the realm points contract address
+     * @dev Only callable when contract is not ended or frozen
+     * @param newRealmPoints The address of the new realm points contract
+     * @custom:throws InvalidAddress if newRealmPoints is 0
+     * @custom:emits RPContractSet when realm points contract is updated
+     */
+    function setRealmPoints(address newRealmPoints) external whenNotEnded whenNotFrozen onlyOwner {
         if(newRealmPoints == address(0)) revert Errors.InvalidAddress();
-
+    
         emit RPContractSet(RP_CONTRACT, newRealmPoints);
         RP_CONTRACT = newRealmPoints;
+    }
+
+    /**
+     * @notice Updates the number of NFTs required to create a vault
+     * @dev Zero values are accepted, allowing vault creation without NFT requirements
+     * @dev Only callable when contract is not ended or frozen
+     * @param newAmount The new number of NFTs required for vault creation
+     */
+    function updateCreationNfts(uint256 newAmount) external whenNotEnded whenNotFrozen onlyOwner {
+        uint256 oldAmount = CREATION_NFTS_REQUIRED;
+        CREATION_NFTS_REQUIRED = newAmount; 
+
+        emit CreationNftRequirementUpdated(oldAmount, newAmount);
+    }
+
+    /**
+     * @notice Updates the cooldown duration for vaults
+     * @dev Zero values are accepted. New duration can be less or more than current value
+     * @dev Only callable when contract is not ended or frozen
+     * @param newDuration The new cooldown duration to set
+     */
+    function updateVaultCooldown(uint256 newDuration) external whenNotEnded whenNotFrozen onlyOwner {
+        emit VaultCooldownDurationUpdated(VAULT_COOLDOWN_DURATION, newDuration);     
+        VAULT_COOLDOWN_DURATION = newDuration;
     }
 
 
@@ -725,28 +757,7 @@ contract StakingPro is Pausable, Ownable2Step {
     //--------------  NFT MULTIPLIER OVER  ----------------------------
 
 
-    /**
-     * @notice Updates the number of NFTs required to create a vault
-     * @dev Zero values are accepted, allowing vault creation without NFT requirements
-     * @param newAmount The new number of NFTs required for vault creation
-     */
-    function updateCreationNfts(uint256 newAmount) external onlyOwner {
-        uint256 oldAmount = CREATION_NFTS_REQUIRED;
-        CREATION_NFTS_REQUIRED = newAmount; 
 
-        emit CreationNftRequirementUpdated(oldAmount, newAmount);
-    }
-
-    /**
-     * @notice Updates the cooldown duration for vaults
-     * @dev Zero values are accepted. New duration can be less or more than current value
-     * @param newDuration The new cooldown duration to set
-     */
-    function updateVaultCooldown(uint256 newDuration) external onlyOwner {
-        
-        emit VaultCooldownDurationUpdated(VAULT_COOLDOWN_DURATION, newDuration);     
-        VAULT_COOLDOWN_DURATION = newDuration;
-    }
 
     /**
      * @notice Sets up a new token distribution schedule
@@ -1021,6 +1032,10 @@ contract StakingPro is Pausable, Ownable2Step {
         if(endTime > 0 && block.timestamp >= endTime) revert Errors.StakingEnded();
     }
 
+    function _whenNotFrozen() internal view {
+        if(isFrozen == 1) revert Errors.IsFrozen();
+    }
+
     modifier whenStartedAndNotEnded() {
         _whenStarted();
         _whenNotEnded();
@@ -1034,6 +1049,11 @@ contract StakingPro is Pausable, Ownable2Step {
 
     modifier whenNotEnded() {
         _whenNotEnded();
+        _;
+    }
+
+    modifier whenNotFrozen() {
+        _whenNotFrozen();
         _;
     }
 }
