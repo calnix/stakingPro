@@ -783,23 +783,23 @@ contract StakingPro is Pausable, Ownable2Step {
 
 
     /**
-     * @notice Pauses all contract operations and updates distribution indexes
+     * @notice Updates distribution indexes and pauses contract
      * @dev Updates all active distribution indexes to current timestamp before pausing
      * @dev This ensures all rewards are properly calculated and booked up to pause time
      * @custom:throws NoActiveDistributions if there are no active distributions
      */
-    function updateDistributionsAndPause() external onlyOwner whenNotPaused {
-        if(isFrozen == 1) revert Errors.IsFrozen(); 
+    function updateDistributionsAndPause() external whenNotFrozen whenNotEnded whenNotPaused onlyOwner {
 
         // at least staking power should have been setup on deployment
-        if(activeDistributions.length == 0) revert Errors.NoActiveDistributions(); 
-
         uint256 numOfDistributions = activeDistributions.length;
 
-        for(uint256 i; i < numOfDistributions; ++i) {
-            // update distribution index
-            distributions[activeDistributions[i]] 
-                = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distributions[activeDistributions[i]], totalBoostedRealmPoints, totalBoostedStakedTokens, paused());
+        if(numOfDistributions > 0){           
+            
+            for(uint256 i; i < numOfDistributions; ++i) {
+                // update distribution index
+                distributions[activeDistributions[i]] 
+                        = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distributions[activeDistributions[i]], totalBoostedRealmPoints, totalBoostedStakedTokens, paused());
+            }
         }
 
         emit DistributionsUpdated(activeDistributions);
@@ -816,7 +816,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @param vaultIds Array of vault IDs to update
      * @custom:throws InvalidArray if vaultIds array is empty
      */
-    function updateAllVaultAccounts(bytes32[] calldata vaultIds) external {
+    function updateAllVaultAccounts(bytes32[] calldata vaultIds) external whenNotEnded whenNotFrozen {
         uint256 numOfVaults = vaultIds.length;
         if(numOfVaults == 0) revert Errors.InvalidArray();
 
@@ -828,7 +828,7 @@ contract StakingPro is Pausable, Ownable2Step {
 
         PoolLogic.executeUpdateVaultsAndAccounts(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, vaultIds, numOfVaults);
 
-        // EMIT?
+        emit VaultAccountsUpdated(vaultIds);
     }    
 
     /**
@@ -838,7 +838,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws If newMultiplier is 0
      * @custom:emits NftMultiplierUpdated when multiplier is updated
      */
-    function updateNftMultiplier(uint256 newMultiplier) external onlyOwner {
+    function updateNftMultiplier(uint256 newMultiplier) external whenNotEnded whenNotFrozen onlyOwner {
         if(newMultiplier == 0) revert Errors.InvalidMultiplier();
 
         uint256 oldMultiplier = NFT_MULTIPLIER;
@@ -847,9 +847,15 @@ contract StakingPro is Pausable, Ownable2Step {
         emit NftMultiplierUpdated(oldMultiplier, newMultiplier);
     }
 
-    //note: for each vault, update its boosted balances, then update its respective users
-    // ensure NFT_MULTIPLIER has been changed before calling this fn
-    function updateBoostedBalances(bytes32[] calldata vaultIds) external onlyOwner {
+    /**
+     * @notice Updates boosted balances for specified vaults using the current NFT multiplier
+     * @dev Should only be called after NFT_MULTIPLIER has been updated. Recalculates boost factors and updates global totals.
+     * @param vaultIds Array of vault IDs to update boosted balances for
+     * @custom:throws InvalidArray if vaultIds array is empty
+     * @custom:throws NonExistentVault if any vault ID does not exist
+     * @custom:emits BoostedBalancesUpdated when vault boosted balances are updated
+     */
+    function updateBoostedBalances(bytes32[] calldata vaultIds) external whenNotEnded whenNotFrozen onlyOwner {
         uint256 numOfVaults = vaultIds.length;
         if(numOfVaults == 0) revert Errors.InvalidArray();
 
