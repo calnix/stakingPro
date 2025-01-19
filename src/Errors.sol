@@ -36,8 +36,8 @@ library Errors {
     // updateDistribution
     error InvalidDistributionParameters();
     error NonExistentDistribution();
-    error DistributionAlreadyEnded();
     error DistributionStarted();
+    error DistributionEnded();
     error InvalidDistributionStartTime();
     error InvalidDistributionEndTime();
 
@@ -61,7 +61,6 @@ library Errors {
     error NoActiveDistributions();
 
     // endDistributionImmediately
-    error DistributionOver();
     error DistributionManuallyEnded();
 
     // freeze

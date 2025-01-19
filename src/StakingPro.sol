@@ -733,7 +733,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws InvalidDistributionEndTime if new end time is not after start time
      * @custom:emits DistributionUpdated when distribution parameters are modified
      */
-    function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external onlyOwner whenNotPaused {
+    function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external whenNotEnded whenNotFrozen onlyOwner {
 
         if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert Errors.InvalidDistributionParameters(); 
 
@@ -748,11 +748,11 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws DistributionEnded if distribution has already ended
      * @custom:emits DistributionUpdated when distribution is ended
      */
-    function endDistributionImmediately(uint256 distributionId) external onlyOwner whenNotPaused {
+    function endDistributionImmediately(uint256 distributionId) external whenNotEnded whenNotFrozen onlyOwner {
         DataTypes.Distribution memory distribution = distributions[distributionId];
         
         if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
-        if(block.timestamp >= distribution.endTime) revert Errors.DistributionOver();
+        if(block.timestamp >= distribution.endTime) revert Errors.DistributionEnded();
         if(distribution.manuallyEnded == 1) revert Errors.DistributionManuallyEnded();
    
         // update distribution index

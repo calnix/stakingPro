@@ -666,7 +666,7 @@ library PoolLogic {
 
         // Check distribution exists + not ended
         if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
-        if(block.timestamp >= distribution.endTime) revert Errors.DistributionOver();
+        if(block.timestamp >= distribution.endTime) revert Errors.DistributionEnded();
 
         // update distribution index
         distribution = _updateDistributionIndex(distribution, activeDistributions, totalBoostedRealmPoints, totalBoostedStakedTokens, isPaused);
@@ -686,7 +686,7 @@ library PoolLogic {
         if(newEndTime > 0) {
 
             // cannot be in the past
-            if(newEndTime < block.timestamp) revert Errors.InvalidEndTime();
+            if(newEndTime <= block.timestamp) revert Errors.InvalidDistributionEndTime();
 
             // If only endTime is being updated, ensure it's after existing startTime
             if(newStartTime == 0 && newEndTime <= distribution.startTime) revert Errors.InvalidDistributionEndTime();
