@@ -562,7 +562,7 @@ contract StakingPro is Pausable, Ownable2Step {
             uint256 incomingTotalStakedTokens, 
             uint256 incomingTotalBoostedStakedTokens
         ) 
-            = PoolLogic.executeStakeOnBehalfOf(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, vaultIds, onBehalfOf, amounts);
+            = PoolLogic.executeStakeOnBehalfOf(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, vaultIds, onBehalfOfs, amounts);
 
         // EMIT
         //emit StakedTokens(onBehalfOf, vaultIds, incomingTotalStakedTokens);
@@ -643,6 +643,134 @@ contract StakingPro is Pausable, Ownable2Step {
         VAULT_COOLDOWN_DURATION = newDuration;
     }
 
+    /**
+     * @notice Sets up a new token distribution schedule
+     * @dev Can only be called by contract owner. Distribution must not already exist.
+     * @dev Distribution ID 0 is reserved for staking power and is the only ID allowed to have indefinite endTime
+     * @param distributionId Unique identifier for this distribution (0 reserved for staking power)
+     * @param distributionStartTime Timestamp when distribution begins, must be in the future
+     * @param distributionEndTime Timestamp when distribution ends (0 allowed only for ID 0)
+     * @param emissionPerSecond Rate of token emissions per second (must be > 0)
+     * @param tokenPrecision Decimal precision for the distributed token (must be > 0)
+     * @custom:throws ZeroEmissionRate if emission rate is 0
+     * @custom:throws ZeroTokenPrecision if token precision is 0
+     * @custom:throws InvalidStartTime if start time is not in the future
+     * @custom:throws InvalidDistributionEndTime if end time is not after start time
+     * @custom:throws InvalidEndTime if non-zero ID has indefinite end time
+     * @custom:throws DistributionAlreadySetup if distribution with ID already exists
+     * @custom:emits DistributionCreated when distribution is successfully created
+     */
+    function setupDistribution(
+        uint256 distributionId, uint256 distributionStartTime, uint256 distributionEndTime, uint256 emissionPerSecond, uint256 tokenPrecision,
+        uint32 dstEid, bytes32 tokenAddress) external whenNotEnded whenNotFrozen onlyOwner {
+            
+        if (tokenPrecision == 0) revert Errors.ZeroTokenPrecision();
+        if (emissionPerSecond == 0) revert Errors.ZeroEmissionRate();
+
+        if (distributionStartTime <= block.timestamp) revert Errors.InvalidDistributionStartTime();
+        if (distributionEndTime <= distributionStartTime) revert Errors.InvalidDistributionEndTime();
+
+        if(distributionId > 0){
+
+            // only staking power can have indefinite endTime
+            if(distributionEndTime == 0) revert Errors.InvalidDistributionEndTime();
+
+            // LZ sanity checks
+            if(dstEid == 0) revert Errors.InvalidDstEid();
+            if(tokenAddress == bytes32(0)) revert Errors.InvalidTokenAddress();
+        }
+
+        // lazy load startTime, instead of entire struct
+        DataTypes.Distribution storage distributionPointer = distributions[distributionId]; 
+        
+        // check if fresh id
+        if(distributionPointer.startTime > 0) revert Errors.DistributionAlreadySetup();
+            
+        // Initialize struct
+        DataTypes.Distribution memory distribution;
+            distribution.distributionId = distributionId;
+            distribution.TOKEN_PRECISION = tokenPrecision;
+            distribution.endTime = distributionEndTime;
+            distribution.startTime = distributionStartTime;
+            distribution.emissionPerSecond = emissionPerSecond;
+            distribution.lastUpdateTimeStamp = distributionStartTime;
+
+        // update storage
+        distributions[distributionId] = distribution;
+
+        // update distribution tracking
+        activeDistributions.push(distributionId);
+
+        emit DistributionCreated(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision);
+        
+
+        // REWARDS_VAULT setup: only for non-staking power distributions
+        if(distributionId > 0) {
+
+            uint256 totalRequired = (distributionEndTime - distributionStartTime) * emissionPerSecond;
+
+            REWARDS_VAULT.setUpDistribution(distributionId, dstEid, tokenAddress, totalRequired);
+        }
+    }
+
+    /** 
+     * @notice Updates the parameters of an existing distribution
+     * @dev Can modify:
+     *      - startTime (only if distribution hasn't started)
+     *      - endTime (can extend or shorten, must be > block.timestamp)
+     *      - emission rate (can be modified at any time)
+     * @dev At least one parameter must be modified (non-zero)
+     * @param distributionId ID of the distribution to update
+     * @param newStartTime New start time for the distribution. Must be > block.timestamp if modified
+     * @param newEndTime New end time for the distribution. Must be > block.timestamp if modified
+     * @param newEmissionPerSecond New emission rate per second. Must be > 0 if modified
+     * @custom:throws InvalidDistributionParameters if all parameters are 0
+     * @custom:throws NonExistentDistribution if distribution doesn't exist
+     * @custom:throws DistributionEnded if distribution has already ended
+     * @custom:throws DistributionStarted if trying to modify start time after distribution started
+     * @custom:throws InvalidStartTime if new start time is not in the future
+     * @custom:throws InvalidEndTime if new end time is not in the future
+     * @custom:throws InvalidDistributionEndTime if new end time is not after start time
+     * @custom:emits DistributionUpdated when distribution parameters are modified
+     */
+    function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external onlyOwner whenNotPaused {
+
+        if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert Errors.InvalidDistributionParameters(); 
+
+        PoolLogic.executeUpdateDistributionParams(activeDistributions, distributions, distributionId, newStartTime, newEndTime, newEmissionPerSecond, 
+            totalBoostedRealmPoints, totalBoostedStakedTokens, paused());
+    }
+
+    /**
+     * @notice Immediately ends a distribution
+     * @param distributionId ID of the distribution to end
+     * @custom:throws NonExistentDistribution if distribution doesn't exist
+     * @custom:throws DistributionEnded if distribution has already ended
+     * @custom:emits DistributionUpdated when distribution is ended
+     */
+    function endDistributionImmediately(uint256 distributionId) external onlyOwner whenNotPaused {
+        DataTypes.Distribution memory distribution = distributions[distributionId];
+        
+        if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
+        if(block.timestamp >= distribution.endTime) revert Errors.DistributionOver();
+        if(distribution.manuallyEnded == 1) revert Errors.DistributionManuallyEnded();
+   
+        // update distribution index
+        distribution = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distribution, totalBoostedRealmPoints, totalBoostedStakedTokens, paused());
+
+        // end now
+        distribution.endTime = block.timestamp;
+        distribution.manuallyEnded = 1;
+
+        // update storage   
+        distributions[distributionId] = distribution;
+
+        emit DistributionEnded(distributionId, distribution.endTime, distribution.totalEmitted);
+
+        // REWARDS_VAULT endDistributionImmediately: only for token distributions
+        if(distributionId > 0) REWARDS_VAULT.endDistributionImmediately(distributionId);
+    }
+    
 
     //--------------  NFT MULTIPLIER  ----------------------------
     /**    
@@ -755,134 +883,6 @@ contract StakingPro is Pausable, Ownable2Step {
     }
   
     //--------------  NFT MULTIPLIER OVER  ----------------------------
-
-
-
-
-    /**
-     * @notice Sets up a new token distribution schedule
-     * @dev Can only be called by contract owner. Distribution must not already exist.
-     * @dev Distribution ID 0 is reserved for staking power and is the only ID allowed to have indefinite endTime
-     * @param distributionId Unique identifier for this distribution (0 reserved for staking power)
-     * @param distributionStartTime Timestamp when distribution begins, must be in the future
-     * @param distributionEndTime Timestamp when distribution ends (0 allowed only for ID 0)
-     * @param emissionPerSecond Rate of token emissions per second (must be > 0)
-     * @param tokenPrecision Decimal precision for the distributed token (must be > 0)
-     * @custom:throws ZeroEmissionRate if emission rate is 0
-     * @custom:throws ZeroTokenPrecision if token precision is 0
-     * @custom:throws InvalidStartTime if start time is not in the future
-     * @custom:throws InvalidDistributionEndTime if end time is not after start time
-     * @custom:throws InvalidEndTime if non-zero ID has indefinite end time
-     * @custom:throws DistributionAlreadySetup if distribution with ID already exists
-     * @custom:emits DistributionCreated when distribution is successfully created
-     */
-    function setupDistribution(
-        uint256 distributionId, uint256 distributionStartTime, uint256 distributionEndTime, uint256 emissionPerSecond, uint256 tokenPrecision,
-        uint32 dstEid, bytes32 tokenAddress) external onlyOwner {
-            
-        if (emissionPerSecond == 0) revert Errors.ZeroEmissionRate();
-        if (tokenPrecision == 0) revert Errors.ZeroTokenPrecision();
-
-        if (distributionStartTime <= block.timestamp) revert Errors.InvalidStartTime();
-        if (distributionEndTime <= distributionStartTime) revert Errors.InvalidDistributionEndTime();
-
-        // only staking power can have indefinite endTime
-        if(distributionId > 0 && distributionEndTime == 0) revert Errors.InvalidEndTime();
-
-        // lazy load startTime, instead of entire struct
-        DataTypes.Distribution storage distributionPointer = distributions[distributionId]; 
-        
-        // check if fresh id
-        if(distributionPointer.startTime > 0) revert Errors.DistributionAlreadySetup();
-            
-        // Initialize struct
-        DataTypes.Distribution memory distribution;
-            distribution.distributionId = distributionId;
-            distribution.TOKEN_PRECISION = tokenPrecision;
-            distribution.endTime = distributionEndTime;
-            distribution.startTime = distributionStartTime;
-            distribution.emissionPerSecond = emissionPerSecond;
-            distribution.lastUpdateTimeStamp = distributionStartTime;
-
-        // update storage
-        distributions[distributionId] = distribution;
-
-        // update distribution tracking
-        activeDistributions.push(distributionId);
-
-        emit DistributionCreated(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision);
-        
-
-        // REWARDS_VAULT setup: only for non-staking power distributions
-        if(distributionId > 0) {
-
-            if(dstEid == 0) revert Errors.InvalidDstEid();
-            if(tokenAddress == bytes32(0)) revert Errors.InvalidTokenAddress();
-
-            uint256 totalRequired = (distributionEndTime - distributionStartTime) * emissionPerSecond;
-
-            REWARDS_VAULT.setUpDistribution(distributionId, dstEid, tokenAddress, totalRequired);
-        }
-    }
-
-    /** 
-     * @notice Updates the parameters of an existing distribution
-     * @dev Can modify:
-     *      - startTime (only if distribution hasn't started)
-     *      - endTime (can extend or shorten, must be > block.timestamp)
-     *      - emission rate (can be modified at any time)
-     * @dev At least one parameter must be modified (non-zero)
-     * @param distributionId ID of the distribution to update
-     * @param newStartTime New start time for the distribution. Must be > block.timestamp if modified
-     * @param newEndTime New end time for the distribution. Must be > block.timestamp if modified
-     * @param newEmissionPerSecond New emission rate per second. Must be > 0 if modified
-     * @custom:throws InvalidDistributionParameters if all parameters are 0
-     * @custom:throws NonExistentDistribution if distribution doesn't exist
-     * @custom:throws DistributionEnded if distribution has already ended
-     * @custom:throws DistributionStarted if trying to modify start time after distribution started
-     * @custom:throws InvalidStartTime if new start time is not in the future
-     * @custom:throws InvalidEndTime if new end time is not in the future
-     * @custom:throws InvalidDistributionEndTime if new end time is not after start time
-     * @custom:emits DistributionUpdated when distribution parameters are modified
-     */
-    function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external onlyOwner whenNotPaused {
-
-        if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert Errors.InvalidDistributionParameters(); 
-
-        PoolLogic.executeUpdateDistributionParams(activeDistributions, distributions, distributionId, newStartTime, newEndTime, newEmissionPerSecond, 
-            totalBoostedRealmPoints, totalBoostedStakedTokens, paused());
-    }
-
-    /**
-     * @notice Immediately ends a distribution
-     * @param distributionId ID of the distribution to end
-     * @custom:throws NonExistentDistribution if distribution doesn't exist
-     * @custom:throws DistributionEnded if distribution has already ended
-     * @custom:emits DistributionUpdated when distribution is ended
-     */
-    function endDistributionImmediately(uint256 distributionId) external onlyOwner whenNotPaused {
-        DataTypes.Distribution memory distribution = distributions[distributionId];
-        
-        if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
-        if(block.timestamp >= distribution.endTime) revert Errors.DistributionOver();
-        if(distribution.manuallyEnded == 1) revert Errors.DistributionManuallyEnded();
-   
-        // update distribution index
-        distribution = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distribution, totalBoostedRealmPoints, totalBoostedStakedTokens, paused());
-
-        // end now
-        distribution.endTime = block.timestamp;
-        distribution.manuallyEnded = 1;
-
-        // update storage   
-        distributions[distributionId] = distribution;
-
-        emit DistributionEnded(distributionId, distribution.endTime, distribution.totalEmitted);
-
-        // REWARDS_VAULT endDistributionImmediately: only for token distributions
-        if(distributionId > 0) REWARDS_VAULT.endDistributionImmediately(distributionId);
-    }
-    
 
 
 //------------------------------- risk ----------------------------------------------------

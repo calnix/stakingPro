@@ -10,6 +10,8 @@ library Errors {
     error InvalidAddress();
     error InvalidArray();
     error VaultEndTimeSet(bytes32 vaultId);
+    error InvalidStartTime();
+    error InvalidEndTime();
 
     // createVault
     error IncorrectCreationNfts();
@@ -36,8 +38,7 @@ library Errors {
     error NonExistentDistribution();
     error DistributionAlreadyEnded();
     error DistributionStarted();
-    error InvalidStartTime();
-    error InvalidEndTime();
+    error InvalidDistributionStartTime();
     error InvalidDistributionEndTime();
 
     // setupDistribution
