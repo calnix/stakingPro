@@ -514,7 +514,10 @@ The staked NFTs contribute to boosting the vault's staked Tokens and Realm Point
 stakeRP(bytes32 vaultId, uint256 amount, address onBehalfOf) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
 ```
 
+Allows users to stake Realm Points into a specified vault:
 
+- Checks that the vault exists and is not ended
+- Transfers Realm Points from user to contract
 
 ## claimRewards
 
