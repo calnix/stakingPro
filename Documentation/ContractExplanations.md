@@ -647,7 +647,7 @@ Allows the operator/owner to stake on behalf of users:
 ## setEndTime
 
 ```solidity
-setEndTime(uint256 endTime_) external whenNotEnded whenNotPaused onlyOperatorOrOwner
+setEndTime(uint256 endTime_) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE)
 ```
 
 - endTime can be moved forward or backward; as long its a future timestamp
@@ -656,7 +656,7 @@ setEndTime(uint256 endTime_) external whenNotEnded whenNotPaused onlyOperatorOrO
 ## setRewardsVault
 
 ```solidity
-setRewardsVault(address newRewardsVault) external whenNotEnded whenNotPaused onlyOperatorOrOwner
+setRewardsVault(address newRewardsVault) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE)
 ```
 
 - Updates the rewards vault address; cannot be set to a zero address
@@ -674,7 +674,7 @@ This provides flexibility to upgrade reward distribution logic while maintaining
 ## updateMinimumRealmPoints
 
 ```solidity
-updateMinimumRealmPoints(uint256 newAmount) external whenNotEnded whenNotPaused onlyOperatorOrOwner
+updateMinimumRealmPoints(uint256 newAmount) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE)
 ```
 
 - Updates the storage variable `MINIMUM_REALMPOINTS_REQUIRED`; which is referenced in `stakeRP()`.
@@ -684,7 +684,7 @@ updateMinimumRealmPoints(uint256 newAmount) external whenNotEnded whenNotPaused 
 ## updateCreationNfts
 
 ```solidity
-updateCreationNfts(uint256 newAmount) external whenNotEnded whenNotPaused onlyOperatorOrOwner
+updateCreationNfts(uint256 newAmount) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE)
 ```
 
 - Updates the storage variable `CREATION_NFTS_REQUIRED`; which is referenced in `createVault()`.
@@ -693,7 +693,7 @@ updateCreationNfts(uint256 newAmount) external whenNotEnded whenNotPaused onlyOp
 ## updateVaultCooldown
 
 ```solidity
-updateVaultCooldown(uint256 newDuration) external whenNotEnded whenNotPaused onlyOperatorOrOwner
+updateVaultCooldown(uint256 newDuration) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE)
 ```
 
 - Updates the storage variable `VAULT_COOLDOWN_DURATION`; which is referenced in `activateCooldown()`.
@@ -704,7 +704,7 @@ updateVaultCooldown(uint256 newDuration) external whenNotEnded whenNotPaused onl
 ```solidity
 setupDistribution(uint256 distributionId, uint256 distributionStartTime, uint256 distributionEndTime, uint256 emissionPerSecond, uint256 tokenPrecision,
         uint32 dstEid, bytes32 tokenAddress
-    ) external whenNotEnded whenNotPaused onlyOperatorOrOwner 
+    ) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) 
 ```
 
 Creates a new distribution with specified parameters:
@@ -756,7 +756,7 @@ staking power will be identified by its distribution id as 0, throughout the con
 ## updateDistribution
 
 ```solidity
-updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external whenNotEnded whenNotFrozen onlyOperatorOrOwner
+updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external whenNotEnded whenNotFrozen onlyRole(OPERATOR_ROLE)
 ```
 
 Allows modification of parameters of an existing distribution:
@@ -779,7 +779,7 @@ This function enables flexible management of reward distributions by allowing ad
 ## endDistributionImmediately
 
 ```solidity
-endDistributionImmediately(uint256 distributionId) external whenNotEnded whenNotFrozen onlyOperatorOrOwner
+endDistributionImmediately(uint256 distributionId) external whenNotEnded whenNotFrozen onlyRole(OPERATOR_ROLE)
 ```
 
 Allows owner to immediately terminate an active distribution:
@@ -815,7 +815,7 @@ disableMaintenance() external whenNotPaused whenUnderMaintenance onlyOperatorOrO
 ## updateDistributions
 
 ```solidity
-updateDistributions() external whenNotEnded whenNotPaused whenUnderMaintenance onlyOperatorOrOwner
+updateDistributions() external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE)
 ```
 
 - Updates all active distribution indexes to current timestamp
@@ -825,7 +825,7 @@ updateDistributions() external whenNotEnded whenNotPaused whenUnderMaintenance o
 ## updateAllVaultAccounts
 
 ```solidity
-updateAllVaultAccounts(bytes32[] calldata vaultIds) external whenNotEnded whenNotPaused whenUnderMaintenance onlyOperatorOrOwner
+updateAllVaultAccounts(bytes32[] calldata vaultIds) external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE)
 ```
 
 - Updates all vault accounts for all active distributions
@@ -835,7 +835,7 @@ updateAllVaultAccounts(bytes32[] calldata vaultIds) external whenNotEnded whenNo
 ## updateNftMultiplier
 
 ```solidity
-updateNftMultiplier(uint256 newMultiplier) external whenNotEnded whenNotPaused whenUnderMaintenance onlyOperatorOrOwner
+updateNftMultiplier(uint256 newMultiplier) external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE)
 ```
 
 - Updates the NFT multiplier
@@ -844,7 +844,7 @@ updateNftMultiplier(uint256 newMultiplier) external whenNotEnded whenNotPaused w
 ## updateBoostedBalances
 
 ```solidity
-updateBoostedBalances(bytes32[] calldata vaultIds) external whenNotEnded whenNotPaused whenUnderMaintenance onlyOperatorOrOwner
+updateBoostedBalances(bytes32[] calldata vaultIds) external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE)
 ```
 
 - This function is expected to be called multiple times, until all vaults have been updated to use the latest `NFT_MULTIPLIER` value
