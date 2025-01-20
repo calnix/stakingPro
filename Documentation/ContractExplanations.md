@@ -511,15 +511,102 @@ The staked NFTs contribute to boosting the vault's staked Tokens and Realm Point
 ## stakeRP
 
 ```solidity
-stakeRP(bytes32 vaultId, uint256 amount, address onBehalfOf) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+stakeRP(bytes32 vaultId, uint256 amount, uint256 expiry, bytes calldata signature) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
 ```
 
 Allows users to stake Realm Points into a specified vault:
 
 - Checks that the vault exists and is not ended
-- Transfers Realm Points from user to contract
+- Amount must be greater than `MINIMUM_REALMPOINTS_REQUIRED`
+- Signature must not be expired or already executed
+- Signature must be valid and from the stored signer
+
+## unstakeAll
+
+```solidity
+unstakeAll(bytes32 vaultId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+```
+
+Allows users to unstake all their staked tokens and Nfts from a specified vault:
+
+- Checks that the vault exists and is not ended
+- Unstakes all staked tokens and Nfts
+- Updates NFT_REGISTRY to record unstake (NFT_REGISTRY.recordUnstake)
+
+## migrateVaults
+
+```solidity
+migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance 
+```
+
+Allows users to migrate their staked tokens and Nfts from one vault to another:
+
+- Checks that the old vault exists
+- Checks that the new vault exists and is not ended
+- Migrates all staked tokens and Nfts from the old vault to the new vault
+- Calls NFT_REGISTRY to record unstake on the old vault, and stake on the new vault
 
 ## claimRewards
+
+```solidity
+claimRewards(bytes32 vaultId, uint256 distributionId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+```
+
+Allows users to claim rewards from a specified vault:
+
+- Checks that the distributionId is not 0.
+- Calls RewardsVault to transfer rewards to the user
+
+## updateVaultFees
+
+```solidity
+updateVaultFees(bytes32 vaultId, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+```
+
+Updates the fees for a specified vault:
+
+- Only the vault creator can update fees
+- Creator can only decrease their creator fee factor
+- Total of all fees cannot exceed 50% [MocaToken stakers receive at least 50% of rewards]
+
+## activateCooldown
+
+```solidity
+activateCooldown(bytes32 vaultId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+```
+
+Activates the cooldown period for a vault:
+
+- If `VAULT_COOLDOWN_DURATION` is 0, vault is immediately removed from circulation
+- When removed, all vault's staked assets are deducted from global totals
+
+If `VAULT_COOLDOWN_DURATION` is of non-zero value, the vault's endTime is set to `block.timestamp` + `VAULT_COOLDOWN_DURATION`.
+While this sets the endTime of the vault, it does not necessarily mean that the vault will be removed from circulation immediately.
+That would be handled by the `endVaults()` function.
+
+## endVaults
+
+```solidity
+endVaults(bytes32[] calldata vaultIds) external onlyOwner
+```
+
+- Ends multiple vaults
+- Removes all staked assets from circulation and updates global totals
+- Callable by anyone; no access control restrictions
+- Checks if endTime was set, as per `activateCooldown()`, else skips to next vault
+
+## stakeOnBehalfOf
+
+```solidity
+stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOfs, uint256[] calldata amounts) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance onlyOperatorOrOwner
+```
+
+Allows the operator/owner to stake on behalf of users:
+
+- Checks that the vault exists and is not ended
+- Transfers tokens from the function caller to the contract
+
+
 
 # Owner functions
 

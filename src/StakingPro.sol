@@ -49,6 +49,9 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     // vault 
     uint256 public CREATION_NFTS_REQUIRED;
     uint256 public VAULT_COOLDOWN_DURATION;
+    
+    address internal immutable STORED_SIGNER;                 // can this be immutable? 
+    uint256 public MINIMUM_REALMPOINTS_REQUIRED;
 
     // pool states
     uint256 public isFrozen;
@@ -58,12 +61,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     address public operator;
 
     // distributions
-    uint256[] public activeDistributions;    // array stores key values for distributions mapping; includes not yet started distributions
-    
-    address internal immutable STORED_SIGNER;                 // can this be immutable? 
-    uint256 public MINIMUM_REALMPOINTS_REQUIRED;
-    // has signature been executed: 1 is true, 0 is false [replay attack prevention]
-    mapping(bytes signature => uint256 executed) public executedSignatures;
+    uint256[] public activeDistributions;    // array stores key values for distributions mapping; includes not yet started distributions  
 
 //-------------------------------mappings--------------------------------------------
 
@@ -82,6 +80,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     // rewards accrued per user, per distribution
     mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) public userAccounts;
 
+    // has signature been executed: 1 is true, 0 is false [replay attack prevention]
+    mapping(bytes signature => uint256 executed) public executedSignatures;
 
 //-------------------------------constructor------------------------------------------
 
@@ -245,9 +245,16 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     /**
      * @notice Stakes realm points into a vault
-     * @dev Only callable by the RealmPoints contract
+     * @dev Requires a valid signature from the stored signer to authorize the staking
      * @param vaultId The ID of the vault to stake realm points into
      * @param amount The amount of realm points to stake
+     * @param expiry The expiry timestamp of the signature
+     * @param signature The signature to verify
+     * @custom:requirements
+     * - Amount must be greater than MINIMUM_REALMPOINTS_REQUIRED
+     * - Signature must not be expired or already executed
+     * - Signature must be valid and from the stored signer
+     * - Contract must not be paused and staking must have started
      */
     function stakeRP(bytes32 vaultId, uint256 amount, uint256 expiry, bytes calldata signature) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(vaultId == 0) revert Errors.InvalidVaultId();
@@ -264,6 +271,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
         
         address signer = ECDSA.recover(digest, signature);
         if(signer != STORED_SIGNER) revert Errors.InvalidSignature(); 
+
 
         // set signature to executed
         executedSignatures[signature] = 1;
@@ -290,7 +298,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @notice Unstakes all tokens and NFTs from a vault
      * @dev Updates accounting, transfers tokens, and records NFT unstaking
      * @param vaultId The ID of the vault to unstake from
-     * @custom:emits UnstakedTokens, UnstakedNfts
      */
     function unstakeAll(bytes32 vaultId) external whenStarted whenNotPaused whenNotUnderMaintenance {
         if(isFrozen == 1) revert Errors.IsFrozen();
@@ -390,9 +397,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      *      3. NFT staking rewards
      *      4. Creator rewards (if caller is vault creator)
      * @dev Not applicable to distributionId:0 which is the staking power distribution
-     * @custom:throws InvalidVaultId if vaultId is 0
-     * @custom:throws StakingPowerDistribution if distributionId is 0
-     * @custom:emits RewardsClaimed when rewards are successfully claimed
      */
     function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted whenNotPaused whenNotUnderMaintenance {   
         if(vaultId == 0) revert Errors.InvalidVaultId();
@@ -442,9 +446,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @dev If VAULT_COOLDOWN_DURATION is 0, vault is immediately removed from circulation
      * @dev When removed, all vault's staked assets are deducted from global totals
      * @param vaultId The ID of the vault to activate cooldown
-     * @custom:throws InvalidVaultId if vaultId is 0
-     * @custom:emits VaultRemoved when vault is immediately removed (zero cooldown)
-     * @custom:emits VaultCooldownInitiated when cooldown period begins
      */
     function activateCooldown(bytes32 vaultId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(vaultId == 0) revert Errors.InvalidVaultId();
