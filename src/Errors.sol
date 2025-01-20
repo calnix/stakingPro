@@ -9,7 +9,9 @@ library Errors {
     error InvalidVaultId();
     error InvalidAddress();
     error InvalidArray();
-    error VaultAlreadyEnded(bytes32 vaultId);
+    error VaultEndTimeSet(bytes32 vaultId);
+    error InvalidStartTime();
+    error InvalidEndTime();
 
     // createVault
     error IncorrectCreationNfts();
@@ -30,15 +32,13 @@ library Errors {
 
     // _cache
     error NonExistentVault(bytes32 vaultId);
-    error VaultEnded(bytes32 vaultId, uint256 endTime);
 
     // updateDistribution
     error InvalidDistributionParameters();
     error NonExistentDistribution();
-    error DistributionAlreadyEnded();
     error DistributionStarted();
-    error InvalidStartTime();
-    error InvalidEndTime();
+    error DistributionEnded();
+    error InvalidDistributionStartTime();
     error InvalidDistributionEndTime();
 
     // setupDistribution
@@ -61,12 +61,15 @@ library Errors {
     error NoActiveDistributions();
 
     // endDistributionImmediately
-    error DistributionOver();
     error DistributionManuallyEnded();
 
     // freeze
     error IsFrozen();
     error NotFrozen();
 
-    // endTime
+    // Operator+Maintenance
+    error NotOperatorOrOwner();
+    error AlreadyInMaintenance();
+    error NotInMaintenance();
+    error InMaintenance();
 }

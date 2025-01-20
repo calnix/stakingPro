@@ -53,15 +53,6 @@ contract DataTypes {
         uint256 totalClaimedRewards;        // total: staking, nft, creator, rp
     }
 
-    //note: can consider removing; unless stack issues
-    struct Fees {
-        // fees: pct values
-        uint256 nftFeeFactor;
-        uint256 creatorFeeFactor;   
-        uint256 realmPointsFeeFactor;
-    }
-
-
     /*//////////////////////////////////////////////////////////////
                                   USER
     //////////////////////////////////////////////////////////////*/
@@ -116,7 +107,30 @@ contract DataTypes {
         uint256 totalEmitted;
         uint256 lastUpdateTimeStamp;  
 
+        // state
         uint256 manuallyEnded;
     }
+
+    /*//////////////////////////////////////////////////////////////
+                                INPUTS 
+    //////////////////////////////////////////////////////////////*/
+
+    struct UpdateAccountsIndexesParams {
+        address user;
+        bytes32 vaultId;       
+        uint256 PRECISION_BASE;
+        bool isPaused;
+
+        // boosted balances
+        uint256 totalBoostedRealmPoints;
+        uint256 totalBoostedStakedTokens;
+    }
+
+    struct GenericParams {
+        uint256 amount;
+        uint256 NFT_MULTIPLIER;
+        uint256[] tokenIds;
+    }
+
 
 }

@@ -264,6 +264,25 @@ Increasing `NFT_MULTIPLIER` beyond `10_000` changes the boost from fractional to
         uint256 incomingBoostedStakedTokens = (amount * vault.totalBoostFactor) / PRECISION_BASE;
 ```
 
+Example:
+
+```solidity
+    function ret() external pure returns(uint256) {
+        
+        uint256 PRECISION_BASE = 10_000;
+        
+        uint256 vaultTotalBoostFactor = PRECISION_BASE; //init at 100%  
+
+        uint256 NFT_MULTIPLIER = 1000;                     // 10% = 1000/10_000 = 1000/PRECISION_BASE 
+        vaultTotalBoostFactor = vaultTotalBoostFactor + (1 * NFT_MULTIPLIER);   // 10_000 + 1000 = 11_000
+        
+        uint256 amount = 10;
+        uint256 incomingBoostedStakedTokens = (amount * vaultTotalBoostFactor) / PRECISION_BASE; // amount * (11_000/10_000) = amount * 11
+
+        return incomingBoostedStakedTokens; // RETURNS 11
+    }
+```
+
 Exceeding `10_000` is acceptable for NFT_MULTIPLIER, and it can still retain 2dp precision.
 
 ```solidity
@@ -365,37 +384,147 @@ staking power
 
 # Contract Walkthrough
 
-## Constructor
+## Constructor & Initial setup
 
 ```solidity
- constructor(address registry, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
-        address owner, string memory name, string memory version) payable EIP712(name, version) Ownable(owner)
+    constructor(address registry, address stakedToken, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
+        address owner) payable Ownable(owner) {...}
 ```
 
 On deployment, the following must be defined:
 
-1. address of nft registry contract (should be deployed in advance)
-2. startTime: user are only able to call staking functions after startTime.
-3. nftMultiplier: boost factor per nft
-4. creationNftsRequired: number of creation nfts required per vault
-5. vaultCoolDownDuration: cooldown period of vault before ending permanently
+1. address of nft registry contract
+2. address of staked token
+3. startTime: user are only able to call staking functions after startTime.
+4. nftMultiplier: multiplier factor per nft
+5. creationNftsRequired: number of nfts required to create a vault
+6. vaultCoolDownDuration: cooldown period of vault before ending permanently
 
+This expects that the nft registry contract should be deployed in advance.
 
+We need to then deploy the following contracts:
+- RewardsVault
+- RealmPoints
+
+We need to then set the following, on the stakingPro contract:
+- RewardsVault address
+- RealmPoints address
+
+## Roles
+
+1. Owner [Multi-sig]
+2. Operator [EOA]
+3. Users
+
+## Pool States
+
+- ended
+- paused/unpaused
+- frozen
+- underMaintenance
+
+1. ended: contract is ended, as dictated by its endTime. Users can only claim rewards and unstake.
+2. paused: contract is paused, all user functions revert.
+3. frozen: contract is frozen, all user functions revert except for emergencyExit().
+4. underMaintenance: contract is under maintenance, all user functions revert.
+
+### Under Maintenance
+
+Contract is set to `underMaintenance` when there is a need to update the NFT_MULTIPLIER value.
+
+Process:
+    1. enableMaintenance
+    2. updateDistributions
+    3. updateAllVaultAccounts
+    4. updateNftMultiplier
+    5. updateBoostedBalances
+    6. disableMaintenance
+
+Setting the contract to `underMaintenance` will prevent users from staking, unstaking, claiming rewards, or creating new vaults.
+This is to ensure that the NFT_MULTIPLIER is updated correctly, and that the boosted balances are updated correctly.
+
+### Pause/Unpause
+
+Contract is set to `paused` when there is a need to assess for possible security issues.
+If there are no security issues, the contract can be unpaused.
+
+If there are security issues, the contract is frozen.
+
+### Frozen
+
+Contract is set to `frozen` when there are irreparable issues with the contract.
+This is to prevent any further damage to the contract, and to ensure that the contract is not used anymore.
+
+Once frozen, users can only call `emergencyExit()`, which will allow users to reclaim their principal staked assets.
+Any unclaimed rewards and fees are forfeited.
+
+Note: `emergencyExit()` assumes that the contract is broken and any state updates made to be invalid; hence it does not update rewards and fee calculations.
+
+# User functions
+
+## createVault
+
+```solidity
+createVault(
+    uint256[] calldata tokenIds, 
+    uint256 nftFeeFactor, 
+    uint256 creatorFeeFactor, 
+    uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+```
+
+Creates a new vault for staking with specified fee parameters:
+
+- nftMultiplier: multiplier factor per nft
+- creationNftsRequired: number of nfts required to create a vault
+- vaultCoolDownDuration: cooldown period of vault before ending permanently
+
+Requires the creator to have the required number of nfts.
+These nfts are locked, and do not count towards rewards calculations.
+
+## stakeTokens
+
+```solidity
+stakeTokens(bytes32 vaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+```
+
+Allows users to stake tokens into a specified vault:
+
+- Checks that the vault exists and is not ended
+- Transfers tokens from user to contract
+
+Note that staking tokens does not automatically stake NFTs or Realm Points - these must be staked separately via their respective functions.
+
+## stakeNfts
+
+```solidity
+stakeNfts(bytes32 vaultId, uint256[] calldata tokenIds) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+```
+
+Allows users to stake NFTs into a specified vault:
+
+- Checks that the vault exists and is not ended
+- Calls NFT_REGISTRY.checkIfUnassignedAndOwned(), to check if the NFTs are unassigned and owned by the user
+- Calls NFT_REGISTRY.recordStake(), to record vault assignment so that the NFTs cannot be staked in another vault
+
+The staked NFTs contribute to boosting the vault's staked Tokens and Realm Points, which determines its share of rewards from active distributions.
+
+## stakeRP
+
+```solidity
+stakeRP(bytes32 vaultId, uint256 amount, address onBehalfOf) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+```
+
+Allows users to stake Realm Points into a specified vault:
+
+- Checks that the vault exists and is not ended
+- Transfers Realm Points from user to contract
+
+## claimRewards
 
 # Owner functions
 
 ## updateNftMultiplier [!!!]
 
-When all the vaults have been updated to use the latest `NFT_MULTIPLIER` value, `totalBoostedStakedTokens` and `totalBoostedRealmPoints` should match up.
-This serves as a sanity check to ensure that the multiplier is updated correctly, as well as the vaults are updated correctly.
-
-Process:
-
-1. pause contract
-2. close all the books: distributions, vaultAccounts [updateAllVaultsAndAccounts]
-3. update Nft Multiplier [updateNftMultiplier]
-4. totalBoosted values and vault boosted values are now different: update all vault and user Structs. [updateBoostedBalances]
-5. unpause
 
 ## updateCreationNfts
 
@@ -573,10 +702,12 @@ The only thing an operator should do it pause the contract.
         // - update user's account
 
 ```
+## 2. how rewards are calculated: distribution, vault, user
+
 
 # Execution Flow
 
-## 1. setupDistribution
+## 1. Creating a distribution
 
 - called on stakingPro
 - has nested call to rewardsVault to communicate necessary values: `totalRequired`, `dstEid`, `tokenAddress` (bytes32)
@@ -586,6 +717,11 @@ The only thing an operator should do it pause the contract.
 - `tokenAddress` is stored as bytes32, to standardize across evm and non-evm chains
 
 Nested call within stakingPro so that we do not have to make 2 independent txns to setup distribution; reducing human error.
+
+**The rewardsVault must be set before any distributions can be created**
+- If this address has not been set, distributions cannot be created, as the nested call to rewardsVault will revert.
+- Address cannot be set to a zero address.
+- If RewardsVault contract is paused, distributions cannot be created or ended, rewards cannot be claimed. [revert]
 
 ## 2. Deposit tokens
 
@@ -656,41 +792,54 @@ The expectation is that we call endVaults() on all the vaults that have come to 
 
 [!!!]: confirm that _udpateVaultsAndAccounts() is failing after endtime. consider a removed check?
 
-## 6. Updating NFT_MULTIPLIER
+## 6. Updating NFT_MULTIPLIER (pause, update, unpause)
 
 Process:
 
-1. call `pause()`: closes all the books; update indexes to NOW; then pauses contract.
-2. update NFT multiplier: `updateNftMultiplier()`
-3. recalculate boostedBalance: `updateBoostedBalances()`
-4. call `unpause()`: unpauses contract.
+1. call `updateDistributionsAndPause()`: updates all distribution indexes, then pauses contract.
+2. call `updateAllVaultAccounts()`: updates all vault indexes
+3. update NFT multiplier: `updateNftMultiplier()`
+4. recalculate boostedBalance: `updateBoostedBalances(bytes32[] calldata vaultIds)`
+5. call `unpause()`: unpauses contract.
 
-During this process, no one should be able to call any functions, including `unstakeAll`.
-Cos if a user unstakes, boosted balances could be incorrectly calculated and updated.
+We will need to call `updateBoostedBalances()` multiple times for all vaults that have been updated.
+During this process, user functions are disabled, as calling them during this process will result in incorrect calculations.
 
-Easier, to lockdown the contract, update, verify that the updated totalBoosted global values tally with the expected values.
-Else, end the contract and redeploy.
+E.g. an unstake() could slip in btw `updateBoostedBalances()` calls and wreck havoc on calculations.
 
-## 7. How to end stakingPro and/or migrate to a new stakingPro contract
+Hence, lock the contract, update, verify that the updated totalBoosted global values tally with the expected values.
+If verification fails, end the contract and redeploy.
 
-Set endTime global variable.
-Users will be able to call: `unstakeAll` and `claimRewards` after endTime.
+When all the vaults have been updated to use the latest `NFT_MULTIPLIER` value, `totalBoostedStakedTokens` and `totalBoostedRealmPoints` should match up.
+This serves as a sanity check to ensure that the multiplier is updated correctly, as well as the vaults are updated correctly.
 
-It is not possible to nest `claimRewards` within `unstakeAll`, as `claimRewards` operates on a per-distribution basis. Hence, 2 functions are needed.
+Note: `_updateDistributionIndex` returns if paused. This prevents multiple updates to distribution indexes during `updateAllVaultAccounts()`.
 
-## 8. Emergency Exit
+## 7. How to end stakingPro and/or migrate to a new stakingPro contract (endTime)
+
+- Set endTime global variable via `setEndTime`.
+- Users will be able to call: `unstakeAll` and `claimRewards` after `endTime`.
+- `setEndTime` can be called repeatedly, by owner, to update `endTime`.
+- `endTime` can be moved forward or backward.
+
+**What if endTime is set, but there are still active distributions continuing beyond endTime?**
+
+- `unstake` and `claimRewards` are callable even after `endTime`.
+- Calling these functions after `endTime` would mean that if there are still active distributions, the distributions would be updated via _updateUserAccounts::_updateDistributionIndex.
+
+Hence, when calling `setEndTime`, we should check if there are still active distributions beyond endTime.
+If there are, we should end those distributions via `updateDistribution`.
+
+>It is not possible to nest `claimRewards` within `unstakeAll`, as `claimRewards` operates on a per-distribution basis. Hence, 2 functions are needed.
+
+## 8. Emergency Exit (whenPaused, Frozen)
 
 Assuming black swan event, we can call `emergencyExit` to allow users to exit.
 Function is callable by anyone, but only after the contract has been paused and frozen.
 
-1. pause() -> only unstake
-2. freeze() -> cannot unpause
-3. emergencyExit() -> only unstake
-
-After pausing, users can only call `unstakeAll` and `claimRewards`.
-However, once **frozen**, users can no longer call `unstakeAll` or `claimRewards`.
-
-They can only call `emergencyExit` to recover their tokens.
+1. pause(): all user fns are disabled
+2. freeze(): cannot unpause; only emergencyExit() can be called
+3. emergencyExit(): exfil all principal assets
 
 ```solidity
 emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf)
@@ -709,3 +858,26 @@ emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf)
 
 - This is done by checking the `onBehalfOf` address.
 - The reason for this is to allow both users and us to call the function, to allow for a swift exit.
+
+## 9. Ending a distribution
+
+- `endDistributionImmediately(uint256 distributionId)`
+- This function enables immediate termination of a distribution by setting its end time to the current block timestamp. 
+- This effectively stops any further rewards from being distributed while preserving all rewards earned up to that point.
+- Distribution must exist and be active (not ended).
+
+## 10. States
+
+unpaused
+- all normal fns
+
+paused
+- claimRewards
+
+frozen
+- emergencyExit
+
+why disallow unstake when paused?
+- so that can update NFT multipliers w/o distruption
+- if users can unstake - this impacts base staked assets as well as boosted staked assets - causing drift in calculations
+- remember updateAllVaultsAndAccounts() is to executed repeatedly, and an unstake() could slip in btw calls the wreck havoc on calculations.

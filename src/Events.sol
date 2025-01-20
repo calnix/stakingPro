@@ -19,7 +19,7 @@ event StakedTokens(address indexed user, bytes32 indexed vaultId, uint256 amount
 
 // stakeNfts
 event StakedNfts(address indexed user, bytes32 indexed vaultId, uint256[] tokenIds);
-event VaultBoostFactorUpdated(bytes32 indexed vaultId, uint256 newBoostFactor);
+event VaultBoostFactorUpdated(bytes32 indexed vaultId, uint256 oldBoostFactor, uint256 newBoostFactor);
 
 // stakeRP
 event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 amount, uint256 boostedAmount);
@@ -40,6 +40,7 @@ event RealmPointsFeeFactorUpdated(bytes32 indexed vaultId, uint256 oldFactor, ui
 event VaultRemoved(bytes32 indexed vaultId);
 event VaultsRemoved(bytes32[] vaultIds, uint256 vaultsNotEnded);
 event VaultCooldownInitiated(bytes32 indexed vaultId);
+event VaultAccountsUpdated(bytes32[] vaultIds);
 
 // migrateVaults
 event VaultMigrated(
@@ -57,7 +58,7 @@ event DistributionUpdated(uint256 indexed distributionId, uint256 startTime, uin
 event DistributionIndexUpdated(uint256 indexed distributionId, uint256 lastUpdateTimestamp, uint256 oldIndex, uint256 newIndex);
 event DistributionCompleted(uint256 indexed distributionId, uint256 endTime, uint256 totalEmitted);
 
-event DistributionEnded(uint256 indexed distributionId);
+event DistributionEnded(uint256 indexed distributionId, uint256 endTime, uint256 totalEmitted);
 
 // admin configuration
 event RewardsVaultSet(address indexed oldVault, address indexed newVault);
@@ -77,10 +78,18 @@ event DistributionsUpdated(uint256[] distributionIds);
 // endTime
 event EndTimeSet(uint256 endTime);
 
+// stakeOnBehalfOf
+//event StakedOnBehalfOf(address indexed user, bytes32[] indexed vaultIds, uint256[] amounts);
+
 // emergencyExit
 event UnstakedTokens(address indexed user, bytes32[] indexed vaultIds, uint256 amount);
 event UnstakedNfts(address indexed user, bytes32[] indexed vaultIds, uint256[] tokenIds);
 
+// Operator+Maintenance
+event MaintenanceDisabled(uint256 timestamp);
+event MaintenanceEnabled(uint256 timestamp);
+event OperatorSet(address indexed oldOperator, address indexed newOperator);
+event OperatorReset(address indexed operator);
 
 //---------------- Realm Points contract ----------------
 event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 amount);
