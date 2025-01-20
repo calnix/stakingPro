@@ -48,12 +48,16 @@ contract StakingPro is Pausable, Ownable2Step {
     uint256 public CREATION_NFTS_REQUIRED;
     uint256 public VAULT_COOLDOWN_DURATION;
 
+    // pool states
+    uint256 public isFrozen;
+    uint256 public isUnderMaintenance;
+
+    // operator role
+    address public operator;
+
     // distributions
     uint256[] public activeDistributions;    // array stores key values for distributions mapping; includes not yet started distributions
-
-    // pool emergency state
-    uint256 public isFrozen;
-
+    
 
 //-------------------------------mappings--------------------------------------------
 
@@ -517,6 +521,39 @@ contract StakingPro is Pausable, Ownable2Step {
         totalBoostedRealmPoints -= totalBoostedRealmPointsToRemove;
     }
 
+    
+    /**
+     * @notice Stakes tokens on behalf of multiple users into multiple vaults
+     * @dev Only callable by owner when contract is active and not paused
+     * @param vaultIds Array of vault IDs to stake into
+     * @param onBehalfOfs Array of addresses to stake on behalf of
+     * @param amounts Array of token amounts to stake for each user
+     */
+    function stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOfs, uint256[] calldata amounts) external whenStartedAndNotEnded whenNotPaused onlyOwner {
+
+        DataTypes.UpdateAccountsIndexesParams memory params;
+            params.PRECISION_BASE = PRECISION_BASE;
+            params.totalBoostedRealmPoints = totalBoostedRealmPoints;
+            params.totalBoostedStakedTokens = totalBoostedStakedTokens;
+
+        (
+            uint256 incomingTotalStakedTokens, 
+            uint256 incomingTotalBoostedStakedTokens
+        ) 
+            = PoolLogic.executeStakeOnBehalfOf(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, vaultIds, onBehalfOfs, amounts);
+
+        // EMIT
+        //emit StakedTokens(onBehalfOf, vaultIds, incomingTotalStakedTokens);
+
+        // update storage: variables
+        totalStakedTokens += incomingTotalStakedTokens;
+        totalBoostedStakedTokens += incomingTotalBoostedStakedTokens;
+        
+        // grab MOCA: from msg.sender to this contract
+        STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), incomingTotalStakedTokens);
+    }
+
+
 //-------------------------------internal------------------------------------------- 
 
     ///@dev concat two uint256 arrays: [1,2,3],[4,5] -> [1,2,3,4,5]
@@ -547,33 +584,13 @@ contract StakingPro is Pausable, Ownable2Step {
 
 //-------------------------------pool management-------------------------------------------
 
+
+
     /*//////////////////////////////////////////////////////////////
                             POOL MANAGEMENT
     //////////////////////////////////////////////////////////////*/
 
-    function stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOfs, uint256[] calldata amounts) external whenStartedAndNotEnded whenNotPaused onlyOwner {
 
-        DataTypes.UpdateAccountsIndexesParams memory params;
-            params.PRECISION_BASE = PRECISION_BASE;
-            params.totalBoostedRealmPoints = totalBoostedRealmPoints;
-            params.totalBoostedStakedTokens = totalBoostedStakedTokens;
-
-        (
-            uint256 incomingTotalStakedTokens, 
-            uint256 incomingTotalBoostedStakedTokens
-        ) 
-            = PoolLogic.executeStakeOnBehalfOf(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, vaultIds, onBehalfOfs, amounts);
-
-        // EMIT
-        //emit StakedTokens(onBehalfOf, vaultIds, incomingTotalStakedTokens);
-
-        // update storage: variables
-        totalStakedTokens += incomingTotalStakedTokens;
-        totalBoostedStakedTokens += incomingTotalBoostedStakedTokens;
-        
-        // grab MOCA: from msg.sender to this contract
-        STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), incomingTotalStakedTokens);
-    }
     
     /**
      * @notice Sets the end time for the staking pool
@@ -583,7 +600,6 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:emits EndTimeSet when end time is updated
      */
     function setEndTime(uint256 endTime_) external whenNotEnded whenNotFrozen onlyOwner {
-        if(isFrozen == 1) revert Errors.IsFrozen();
         if(endTime_ == 0) revert Errors.InvalidEndTime();
         if(endTime_ <= block.timestamp) revert Errors.InvalidEndTime();
 
@@ -772,15 +788,50 @@ contract StakingPro is Pausable, Ownable2Step {
     }
     
 
-    //--------------  NFT MULTIPLIER  ----------------------------
+//--------------  NFT MULTIPLIER  ----------------------------
+    
     /**    
-        1. updateDistributionsAndPause
-        2. updateAllVaultAccounts
-        3. updateNftMultiplier
-        4. updateBoostedBalances
-        5. unpause
+        1. enableMaintenance
+        2. updateDistributions
+        3. updateAllVaultAccounts
+        4. updateNftMultiplier
+        5. updateBoostedBalances
+        6. disableMaintenance
      */
 
+    
+    /*//////////////////////////////////////////////////////////////
+                            MAINTENANCE
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Sets contract to maintenance mode for operational updates
+     * @dev Only callable by operator when contract is not paused or frozen
+     */
+    function enableMaintenance() external whenNotPaused whenNotUnderMaintenance onlyOperatorOrOwner {
+        if(isUnderMaintenance == 1) revert Errors.AlreadyInMaintenance();
+        
+        isUnderMaintenance = 1;
+        
+        emit MaintenanceEnabled(block.timestamp);
+    }
+
+    /**
+     * @notice Disables maintenance mode
+     * @dev Only callable by operator
+     */
+    function disableMaintenance() external whenNotPaused whenUnderMaintenance onlyOperatorOrOwner {
+        if(isUnderMaintenance == 0) revert Errors.NotInMaintenance();
+        
+        isUnderMaintenance = 0;
+        
+        emit MaintenanceDisabled(block.timestamp);
+    }
+
+
+    /*//////////////////////////////////////////////////////////////
+                            NFT MULTIPLIER
+    //////////////////////////////////////////////////////////////*/
 
     /**
      * @notice Updates distribution indexes and pauses contract
@@ -788,7 +839,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @dev This ensures all rewards are properly calculated and booked up to pause time
      * @custom:throws NoActiveDistributions if there are no active distributions
      */
-    function updateDistributionsAndPause() external whenNotFrozen whenNotEnded whenNotPaused onlyOwner {
+    function updateDistributions() external whenNotEnded whenNotPaused whenUnderMaintenance {
 
         // at least staking power should have been setup on deployment
         uint256 numOfDistributions = activeDistributions.length;
@@ -803,20 +854,15 @@ contract StakingPro is Pausable, Ownable2Step {
         }
 
         emit DistributionsUpdated(activeDistributions);
-
-        _pause();
     }
 
-
-
-    // note: onlyOwner? if ended remove?
     /**
      * @notice Updates all vault accounts for the given vault IDs across all active distributions
      * @dev Updates distribution indexes and vault account states for each vault across all active distributions
      * @param vaultIds Array of vault IDs to update
      * @custom:throws InvalidArray if vaultIds array is empty
      */
-    function updateAllVaultAccounts(bytes32[] calldata vaultIds) external whenNotEnded whenNotFrozen {
+    function updateAllVaultAccounts(bytes32[] calldata vaultIds) external whenNotEnded whenNotPaused whenUnderMaintenance {
         uint256 numOfVaults = vaultIds.length;
         if(numOfVaults == 0) revert Errors.InvalidArray();
 
@@ -838,7 +884,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws If newMultiplier is 0
      * @custom:emits NftMultiplierUpdated when multiplier is updated
      */
-    function updateNftMultiplier(uint256 newMultiplier) external whenNotEnded whenNotFrozen onlyOwner {
+    function updateNftMultiplier(uint256 newMultiplier) external whenNotEnded whenNotPaused whenUnderMaintenance onlyOperatorOrOwner {
         if(newMultiplier == 0) revert Errors.InvalidMultiplier();
 
         uint256 oldMultiplier = NFT_MULTIPLIER;
@@ -855,7 +901,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws NonExistentVault if any vault ID does not exist
      * @custom:emits BoostedBalancesUpdated when vault boosted balances are updated
      */
-    function updateBoostedBalances(bytes32[] calldata vaultIds) external whenNotEnded whenNotFrozen onlyOwner {
+    function updateBoostedBalances(bytes32[] calldata vaultIds) external whenNotEnded whenNotPaused whenUnderMaintenance onlyOperatorOrOwner {
         uint256 numOfVaults = vaultIds.length;
         if(numOfVaults == 0) revert Errors.InvalidArray();
 
@@ -888,10 +934,41 @@ contract StakingPro is Pausable, Ownable2Step {
         emit BoostedBalancesUpdated(vaultIds);
     }
   
-    //--------------  NFT MULTIPLIER OVER  ----------------------------
+//--------------  NFT MULTIPLIER OVER  ----------------------------
 
 
 //------------------------------- risk ----------------------------------------------------
+
+    /*//////////////////////////////////////////////////////////////
+                        OPERATOR + OWNER
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Resets the operator address to zero
+     * @dev Only callable by owner & operator
+     */
+    function resetOperator() external onlyOwner onlyOperator {   
+        operator = address(0);
+        emit OperatorReset(operator);
+    }
+
+
+    /*//////////////////////////////////////////////////////////////
+                            ONLY OWNER
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Updates the operator address
+     * @dev Only callable by owner
+     * @param newOperator The new operator address
+     */
+    function setOperator(address newOperator) external onlyOwner {
+        if(newOperator == address(0)) revert Errors.InvalidAddress();
+        
+        emit OperatorSet(operator, newOperator);
+        operator = newOperator;
+    }
+
 
     /**
      * @notice Pause pool. Cannot pause once frozen
@@ -925,7 +1002,7 @@ contract StakingPro is Pausable, Ownable2Step {
 
 
     /*//////////////////////////////////////////////////////////////
-                                RECOVER
+                            EMERGENCY EXIT
     //////////////////////////////////////////////////////////////*/
     
     /** note: do we want to cover rewards and fees? - no. why? cos then we have to iterate through distributions and update indexes.
@@ -1023,6 +1100,7 @@ contract StakingPro is Pausable, Ownable2Step {
          */
     }
 
+//-----------------------------------internal-------------------------------------------
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
@@ -1040,6 +1118,18 @@ contract StakingPro is Pausable, Ownable2Step {
 
     function _whenNotFrozen() internal view {
         if(isFrozen == 1) revert Errors.IsFrozen();
+    }
+
+    function _onlyOperatorOrOwner() internal view {
+        if(msg.sender != operator && msg.sender != owner) revert Errors.NotOperatorOrOwner();
+    }
+
+    function _whenUnderMaintenance() internal view {
+        if(isUnderMaintenance == 0) revert Errors.NotInMaintenance();
+    }
+
+    function _whenNotUnderMaintenance() internal view {
+        if(isUnderMaintenance == 1) revert Errors.InMaintenance();
     }
 
     modifier whenStartedAndNotEnded() {
@@ -1062,4 +1152,21 @@ contract StakingPro is Pausable, Ownable2Step {
         _whenNotFrozen();
         _;
     }
+
+    modifier onlyOperatorOrOwner() {
+        _onlyOperatorOrOwner();
+        _;
+    }
+    
+    modifier whenUnderMaintenance() {
+        _whenUnderMaintenance();
+        _;
+    }
+
+    modifier whenNotUnderMaintenance() {
+        _whenNotUnderMaintenance();
+        _;
+    }
+
+
 }

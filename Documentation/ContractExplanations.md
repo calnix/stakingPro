@@ -755,9 +755,7 @@ paused
 frozen
 - emergencyExit
 
-
 why disallow unstake when paused?
 - so that can update NFT multipliers w/o distruption
-- if users can unstake - this impacts base staked assets as well as boosted staked assets - causing drift in calcualtions
+- if users can unstake - this impacts base staked assets as well as boosted staked assets - causing drift in calculations
 - remember updateAllVaultsAndAccounts() is to executed repeatedly, and an unstake() could slip in btw calls the wreck havoc on calculations.
-

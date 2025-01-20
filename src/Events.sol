@@ -85,6 +85,11 @@ event EndTimeSet(uint256 endTime);
 event UnstakedTokens(address indexed user, bytes32[] indexed vaultIds, uint256 amount);
 event UnstakedNfts(address indexed user, bytes32[] indexed vaultIds, uint256[] tokenIds);
 
+// Operator+Maintenance
+event MaintenanceDisabled(uint256 timestamp);
+event MaintenanceEnabled(uint256 timestamp);
+event OperatorUpdated(address indexed oldOperator, address indexed newOperator);
+event OperatorReset(address indexed operator);
 
 //---------------- Realm Points contract ----------------
 event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 amount);

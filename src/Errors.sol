@@ -67,5 +67,9 @@ library Errors {
     error IsFrozen();
     error NotFrozen();
 
-    // endTime
+    // Operator+Maintenance
+    error NotOperatorOrOwner();
+    error AlreadyInMaintenance();
+    error NotInMaintenance();
+    error InMaintenance();
 }
