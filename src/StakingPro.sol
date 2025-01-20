@@ -565,8 +565,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @notice Sets the end time for the staking pool
      * @dev Only callable when contract is not ended or frozen
      * @param endTime_ The new end time for the staking pool
-     * @custom:throws InvalidEndTime if endTime_ is 0 or not in the future
-     * @custom:emits EndTimeSet when end time is updated
      */
     function setEndTime(uint256 endTime_) external whenNotEnded whenNotPaused onlyOperatorOrOwner {
         if(endTime_ == 0) revert Errors.InvalidEndTime();
@@ -579,8 +577,7 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     /**
      * @notice Updates the rewards vault address
-     * @dev Only callable by owner when contract is not paused
-     * @dev Only callable when contract is not ended or frozen
+     * @dev Only callable when contract is not ended or paused
      * @param newRewardsVault The address of the new rewards vault contract
      */
     function setRewardsVault(address newRewardsVault) external whenNotEnded whenNotPaused onlyOperatorOrOwner {
@@ -592,10 +589,10 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
     /**
      * @notice Updates the minimum realm points required for staking
-     * @dev Zero values are not accepted to prevent dust attacks
+     * @dev Zero values are not accepted 
      * @param newAmount The new minimum realm points required
     */
-    function updateMinimumRealmPoints(uint256 newAmount) external onlyOwner {
+    function updateMinimumRealmPoints(uint256 newAmount) external whenNotEnded whenNotPaused onlyOperatorOrOwner {
         if(newAmount == 0) revert Errors.InvalidAmount();
         
         uint256 oldAmount = MINIMUM_REALMPOINTS_REQUIRED;
@@ -607,7 +604,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     /**
      * @notice Updates the number of NFTs required to create a vault
      * @dev Zero values are accepted, allowing vault creation without NFT requirements
-     * @dev Only callable when contract is not ended or frozen
      * @param newAmount The new number of NFTs required for vault creation
      */
     function updateCreationNfts(uint256 newAmount) external whenNotEnded whenNotPaused onlyOperatorOrOwner {
@@ -620,7 +616,6 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     /**
      * @notice Updates the cooldown duration for vaults
      * @dev Zero values are accepted. New duration can be less or more than current value
-     * @dev Only callable when contract is not ended or frozen
      * @param newDuration The new cooldown duration to set
      */
     function updateVaultCooldown(uint256 newDuration) external whenNotEnded whenNotPaused onlyOperatorOrOwner {
@@ -702,16 +697,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
      * @param newStartTime New start time for the distribution. Must be > block.timestamp if modified
      * @param newEndTime New end time for the distribution. Must be > block.timestamp if modified
      * @param newEmissionPerSecond New emission rate per second. Must be > 0 if modified
-     * @custom:throws InvalidDistributionParameters if all parameters are 0
-     * @custom:throws NonExistentDistribution if distribution doesn't exist
-     * @custom:throws DistributionEnded if distribution has already ended
-     * @custom:throws DistributionStarted if trying to modify start time after distribution started
-     * @custom:throws InvalidStartTime if new start time is not in the future
-     * @custom:throws InvalidEndTime if new end time is not in the future
-     * @custom:throws InvalidDistributionEndTime if new end time is not after start time
-     * @custom:emits DistributionUpdated when distribution parameters are modified
      */
-    function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external whenNotEnded whenNotFrozen onlyOwner {
+    function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external whenNotEnded whenNotFrozen onlyOperatorOrOwner {
 
         if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert Errors.InvalidDistributionParameters(); 
 
@@ -722,11 +709,8 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
     /**
      * @notice Immediately ends a distribution
      * @param distributionId ID of the distribution to end
-     * @custom:throws NonExistentDistribution if distribution doesn't exist
-     * @custom:throws DistributionEnded if distribution has already ended
-     * @custom:emits DistributionUpdated when distribution is ended
      */
-    function endDistributionImmediately(uint256 distributionId) external whenNotEnded whenNotFrozen onlyOwner {
+    function endDistributionImmediately(uint256 distributionId) external whenNotEnded whenNotFrozen onlyOperatorOrOwner {
         DataTypes.Distribution memory distribution = distributions[distributionId];
         
         if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
@@ -745,11 +729,11 @@ contract StakingPro is EIP712, Pausable, Ownable2Step {
 
         emit DistributionEnded(distributionId, distribution.endTime, distribution.totalEmitted);
 
-        // REWARDS_VAULT endDistributionImmediately: only for token distributions
+        // only for token distributions
         if(distributionId > 0) REWARDS_VAULT.endDistributionImmediately(distributionId);
     }
     
-
+    
 //--------------  NFT MULTIPLIER  ----------------------------
     
     /**    

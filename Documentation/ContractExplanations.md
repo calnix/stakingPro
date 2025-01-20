@@ -608,41 +608,100 @@ Allows the operator/owner to stake on behalf of users:
 
 
 
-# Owner functions
+# OwnerOrOperator functions
 
-## updateNftMultiplier [!!!]
+## setEndTime
 
+```solidity
+setEndTime(uint256 endTime_) external whenNotEnded whenNotPaused onlyOperatorOrOwner
+```
 
-## updateCreationNfts
+- endTime can be moved forward or backward; as long its a future timestamp
+- Only callable when contract is not ended or frozen
 
-- Updates the minimum number of NFTs required to create new vaults.
-- Owner can set this to 0 to allow vault creation without NFT requirements, or increase/decrease it to adjust the barrier to entry. 
-- Existing vaults are unaffected by this change.
+## setRewardsVault
+
+```solidity
+setRewardsVault(address newRewardsVault) external whenNotEnded whenNotPaused onlyOperatorOrOwner
+```
+
+- Updates the rewards vault address; cannot be set to a zero address
+- Only callable when contract is not ended or frozen
+- Should only be updated when there are no active distributions, else reverts and txn fails will occur.
+
+Key aspects:
+
+- Allows deploying enhanced rewards vault contracts without modifying StakingPro
+- Preserves all staked assets and earned rewards
+- Takes effect immediately for future reward distributions
+
+This provides flexibility to upgrade reward distribution logic while maintaining core staking functionality.
 
 ## updateMinimumRealmPoints
 
-- Updates the minimum number of Realm Points required to call `stakeRP`.
-- Owner can increase/decrease it to adjust the barrier to entry.
-- Existing vaults are unaffected by this change.
+```solidity
+updateMinimumRealmPoints(uint256 newAmount) external whenNotEnded whenNotPaused onlyOperatorOrOwner
+```
 
-> stakeRP is how users onboard to the contract.
+- Updates the storage variable `MINIMUM_REALMPOINTS_REQUIRED`; which is referenced in `stakeRP()`.
+- Can increase/decrease it to adjust the barrier to entry.
+- Zero amount not allowed.
+
+## updateCreationNfts
+
+```solidity
+updateCreationNfts(uint256 newAmount) external whenNotEnded whenNotPaused onlyOperatorOrOwner
+```
+
+- Updates the storage variable `CREATION_NFTS_REQUIRED`; which is referenced in `createVault()`.
+- Zero values are accepted, allowing vault creation without NFT requirements.
 
 ## updateVaultCooldown
 
-- Updates the cooldown duration for vaults, by changing the global variable `VAULT_COOLDOWN_DURATION`.
-- Owner can set this to 0 to allow vaults to be ended immediately, or increase/decrease it to adjust the cooldown period.
-- When vault owners call `endVaults`, the global variable `VAULT_COOLDOWN_DURATION` is referenced to determine the cooldown period.
+```solidity
+updateVaultCooldown(uint256 newDuration) external whenNotEnded whenNotPaused onlyOperatorOrOwner
+```
+
+- Updates the storage variable `VAULT_COOLDOWN_DURATION`; which is referenced in `activateCooldown()`.
+- Zero values are accepted, allowing vaults to be ended immediately.
 
 ## setupDistribution
 
-`setupDistribution(uint256 distributionId, uint256 startTime, uint256 endTime, uint256 emissionPerSecond, uint256 tokenPrecision)`
+```solidity
+setupDistribution(uint256 distributionId, uint256 distributionStartTime, uint256 distributionEndTime, uint256 emissionPerSecond, uint256 tokenPrecision,
+        uint32 dstEid, bytes32 tokenAddress
+    ) external whenNotEnded whenNotPaused onlyOperatorOrOwner 
+```
 
 Creates a new distribution with specified parameters:
+
 - distributionId: Unique identifier for the distribution
-- startTime: When distribution begins emitting rewards
-- endTime: When distribution stops emitting rewards
+- distributionStartTime: When distribution begins emitting rewards
+- distributionEndTime: When distribution stops emitting rewards
 - emissionPerSecond: Rate of reward token emissions
 - tokenPrecision: Decimal precision of the reward token (e.g. 1e18)
+- dstEid: EID of the destination chain
+- tokenAddress: Address of the reward token
+
+### Staking Power
+
+- Distribution Id 0 is reserved for staking power
+- It can be set to have indefinite endTime.
+- Does not require a dstEid or tokenAddress.
+
+### Token setup
+
+- both start and end times must be defined
+- else, we would be emitting token rewards indefinitely
+- calls RewardsVault to setup the Distribution there as well
+- does not expect tokens to have been deposited; that comes after the distribution is setup
+
+### LayerZero
+
+- dstEid: EID of the destination chain
+- tokenAddress: Address of the reward token
+
+Use of bytes32 for tokenAddress is to standardize across evm and non-evm chains.
 
 ### Staking power setup
 
@@ -662,16 +721,19 @@ staking power will be identified by its distribution id as 0, throughout the con
 
 ## updateDistribution
 
-`updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond)`
+```solidity
+updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external whenNotEnded whenNotFrozen onlyOperatorOrOwner
+```
 
-Allows owner to modify parameters of an existing distribution:
+Allows modification of parameters of an existing distribution:
 
 - distributionId: ID of the distribution to update
 - newStartTime: Can only be modified if distribution hasn't started yet. Must be in the future.
-- newEndTime: Can be extended or shortened, but must be after current timestamp
+- newEndTime: Can be extended or shortened, but must be after current timestamp [`newEndTime > block.timestamp`]
 - newEmissionPerSecond: Can be modified at any time to adjust reward rate
 
 Key constraints:
+
 - At least one parameter must be modified (non-zero)
 - Cannot modify start time after distribution has begun
 - New end time must be after start time
@@ -680,64 +742,23 @@ Key constraints:
 
 This function enables flexible management of reward distributions by allowing adjustments to timing and emission rates while maintaining key invariants.
 
-```solidity
-    /** 
-     * @notice Updates the parameters of an existing distribution
-     * @dev Can modify:
-     *      - startTime (only if distribution hasn't started)
-     *      - endTime (can extend or shorten, must be > block.timestamp)
-     *      - emission rate (can be modified at any time)
-     * @dev At least one parameter must be modified (non-zero)
-     * @param distributionId ID of the distribution to update
-     * @param newStartTime New start time for the distribution. Must be > block.timestamp if modified
-     * @param newEndTime New end time for the distribution. Must be > block.timestamp if modified
-     * @param newEmissionPerSecond New emission rate per second. Must be > 0 if modified
-     * @custom:throws InvalidDistributionParameters if all parameters are 0
-     * @custom:throws NonExistentDistribution if distribution doesn't exist
-     * @custom:throws DistributionEnded if distribution has already ended
-     * @custom:throws DistributionStarted if trying to modify start time after distribution started
-     * @custom:throws InvalidStartTime if new start time is not in the future
-     * @custom:throws InvalidEndTime if new end time is not in the future
-     * @custom:throws InvalidDistributionEndTime if new end time is not after start time
-     * @custom:emits DistributionUpdated when distribution parameters are modified
-     */
-
-    function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external onlyOwner{}
-```
-
 ## endDistributionImmediately
 
-`endDistributionImmediately(uint256 distributionId)`
+```solidity
+endDistributionImmediately(uint256 distributionId) external whenNotEnded whenNotFrozen onlyOperatorOrOwner
+```
 
 Allows owner to immediately terminate an active distribution:
 
 - distributionId: ID of the distribution to end
+- Enables emergency termination of a distribution by setting its end time to the current block timestamp. 
+- Effectively stops any further rewards from being distributed while preserving all rewards earned up to that point.
+- Distribution must exist and be active (not ended).
+- Calls RewardsVault to set the flag `manuallyEnded=1`
 
-This function enables emergency termination of a distribution by setting its end time to the current block timestamp. This effectively stops any further rewards from being distributed while preserving all rewards earned up to that point.
-Distribution must exist and be active (not ended).
+This provides an emergency mechanism to halt reward distributions if needed, while ensuring already-earned rewards remain claimable.
 
-This provides an emergency control mechanism to halt reward distributions if needed, while ensuring already-earned rewards remain claimable.
-
-## setRewardsVault
-
-`setRewardsVault(address newRewardsVault)`
-
-Allows owner to update the rewards vault contract address:
-
-- newRewardsVault: Address of the new rewards vault contract
-
-This function enables upgrading the rewards vault implementation by pointing to a new contract address. The rewards vault is responsible for holding and distributing rewards tokens.
-
-Key aspects:
-- Only callable by owner
-- New address must be non-zero
-- Allows deploying enhanced rewards vault contracts without modifying StakingPro
-- Preserves all staked assets and earned rewards
-- Takes effect immediately for future reward distributions
-
-This provides flexibility to upgrade reward distribution logic while maintaining core staking functionality.
-
-## Owner fns breakdown
+## Owner Only functions
 
 (nft stuff)
 - updateNftMultiplier

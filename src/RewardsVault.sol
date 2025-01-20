@@ -69,6 +69,7 @@ contract RewardsVault is OApp, Pausable, AccessControl, Ownable2Step {
     error NonExistentDistribution();
     error DistributionCompleted();
     error DistributionManuallyEnded();
+    
 //------- constructor ----------------------------
     constructor(address moneyManager, address admin, address endpoint, address owner) OApp(endpoint, owner) Ownable(owner) {
 
