@@ -536,7 +536,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     
     /**
      * @notice Stakes tokens on behalf of multiple users into multiple vaults
-     * @dev Only callable by owner or operator when contract 
      * @param vaultIds Array of vault IDs to stake into
      * @param onBehalfOfs Array of addresses to stake on behalf of
      * @param amounts Array of token amounts to stake for each user
@@ -573,7 +572,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     
     /**
      * @notice Sets the end time for the staking pool
-     * @dev Only callable when contract is not ended or frozen
      * @param endTime_ The new end time for the staking pool
      */
     function setEndTime(uint256 endTime_) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
@@ -587,7 +585,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
     /**
      * @notice Updates the rewards vault address
-     * @dev Only callable when contract is not ended or paused
      * @param newRewardsVault The address of the new rewards vault contract
      */
     function setRewardsVault(address newRewardsVault) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
@@ -599,7 +596,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
     /**
      * @notice Updates the minimum realm points required for staking
-     * @dev Zero values are not accepted 
      * @param newAmount The new minimum realm points required
     */
     function updateMinimumRealmPoints(uint256 newAmount) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
@@ -635,7 +631,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
     /**
      * @notice Sets up a new token distribution schedule
-     * @dev Can only be called by contract owner. Distribution must not already exist.
+     * @dev Distribution must not already exist.
      * @dev Distribution ID 0 is reserved for staking power and is the only ID allowed to have indefinite endTime
      * @param distributionId Unique identifier for this distribution (0 reserved for staking power)
      * @param distributionStartTime Timestamp when distribution begins, must be in the future
@@ -761,7 +757,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
     /**
      * @notice Sets contract to maintenance mode for operational updates
-     * @dev Only callable by operator or owner
      */
     function enableMaintenance() external whenNotPaused whenNotUnderMaintenance onlyRole(OPERATOR_ROLE) {
         if(isUnderMaintenance == 1) revert Errors.AlreadyInMaintenance();
@@ -773,7 +768,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
     /**
      * @notice Disables maintenance mode
-     * @dev Only callable by operator or owner
      */
     function disableMaintenance() external whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE) {
         if(isUnderMaintenance == 0) revert Errors.NotInMaintenance();
@@ -832,7 +826,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
     /**
      * @notice Updates the NFT multiplier used to calculate boost factors
-     * @dev Only callable by contract owner
      * @param newMultiplier The new multiplier value to set
      */
     function updateNftMultiplier(uint256 newMultiplier) external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE) {
@@ -881,10 +874,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
         emit BoostedBalancesUpdated(vaultIds);
     }
-  
-
-//-----------------------------  NFT MULTIPLIER OVER -----------------------------------------
-
 
 //------------------------------- risk -------------------------------------------------------
 
