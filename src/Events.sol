@@ -88,7 +88,7 @@ event UnstakedNfts(address indexed user, bytes32[] indexed vaultIds, uint256[] t
 // Operator+Maintenance
 event MaintenanceDisabled(uint256 timestamp);
 event MaintenanceEnabled(uint256 timestamp);
-event OperatorUpdated(address indexed oldOperator, address indexed newOperator);
+event OperatorSet(address indexed oldOperator, address indexed newOperator);
 event OperatorReset(address indexed operator);
 
 //---------------- Realm Points contract ----------------

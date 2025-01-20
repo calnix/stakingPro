@@ -969,11 +969,6 @@ contract StakingPro is Pausable, Ownable2Step {
      * @dev Rewards and fees are not withdrawn; indexes are not updated. Preserves state history at time of failure.
      * @param vaultIds Array of vault IDs to recover assets from
      * @param onBehalfOf Address to receive the recovered assets
-     * @custom:throws NotFrozen if contract is not in frozen state  
-     * @custom:throws InvalidArray if vaultIds array is empty
-     * @custom:throws UserHasNothingStaked if user has no staked assets in a vault
-     * @custom:emits UnstakedTokens when ERC20 tokens are recovered
-     * @custom:emits UnstakedNfts when NFTs are recovered
      */
     function emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted whenPaused {
         if(isFrozen == 0) revert Errors.NotFrozen();
@@ -1106,7 +1101,7 @@ contract StakingPro is Pausable, Ownable2Step {
     }
 
     function _onlyOperatorOrOwner() internal view {
-        if(msg.sender != operator && msg.sender != owner) revert Errors.NotOperatorOrOwner();
+        if(msg.sender != operator && msg.sender != owner()) revert Errors.NotOperatorOrOwner();
     }
 
     function _whenUnderMaintenance() internal view {
