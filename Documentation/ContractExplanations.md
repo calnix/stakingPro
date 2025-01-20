@@ -410,11 +410,45 @@ We need to then set the following, on the stakingPro contract:
 - RewardsVault address
 - RealmPoints address
 
-## Roles
+## Roles & Addresses
 
-1. Owner [Multi-sig]
-2. Operator [EOA]
-3. Users
+Addresses:
+
+1. Owner multiSig
+2. Risk monitoring script [EOA]
+3. Operator [EOA]
+
+Roles:
+
+1. MONITOR_ROLE: can only call pause(); for risk monitoring scripts
+2. OPERATOR_ROLE: for update various pool parameters and stakeOnBehalfOf()
+3. DEFAULT_ADMIN_ROLE: Owner multiSig; can assign/revoke roles to other addresses
+
+### Owner multiSig address is assigned:
+
+1. MONITOR_ROLE
+2. OPERATOR_ROLE
+3. DEFAULT_ADMIN_ROLE
+
+With the default admin role, it can assign/revoke roles to other addresses.
+With the monitor role, it can call pause(); to pause the contract.
+With the operator role, it can call update various pool parameters and stakeOnBehalfOf().
+
+### Risk monitoring script address is assigned:
+
+1. MONITOR_ROLE
+
+With the monitor role, it can call pause(); to pause the contract.
+
+### Operator address is assigned:
+
+1. OPERATOR_ROLE
+
+With the operator role, it can call update various pool parameters.
+On deployment, no operator address is assigned. When required, the DAT team is to call `grantRole(bytes32 role, address account)` to assign the operator role to the supplied address.
+
+Once the necessary changes are made, the operator address is to call `revokeRole(bytes32 role, address account)` to revoke the operator role from itself.
+This is to ensure that the operator role is kept unassigned, unless it is required.
 
 ## Pool States
 
@@ -608,7 +642,7 @@ Allows the operator/owner to stake on behalf of users:
 
 
 
-# OwnerOrOperator functions
+# Pool Management functions
 
 ## setEndTime
 
@@ -758,35 +792,124 @@ Allows owner to immediately terminate an active distribution:
 
 This provides an emergency mechanism to halt reward distributions if needed, while ensuring already-earned rewards remain claimable.
 
-## Owner Only functions
+# Maintenance Mode functions [To update: NFT_Multiplier]
 
-(nft stuff)
-- updateNftMultiplier
-- updateBoostedBalances
+## enableMaintenance
 
-(global variables)
-- updateCreationNfts
-- updateMinimumRealmPoints
-- updateVaultCooldown
+```solidity
+enableMaintenance() external whenNotPaused whenNotUnderMaintenance onlyOperatorOrOwner 
+```
 
-(distribution stuff)
-- setupDistribution
-- updateDistribution
-- endDistributionImmediately
+- Enables maintenance mode, which disables all user functions.
+- Only callable when contract is not paused.
 
-(contract)
-- setRewardsVault
+## disableMaintenance
 
-(crisis)
-pause
-unpause
-freeze
-emergencyExit
-recoverERC20
+```solidity
+disableMaintenance() external whenNotPaused whenUnderMaintenance onlyOperatorOrOwner
+```
 
-The only thing an operator should do it pause the contract.
+- Disables maintenance mode, which re-enables all user functions.
+- Only callable when contract is not paused.
 
+## updateDistributions
 
+```solidity
+updateDistributions() external whenNotEnded whenNotPaused whenUnderMaintenance onlyOperatorOrOwner
+```
+
+- Updates all active distribution indexes to current timestamp
+- This ensures all rewards are properly calculated and booked
+- Only callable when contract is under maintenance.
+
+## updateAllVaultAccounts
+
+```solidity
+updateAllVaultAccounts(bytes32[] calldata vaultIds) external whenNotEnded whenNotPaused whenUnderMaintenance onlyOperatorOrOwner
+```
+
+- Updates all vault accounts for all active distributions
+- This ensures all rewards are properly calculated and booked
+- Only callable when contract is under maintenance.
+
+## updateNftMultiplier
+
+```solidity
+updateNftMultiplier(uint256 newMultiplier) external whenNotEnded whenNotPaused whenUnderMaintenance onlyOperatorOrOwner
+```
+
+- Updates the NFT multiplier
+- Only callable when contract is under maintenance.
+
+## updateBoostedBalances
+
+```solidity
+updateBoostedBalances(bytes32[] calldata vaultIds) external whenNotEnded whenNotPaused whenUnderMaintenance onlyOperatorOrOwner
+```
+
+- This function is expected to be called multiple times, until all vaults have been updated to use the latest `NFT_MULTIPLIER` value
+- Also updates the global boosted balances, based on the delta of the update to vault's boosted balances
+
+**After cycling through all vaults, we should sanity check that the updated global boosted balances match up with the expected values. If they do not match up, we should end the contract and redeploy.**
+
+# Risk Management functions
+
+## pause
+
+```solidity
+pause() external whenNotPaused onlyRole(MONITOR_ROLE)
+```
+- pause contract
+- only callable by MONITOR_ROLE
+- MONITOR_ROLE is expected to be assigned to the monitoring script as well as owner multiSig
+
+## unpause
+
+```solidity
+unpause() external whenPaused onlyRole(DEFAULT_ADMIN_ROLE)
+```
+
+- unpause contract
+- only callable by DEFAULT_ADMIN_ROLE
+
+## freeze
+
+```solidity
+freeze() external whenNotFrozen onlyRole(DEFAULT_ADMIN_ROLE)
+```
+
+- freeze contract
+- only callable by DEFAULT_ADMIN_ROLE
+
+## emergencyExit
+
+Assuming black swan event, users call `emergencyExit` to exit.
+
+1. pause(): all user fns are disabled
+2. freeze(): cannot unpause; only emergencyExit() can be called
+3. emergencyExit(): exfil all principal assets
+
+```solidity
+emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted whenPaused whenNotUnderMaintenance
+```
+
+- only callable when contract is paused and frozen
+- callable by users to exfil their assets
+- Rewards and fees are not withdrawn; indexes are not updated. Preserves state history at time of failure.
+
+- This allows users to recover their principal assets in a black swan event.
+- It does not allow users to recover their rewards or fees.
+
+**This is the contrasting point versus calling `unstakeAll` and `emergencyExit`. Why?**
+
+- The assumption here is that the contract can no longer be trusted, and calculations and updates should not be trusted or engaged with.
+- So we only look to recover the principal assets.
+- Can worry about calculating what is owed off-chain at our leisure once users assets are secured.
+
+**Function is callable by anyone, but asset transfers are made to the correct beneficiary**
+
+- This is done by checking the `onBehalfOf` address.
+- The reason for this is to allow both users and us to call the function, to allow for a swift exit.
 
 # Notes
 
@@ -811,7 +934,6 @@ The only thing an operator should do it pause the contract.
 
 ```
 ## 2. how rewards are calculated: distribution, vault, user
-
 
 # Execution Flow
 
@@ -939,33 +1061,6 @@ Hence, when calling `setEndTime`, we should check if there are still active dist
 If there are, we should end those distributions via `updateDistribution`.
 
 >It is not possible to nest `claimRewards` within `unstakeAll`, as `claimRewards` operates on a per-distribution basis. Hence, 2 functions are needed.
-
-## 8. Emergency Exit (whenPaused, Frozen)
-
-Assuming black swan event, we can call `emergencyExit` to allow users to exit.
-Function is callable by anyone, but only after the contract has been paused and frozen.
-
-1. pause(): all user fns are disabled
-2. freeze(): cannot unpause; only emergencyExit() can be called
-3. emergencyExit(): exfil all principal assets
-
-```solidity
-emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf)
-```
-
-- This allows users to recover their principal assets in a black swan event.
-- It does not allow users to recover their rewards or fees.
-
-**This is the contrasting point versus calling `unstakeAll` and `emergencyExit`. Why?**
-
-- The assumption here is that the contract can no longer be trusted, and calculations and updates should not be trusted or engaged with.
-- So we only look to recover the principal assets.
-- Can worry about calculating what is owed off-chain at our leisure once users assets are secured.
-
-**Function is callable by anyone, but asset transfers are made to the correct beneficiary**
-
-- This is done by checking the `onBehalfOf` address.
-- The reason for this is to allow both users and us to call the function, to allow for a swift exit.
 
 ## 9. Ending a distribution
 
