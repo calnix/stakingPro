@@ -117,7 +117,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * - Contract must not be paused and staking must have started
      * @custom:emits VaultCreated event with vault ID, creator address and fee factors
      */
-    function createVault(uint256[] calldata tokenIds, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused {
+    function createVault(uint256[] calldata tokenIds, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         
         // must commit unstaked NFTs to create vaults: these do not count towards stakedNFTs
         uint256 incomingNfts = tokenIds.length;
@@ -174,7 +174,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws InvalidVaultId if vaultId is 0
      * @custom:emits StakedTokens when tokens are staked successfully
      */
-    function stakeTokens(bytes32 vaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused {
+    function stakeTokens(bytes32 vaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(amount == 0) revert Errors.InvalidAmount();
         if(vaultId == 0) revert Errors.InvalidVaultId();
         
@@ -210,7 +210,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:emits StakedNfts when NFTs are staked successfully
      * @custom:emits VaultBoostFactorUpdated when vault's boosted balances are updated
      */
-    function stakeNfts(bytes32 vaultId, uint256[] calldata tokenIds) external whenStartedAndNotEnded whenNotPaused {
+    function stakeNfts(bytes32 vaultId, uint256[] calldata tokenIds) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         uint256 incomingNfts = tokenIds.length;
 
         if(vaultId == 0) revert Errors.InvalidVaultId();
@@ -255,7 +255,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws VaultAlreadyEnded if vault cooldown is active
      * @custom:emits StakedRealmPoints when realm points are successfully staked with (staker, vaultId, amount, boostedAmount)
      */
-    function stakeRP(bytes32 vaultId, uint256 amount, address onBehalfOf) external whenStartedAndNotEnded whenNotPaused {
+    function stakeRP(bytes32 vaultId, uint256 amount, address onBehalfOf) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(msg.sender != RP_CONTRACT) revert Errors.InvalidSender();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
@@ -282,7 +282,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @param vaultId The ID of the vault to unstake from
      * @custom:emits UnstakedTokens, UnstakedNfts
      */
-    function unstakeAll(bytes32 vaultId) external whenStarted whenNotPaused {
+    function unstakeAll(bytes32 vaultId) external whenStarted whenNotPaused whenNotUnderMaintenance {
         if(isFrozen == 1) revert Errors.IsFrozen();
         if(vaultId == 0) revert Errors.InvalidVaultId();
 
@@ -338,7 +338,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:emits VaultMigrated when migration is complete
      * @custom:emits VaultBoostFactorUpdated when boost factors are updated
      */
-    function migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStartedAndNotEnded whenNotPaused {
+    function migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(oldVaultId == 0) revert Errors.InvalidVaultId();
         if(newVaultId == 0) revert Errors.InvalidVaultId();
         
@@ -384,7 +384,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws StakingPowerDistribution if distributionId is 0
      * @custom:emits RewardsClaimed when rewards are successfully claimed
      */
-    function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted whenNotPaused {   
+    function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted whenNotPaused whenNotUnderMaintenance {   
         if(vaultId == 0) revert Errors.InvalidVaultId();
         if(distributionId == 0) revert Errors.StakingPowerDistribution();
 
@@ -420,7 +420,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:emits NftFeeFactorUpdated when NFT fee is updated
      * @custom:emits RealmPointsFeeFactorUpdated when realm points fee is updated
      */
-    function updateVaultFees(bytes32 vaultId, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused {
+    function updateVaultFees(bytes32 vaultId, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(vaultId == 0) revert Errors.InvalidVaultId();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
@@ -443,7 +443,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:emits VaultRemoved when vault is immediately removed (zero cooldown)
      * @custom:emits VaultCooldownInitiated when cooldown period begins
      */
-    function activateCooldown(bytes32 vaultId) external whenStartedAndNotEnded whenNotPaused {
+    function activateCooldown(bytes32 vaultId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(vaultId == 0) revert Errors.InvalidVaultId();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
@@ -494,7 +494,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws InvalidArray if vaultIds array is empty
      * @custom:emits VaultsEnded when all specified vaults are ended
      */
-    function endVaults(bytes32[] calldata vaultIds) external whenStartedAndNotEnded whenNotPaused {
+    function endVaults(bytes32[] calldata vaultIds) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         uint256 numOfVaults = vaultIds.length;
         if(numOfVaults == 0) revert Errors.InvalidArray();
 
@@ -524,12 +524,12 @@ contract StakingPro is Pausable, Ownable2Step {
     
     /**
      * @notice Stakes tokens on behalf of multiple users into multiple vaults
-     * @dev Only callable by owner when contract is active and not paused
+     * @dev Only callable by owner or operator when contract 
      * @param vaultIds Array of vault IDs to stake into
      * @param onBehalfOfs Array of addresses to stake on behalf of
      * @param amounts Array of token amounts to stake for each user
      */
-    function stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOfs, uint256[] calldata amounts) external whenStartedAndNotEnded whenNotPaused onlyOwner {
+    function stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOfs, uint256[] calldata amounts) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance onlyOperatorOrOwner {
 
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.PRECISION_BASE = PRECISION_BASE;
@@ -553,44 +553,11 @@ contract StakingPro is Pausable, Ownable2Step {
         STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), incomingTotalStakedTokens);
     }
 
-
-//-------------------------------internal------------------------------------------- 
-
-    ///@dev concat two uint256 arrays: [1,2,3],[4,5] -> [1,2,3,4,5]
-    function _concatArrays(uint256[] memory arr1, uint256[] memory arr2) internal pure returns(uint256[] memory) {
-        
-        // create resulting arr
-        uint256 len1 = arr1.length;
-        uint256 len2 = arr2.length;
-        uint256[] memory resArr = new uint256[](len1 + len2);
-        
-        uint256 i;
-        for (; i < len1; i++) {
-            resArr[i] = arr1[i];
-        }
-        
-        uint256 j;
-        while (j < len2) {
-            resArr[i++] = arr2[j++];
-        }
-
-        return resArr;
-    }
-
-    ///@dev Generate a vaultId. keccak256 is cheaper than using a counter with a SSTORE, even accounting for eventual collision retries.
-    function _generateVaultId(uint256 salt, address user) internal view returns (bytes32) {
-        return bytes32(keccak256(abi.encode(user, block.timestamp, salt)));
-    }
-
 //-------------------------------pool management-------------------------------------------
-
-
 
     /*//////////////////////////////////////////////////////////////
                             POOL MANAGEMENT
     //////////////////////////////////////////////////////////////*/
-
-
     
     /**
      * @notice Sets the end time for the staking pool
@@ -599,7 +566,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @custom:throws InvalidEndTime if endTime_ is 0 or not in the future
      * @custom:emits EndTimeSet when end time is updated
      */
-    function setEndTime(uint256 endTime_) external whenNotEnded whenNotFrozen onlyOwner {
+    function setEndTime(uint256 endTime_) external whenNotEnded whenNotPaused onlyOperatorOrOwner {
         if(endTime_ == 0) revert Errors.InvalidEndTime();
         if(endTime_ <= block.timestamp) revert Errors.InvalidEndTime();
 
@@ -614,7 +581,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @dev Only callable when contract is not ended or frozen
      * @param newRewardsVault The address of the new rewards vault contract
      */
-    function setRewardsVault(address newRewardsVault) external whenNotEnded whenNotFrozen onlyOwner {
+    function setRewardsVault(address newRewardsVault) external whenNotEnded whenNotPaused onlyOperatorOrOwner {
         if(newRewardsVault == address(0)) revert Errors.InvalidAddress();       
 
         emit RewardsVaultSet(address(REWARDS_VAULT), newRewardsVault);
@@ -625,10 +592,8 @@ contract StakingPro is Pausable, Ownable2Step {
      * @notice Updates the realm points contract address
      * @dev Only callable when contract is not ended or frozen
      * @param newRealmPoints The address of the new realm points contract
-     * @custom:throws InvalidAddress if newRealmPoints is 0
-     * @custom:emits RPContractSet when realm points contract is updated
      */
-    function setRealmPoints(address newRealmPoints) external whenNotEnded whenNotFrozen onlyOwner {
+    function setRealmPoints(address newRealmPoints) external whenNotEnded whenNotPaused onlyOperatorOrOwner {
         if(newRealmPoints == address(0)) revert Errors.InvalidAddress();
     
         emit RPContractSet(RP_CONTRACT, newRealmPoints);
@@ -641,7 +606,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @dev Only callable when contract is not ended or frozen
      * @param newAmount The new number of NFTs required for vault creation
      */
-    function updateCreationNfts(uint256 newAmount) external whenNotEnded whenNotFrozen onlyOwner {
+    function updateCreationNfts(uint256 newAmount) external whenNotEnded whenNotPaused onlyOperatorOrOwner {
         uint256 oldAmount = CREATION_NFTS_REQUIRED;
         CREATION_NFTS_REQUIRED = newAmount; 
 
@@ -654,7 +619,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @dev Only callable when contract is not ended or frozen
      * @param newDuration The new cooldown duration to set
      */
-    function updateVaultCooldown(uint256 newDuration) external whenNotEnded whenNotFrozen onlyOwner {
+    function updateVaultCooldown(uint256 newDuration) external whenNotEnded whenNotPaused onlyOperatorOrOwner {
         emit VaultCooldownDurationUpdated(VAULT_COOLDOWN_DURATION, newDuration);     
         VAULT_COOLDOWN_DURATION = newDuration;
     }
@@ -668,17 +633,10 @@ contract StakingPro is Pausable, Ownable2Step {
      * @param distributionEndTime Timestamp when distribution ends (0 allowed only for ID 0)
      * @param emissionPerSecond Rate of token emissions per second (must be > 0)
      * @param tokenPrecision Decimal precision for the distributed token (must be > 0)
-     * @custom:throws ZeroEmissionRate if emission rate is 0
-     * @custom:throws ZeroTokenPrecision if token precision is 0
-     * @custom:throws InvalidStartTime if start time is not in the future
-     * @custom:throws InvalidDistributionEndTime if end time is not after start time
-     * @custom:throws InvalidEndTime if non-zero ID has indefinite end time
-     * @custom:throws DistributionAlreadySetup if distribution with ID already exists
-     * @custom:emits DistributionCreated when distribution is successfully created
      */
-    function setupDistribution(
-        uint256 distributionId, uint256 distributionStartTime, uint256 distributionEndTime, uint256 emissionPerSecond, uint256 tokenPrecision,
-        uint32 dstEid, bytes32 tokenAddress) external whenNotEnded whenNotFrozen onlyOwner {
+    function setupDistribution(uint256 distributionId, uint256 distributionStartTime, uint256 distributionEndTime, uint256 emissionPerSecond, uint256 tokenPrecision,
+        uint32 dstEid, bytes32 tokenAddress
+    ) external whenNotEnded whenNotPaused onlyOperatorOrOwner {
             
         if (tokenPrecision == 0) revert Errors.ZeroTokenPrecision();
         if (emissionPerSecond == 0) revert Errors.ZeroEmissionRate();
@@ -934,6 +892,7 @@ contract StakingPro is Pausable, Ownable2Step {
         emit BoostedBalancesUpdated(vaultIds);
     }
   
+
 //--------------  NFT MULTIPLIER OVER  ----------------------------
 
 
@@ -947,7 +906,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @notice Resets the operator address to zero
      * @dev Only callable by owner & operator
      */
-    function resetOperator() external onlyOwner onlyOperator {   
+    function resetOperator() external onlyOperatorOrOwner {   
         operator = address(0);
         emit OperatorReset(operator);
     }
@@ -1005,7 +964,7 @@ contract StakingPro is Pausable, Ownable2Step {
                             EMERGENCY EXIT
     //////////////////////////////////////////////////////////////*/
     
-    /** note: do we want to cover rewards and fees? - no. why? cos then we have to iterate through distributions and update indexes.
+    /** note: do we want to cover rewards and fees? - no. why: cos then we have to iterate through distributions and update indexes.
      * @notice Allows users to recover their principal assets in a black swan event
      * @dev Rewards and fees are not withdrawn; indexes are not updated. Preserves state history at time of failure.
      * @param vaultIds Array of vault IDs to recover assets from
@@ -1100,7 +1059,33 @@ contract StakingPro is Pausable, Ownable2Step {
          */
     }
 
-//-----------------------------------internal-------------------------------------------
+//-------------------------------internal------------------------------------------- 
+
+    ///@dev concat two uint256 arrays: [1,2,3],[4,5] -> [1,2,3,4,5]
+    function _concatArrays(uint256[] memory arr1, uint256[] memory arr2) internal pure returns(uint256[] memory) {
+        
+        // create resulting arr
+        uint256 len1 = arr1.length;
+        uint256 len2 = arr2.length;
+        uint256[] memory resArr = new uint256[](len1 + len2);
+        
+        uint256 i;
+        for (; i < len1; i++) {
+            resArr[i] = arr1[i];
+        }
+        
+        uint256 j;
+        while (j < len2) {
+            resArr[i++] = arr2[j++];
+        }
+
+        return resArr;
+    }
+
+    ///@dev Generate a vaultId. keccak256 is cheaper than using a counter with a SSTORE, even accounting for eventual collision retries.
+    function _generateVaultId(uint256 salt, address user) internal view returns (bytes32) {
+        return bytes32(keccak256(abi.encode(user, block.timestamp, salt)));
+    }
 
     /*//////////////////////////////////////////////////////////////
                                MODIFIERS
