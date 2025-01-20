@@ -110,6 +110,18 @@ contract DataTypes {
         // state
         uint256 manuallyEnded;
     }
+    
+    /*//////////////////////////////////////////////////////////////
+                                STAKE RP
+    //////////////////////////////////////////////////////////////*/
+
+    struct StakeRp {
+        address user;
+        bytes32 vaultId;
+        uint256 amount;
+        uint256 expiry;
+    }
+
 
     /*//////////////////////////////////////////////////////////////
                                 INPUTS 
@@ -124,12 +136,6 @@ contract DataTypes {
         // boosted balances
         uint256 totalBoostedRealmPoints;
         uint256 totalBoostedStakedTokens;
-    }
-
-    struct GenericParams {
-        uint256 amount;
-        uint256 NFT_MULTIPLIER;
-        uint256[] tokenIds;
     }
 
 

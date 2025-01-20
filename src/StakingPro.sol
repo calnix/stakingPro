@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 import './Events.sol';
 import {Errors} from './Errors.sol';
 import {DataTypes} from './DataTypes.sol';
+import {PoolLogic} from "./PoolLogic.sol";
 
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20, IERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -11,20 +12,21 @@ import {SafeERC20, IERC20} from "openzeppelin-contracts/contracts/token/ERC20/ut
 import {Pausable} from "openzeppelin-contracts/contracts/utils/Pausable.sol";
 import {Ownable2Step, Ownable} from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
+import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
+
 // interfaces
 import {INftRegistry} from "./interfaces/INftRegistry.sol";
 import {IRewardsVault} from "./interfaces/IRewardsVault.sol";
 
-import {PoolLogic} from "./PoolLogic.sol";
 
-contract StakingPro is Pausable, Ownable2Step {
+contract StakingPro is EIP712, Pausable, Ownable2Step {
     using SafeERC20 for IERC20;
 
     // external interfaces
     INftRegistry public immutable NFT_REGISTRY;
     IERC20 public immutable STAKED_TOKEN;  
     IRewardsVault public REWARDS_VAULT; 
-    address public RP_CONTRACT;
 
     // duration
     uint256 public immutable startTime; 
@@ -58,6 +60,10 @@ contract StakingPro is Pausable, Ownable2Step {
     // distributions
     uint256[] public activeDistributions;    // array stores key values for distributions mapping; includes not yet started distributions
     
+    address internal immutable STORED_SIGNER;                 // can this be immutable? 
+    uint256 public MINIMUM_REALMPOINTS_REQUIRED;
+    // has signature been executed: 1 is true, 0 is false [replay attack prevention]
+    mapping(bytes signature => uint256 executed) public executedSignatures;
 
 //-------------------------------mappings--------------------------------------------
 
@@ -80,7 +86,7 @@ contract StakingPro is Pausable, Ownable2Step {
 //-------------------------------constructor------------------------------------------
 
     constructor(address nftRegistry, address stakedToken, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
-        address owner) payable Ownable(owner) {
+        address owner, string memory name, string memory version) payable EIP712(name, version) Ownable(owner) {
 
         // sanity check input data: time, period, rewards
         if(owner == address(0)) revert Errors.InvalidAddress();
@@ -115,7 +121,6 @@ contract StakingPro is Pausable, Ownable2Step {
      * - Number of NFTs must match CREATION_NFTS_REQUIRED
      * - Total fee factors must not exceed 50% (5000 basis points)
      * - Contract must not be paused and staking must have started
-     * @custom:emits VaultCreated event with vault ID, creator address and fee factors
      */
     function createVault(uint256[] calldata tokenIds, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         
@@ -243,16 +248,28 @@ contract StakingPro is Pausable, Ownable2Step {
      * @dev Only callable by the RealmPoints contract
      * @param vaultId The ID of the vault to stake realm points into
      * @param amount The amount of realm points to stake
-     * @param onBehalfOf The address to stake realm points on behalf of
-     * @custom:throws InvalidSender if caller is not RealmPoints contract
-     * @custom:throws VaultAlreadyEnded if vault cooldown is active
-     * @custom:emits StakedRealmPoints when realm points are successfully staked with (staker, vaultId, amount, boostedAmount)
      */
-    function stakeRP(bytes32 vaultId, uint256 amount, address onBehalfOf) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
-        if(msg.sender != RP_CONTRACT) revert Errors.InvalidSender();
+    function stakeRP(bytes32 vaultId, uint256 amount, uint256 expiry, bytes calldata signature) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
+        if(vaultId == 0) revert Errors.InvalidVaultId();
+        if(expiry < block.timestamp) revert Errors.SignatureExpired();
+        if(amount < MINIMUM_REALMPOINTS_REQUIRED) revert Errors.MinimumRpRequired();
+
+        // replay attack prevention
+        if(executedSignatures[signature] == 1) revert Errors.SignatureAlreadyExecuted();
+
+        // verify signature
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
+            keccak256("StakeRp(address user,bytes32 vaultId,uint256 amount,uint256 expiry)"), 
+            msg.sender, vaultId, amount, expiry)));
+        
+        address signer = ECDSA.recover(digest, signature);
+        if(signer != STORED_SIGNER) revert Errors.InvalidSignature(); 
+
+        // set signature to executed
+        executedSignatures[signature] = 1;
 
         DataTypes.UpdateAccountsIndexesParams memory params;
-            params.user = onBehalfOf;
+            params.user = msg.sender;
             params.vaultId = vaultId;
             params.PRECISION_BASE = PRECISION_BASE;
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
@@ -266,7 +283,7 @@ contract StakingPro is Pausable, Ownable2Step {
         totalStakedRealmPoints += amount;
         totalBoostedRealmPoints += incomingBoostedRealmPoints;
 
-        emit StakedRealmPoints(onBehalfOf, vaultId, amount, incomingBoostedRealmPoints);
+        emit StakedRealmPoints(msg.sender, vaultId, amount, incomingBoostedRealmPoints);
     }
 
     /**
@@ -405,14 +422,7 @@ contract StakingPro is Pausable, Ownable2Step {
      * @param nftFeeFactor The new NFT fee factor factor
      * @param creatorFeeFactor The new creator fee factor
      * @param realmPointsFeeFactor The new realm points fee factor
-     * @custom:throws InvalidVaultId if vaultId is 0
-     * @custom:throws UserIsNotVaultCreator if caller is not the vault creator
-     * @custom:throws CreatorFeeCanOnlyBeDecreased if new creator fee is higher than current
-     * @custom:throws TotalFeeFactorExceeded if total of all fees exceeds 50%
-     * @custom:emits CreatorFeeFactorUpdated when creator fee is updated
-     * @custom:emits NftFeeFactorUpdated when NFT fee is updated
-     * @custom:emits RealmPointsFeeFactorUpdated when realm points fee is updated
-     */
+    */
     function updateVaultFees(bytes32 vaultId, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(vaultId == 0) revert Errors.InvalidVaultId();
 
@@ -484,8 +494,6 @@ contract StakingPro is Pausable, Ownable2Step {
      * @notice Ends multiple vaults
      * @dev Removes all staked assets from circulation and updates global totals
      * @param vaultIds Array of vault IDs to end
-     * @custom:throws InvalidArray if vaultIds array is empty
-     * @custom:emits VaultsEnded when all specified vaults are ended
      */
     function endVaults(bytes32[] calldata vaultIds) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         uint256 numOfVaults = vaultIds.length;
@@ -582,15 +590,17 @@ contract StakingPro is Pausable, Ownable2Step {
     }
 
     /**
-     * @notice Updates the realm points contract address
-     * @dev Only callable when contract is not ended or frozen
-     * @param newRealmPoints The address of the new realm points contract
-     */
-    function setRealmPoints(address newRealmPoints) external whenNotEnded whenNotPaused onlyOperatorOrOwner {
-        if(newRealmPoints == address(0)) revert Errors.InvalidAddress();
-    
-        emit RPContractSet(RP_CONTRACT, newRealmPoints);
-        RP_CONTRACT = newRealmPoints;
+     * @notice Updates the minimum realm points required for staking
+     * @dev Zero values are not accepted to prevent dust attacks
+     * @param newAmount The new minimum realm points required
+    */
+    function updateMinimumRealmPoints(uint256 newAmount) external onlyOwner {
+        if(newAmount == 0) revert Errors.InvalidAmount();
+        
+        uint256 oldAmount = MINIMUM_REALMPOINTS_REQUIRED;
+        MINIMUM_REALMPOINTS_REQUIRED = newAmount;
+
+        emit MinimumRealmPointsUpdated(oldAmount, newAmount);
     }
 
     /**
@@ -1141,5 +1151,26 @@ contract StakingPro is Pausable, Ownable2Step {
         _;
     }
 
+//-------------------------------view------------------------------------------- 
+
+    /*//////////////////////////////////////////////////////////////
+                                HELPERS
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @dev Returns the hash of the fully encoded EIP712 message for this domain
+     *      See EIP712.sol
+     */
+    function hashTypedDataV4(bytes32 structHash) external view returns (bytes32) {
+        return _hashTypedDataV4(structHash);
+    }
+
+    /**
+     * @dev Returns the domain separator for the current chain
+     *      See EIP712.sol
+     */
+    function domainSeparatorV4() external view returns (bytes32) {
+        return _domainSeparatorV4();
+    }
 
 }
