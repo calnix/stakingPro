@@ -708,7 +708,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @param newEndTime New end time for the distribution. Must be > block.timestamp if modified
      * @param newEmissionPerSecond New emission rate per second. Must be > 0 if modified
      */
-    function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external whenNotEnded whenNotFrozen onlyRole(OPERATOR_ROLE) {
+    function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
 
         if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert Errors.InvalidDistributionParameters(); 
 
@@ -720,7 +720,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @notice Immediately ends a distribution
      * @param distributionId ID of the distribution to end
      */
-    function endDistributionImmediately(uint256 distributionId) external whenNotEnded whenNotFrozen onlyRole(OPERATOR_ROLE) {
+    function endDistributionImmediately(uint256 distributionId) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
         DataTypes.Distribution memory distribution = distributions[distributionId];
         
         if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
