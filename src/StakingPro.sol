@@ -79,7 +79,7 @@ contract StakingPro is Pausable, Ownable2Step {
 
 //-------------------------------constructor------------------------------------------
 
-    constructor(address registry, address stakedToken, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
+    constructor(address nftRegistry, address stakedToken, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
         address owner) payable Ownable(owner) {
 
         // sanity check input data: time, period, rewards
@@ -87,7 +87,7 @@ contract StakingPro is Pausable, Ownable2Step {
         if(startTime_ <= block.timestamp) revert Errors.InvalidStartTime();
 
         // interfaces: supporting contracts
-        NFT_REGISTRY = INftRegistry(registry);       
+        NFT_REGISTRY = INftRegistry(nftRegistry);       
         STAKED_TOKEN = IERC20(stakedToken);
 
         // set stakingPro startTime 
@@ -170,9 +170,6 @@ contract StakingPro is Pausable, Ownable2Step {
      * @dev No staking limits on staking assets
      * @param vaultId The ID of the vault to stake into
      * @param amount The amount of tokens to stake
-     * @custom:throws InvalidAmount if amount is 0
-     * @custom:throws InvalidVaultId if vaultId is 0
-     * @custom:emits StakedTokens when tokens are staked successfully
      */
     function stakeTokens(bytes32 vaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(amount == 0) revert Errors.InvalidAmount();
@@ -205,10 +202,6 @@ contract StakingPro is Pausable, Ownable2Step {
      * @dev No staking limits on NFT assets. NFTs increase the boost factor for staked tokens and realm points.
      * @param vaultId The ID of the vault to stake NFTs into
      * @param tokenIds Array of NFT token IDs to stake
-     * @custom:throws InvalidVaultId if vaultId is 0
-     * @custom:throws InvalidAmount if tokenIds array is empty
-     * @custom:emits StakedNfts when NFTs are staked successfully
-     * @custom:emits VaultBoostFactorUpdated when vault's boosted balances are updated
      */
     function stakeNfts(bytes32 vaultId, uint256[] calldata tokenIds) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         uint256 incomingNfts = tokenIds.length;
@@ -964,13 +957,13 @@ contract StakingPro is Pausable, Ownable2Step {
                             EMERGENCY EXIT
     //////////////////////////////////////////////////////////////*/
     
-    /** note: do we want to cover rewards and fees? - no. why: cos then we have to iterate through distributions and update indexes.
+    /** 
      * @notice Allows users to recover their principal assets in a black swan event
      * @dev Rewards and fees are not withdrawn; indexes are not updated. Preserves state history at time of failure.
      * @param vaultIds Array of vault IDs to recover assets from
      * @param onBehalfOf Address to receive the recovered assets
      */
-    function emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted whenPaused {
+    function emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted whenPaused whenNotUnderMaintenance { 
         if(isFrozen == 0) revert Errors.NotFrozen();
         if(vaultIds.length == 0) revert Errors.InvalidArray();
       
@@ -1064,8 +1057,7 @@ contract StakingPro is Pausable, Ownable2Step {
         uint256 len2 = arr2.length;
         uint256[] memory resArr = new uint256[](len1 + len2);
         
-        uint256 i;
-        for (; i < len1; i++) {
+        for (uint256 i; i < len1; i++) {
             resArr[i] = arr1[i];
         }
         

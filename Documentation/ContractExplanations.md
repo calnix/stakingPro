@@ -384,20 +384,139 @@ staking power
 
 # Contract Walkthrough
 
-## Constructor
+## Constructor & Initial setup
 
 ```solidity
- constructor(address registry, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
-        address owner, string memory name, string memory version) payable EIP712(name, version) Ownable(owner)
+    constructor(address registry, address stakedToken, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
+        address owner) payable Ownable(owner) {...}
 ```
 
 On deployment, the following must be defined:
 
-1. address of nft registry contract (should be deployed in advance)
-2. startTime: user are only able to call staking functions after startTime.
-3. nftMultiplier: boost factor per nft
-4. creationNftsRequired: number of creation nfts required per vault
-5. vaultCoolDownDuration: cooldown period of vault before ending permanently
+1. address of nft registry contract
+2. address of staked token
+3. startTime: user are only able to call staking functions after startTime.
+4. nftMultiplier: multiplier factor per nft
+5. creationNftsRequired: number of nfts required to create a vault
+6. vaultCoolDownDuration: cooldown period of vault before ending permanently
+
+This expects that the nft registry contract should be deployed in advance.
+
+We need to then deploy the following contracts:
+- RewardsVault
+- RealmPoints
+
+We need to then set the following, on the stakingPro contract:
+- RewardsVault address
+- RealmPoints address
+
+## Roles
+
+1. Owner [Multi-sig]
+2. Operator [EOA]
+3. Users
+
+## Pool States
+
+- ended
+- paused/unpaused
+- frozen
+- underMaintenance
+
+1. ended: contract is ended, as dictated by its endTime. Users can only claim rewards and unstake.
+2. paused: contract is paused, all user functions revert.
+3. frozen: contract is frozen, all user functions revert except for emergencyExit().
+4. underMaintenance: contract is under maintenance, all user functions revert.
+
+### Under Maintenance
+
+Contract is set to `underMaintenance` when there is a need to update the NFT_MULTIPLIER value.
+
+Process:
+    1. enableMaintenance
+    2. updateDistributions
+    3. updateAllVaultAccounts
+    4. updateNftMultiplier
+    5. updateBoostedBalances
+    6. disableMaintenance
+
+Setting the contract to `underMaintenance` will prevent users from staking, unstaking, claiming rewards, or creating new vaults.
+This is to ensure that the NFT_MULTIPLIER is updated correctly, and that the boosted balances are updated correctly.
+
+### Pause/Unpause
+
+Contract is set to `paused` when there is a need to assess for possible security issues.
+If there are no security issues, the contract can be unpaused.
+
+If there are security issues, the contract is frozen.
+
+### Frozen
+
+Contract is set to `frozen` when there are irreparable issues with the contract.
+This is to prevent any further damage to the contract, and to ensure that the contract is not used anymore.
+
+Once frozen, users can only call `emergencyExit()`, which will allow users to reclaim their principal staked assets.
+Any unclaimed rewards and fees are forfeited.
+
+Note: `emergencyExit()` assumes that the contract is broken and any state updates made to be invalid; hence it does not update rewards and fee calculations.
+
+# User functions
+
+## createVault
+
+```solidity
+createVault(
+    uint256[] calldata tokenIds, 
+    uint256 nftFeeFactor, 
+    uint256 creatorFeeFactor, 
+    uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+```
+
+Creates a new vault for staking with specified fee parameters:
+
+- nftMultiplier: multiplier factor per nft
+- creationNftsRequired: number of nfts required to create a vault
+- vaultCoolDownDuration: cooldown period of vault before ending permanently
+
+Requires the creator to have the required number of nfts.
+These nfts are locked, and do not count towards rewards calculations.
+
+## stakeTokens
+
+```solidity
+stakeTokens(bytes32 vaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+```
+
+Allows users to stake tokens into a specified vault:
+
+- Checks that the vault exists and is not ended
+- Transfers tokens from user to contract
+
+Note that staking tokens does not automatically stake NFTs or Realm Points - these must be staked separately via their respective functions.
+
+## stakeNfts
+
+```solidity
+stakeNfts(bytes32 vaultId, uint256[] calldata tokenIds) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+```
+
+Allows users to stake NFTs into a specified vault:
+
+- Checks that the vault exists and is not ended
+- Calls NFT_REGISTRY.checkIfUnassignedAndOwned(), to check if the NFTs are unassigned and owned by the user
+- Calls NFT_REGISTRY.recordStake(), to record vault assignment so that the NFTs cannot be staked in another vault
+
+The staked NFTs contribute to boosting the vault's staked Tokens and Realm Points, which determines its share of rewards from active distributions.
+
+## stakeRP
+
+```solidity
+stakeRP(bytes32 vaultId, uint256 amount, address onBehalfOf) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+```
+
+
+
+## claimRewards
 
 # Owner functions
 

@@ -1077,8 +1077,7 @@ library PoolLogic {
         uint256 len2 = arr2.length;
         uint256[] memory resArr = new uint256[](len1 + len2);
         
-        uint256 i;
-        for (; i < len1; i++) {
+        for (uint256 i; i < len1; i++) {
             resArr[i] = arr1[i];
         }
         
