@@ -139,7 +139,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(incomingNfts != CREATION_NFTS_REQUIRED) revert Errors.IncorrectCreationNfts();
         
         uint256 check = NFT_REGISTRY.checkIfUnassignedAndOwned(msg.sender, tokenIds);
-        if(check > 0) revert Errors.InvalidNfts(tokenIds);
+        if(check > 0) revert Errors.InvalidNfts();
     
         //note: MOCA stakers must receive at least 50% of rewards
         uint256 totalFeeFactor = nftFeeFactor + creatorFeeFactor + realmPointsFeeFactor;
@@ -226,7 +226,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
         // check if NFTs are unassigned and owned by msg.sender
         uint256 check = NFT_REGISTRY.checkIfUnassignedAndOwned(msg.sender, tokenIds);
-        if(check > 0) revert Errors.InvalidNfts(tokenIds);
+        if(check > 0) revert Errors.InvalidNfts();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.user = msg.sender;
@@ -309,9 +309,9 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @dev Updates accounting, transfers tokens, and records NFT unstaking
      * @param vaultId The ID of the vault to unstake from
      */
-    function unstakeAll(bytes32 vaultId) external whenStarted whenNotPaused whenNotUnderMaintenance {
-        if(isFrozen == 1) revert Errors.IsFrozen();
+    function unstakeAll(bytes32 vaultId, uint256 amount, uint256[] calldata tokenIds) external whenStarted whenNotPaused whenNotUnderMaintenance {
         if(vaultId == 0) revert Errors.InvalidVaultId();
+        if(amount == 0 && tokenIds.length == 0) revert Errors.InvalidAmount();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.user = msg.sender;
@@ -329,7 +329,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             uint256[] memory userTokenIds
         ) 
             = PoolLogic.executeUnstakeTokens(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
-                NFT_MULTIPLIER);
+                NFT_MULTIPLIER, amount, tokenIds);
 
         // decrement user's staked tokens and boosted staked tokens
         if(userStakedTokens > 0){
@@ -753,7 +753,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @notice Sets contract to maintenance mode for operational updates
      */
     function enableMaintenance() external whenNotPaused whenNotUnderMaintenance onlyRole(OPERATOR_ROLE) {
-        if(isUnderMaintenance == 1) revert Errors.AlreadyInMaintenance();
+        if(isUnderMaintenance == 1) revert Errors.InMaintenance();
         
         isUnderMaintenance = 1;
         

@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 library Errors {
+
     // generic (used across multiple functions)
     error NotStarted();
     error StakingEnded();
@@ -12,10 +13,12 @@ library Errors {
     error VaultEndTimeSet(bytes32 vaultId);
     error InvalidStartTime();
     error InvalidEndTime();
+    error UserIsNotCreator();
+    error NonExistentVault(bytes32 vaultId);
 
     // createVault
     error IncorrectCreationNfts();
-    error InvalidNfts(uint256[] tokenIds);
+    error InvalidNfts();
     error TotalFeeFactorExceeded();
 
     // stakeRealmPoints
@@ -23,53 +26,40 @@ library Errors {
     error MinimumRpRequired();
     error SignatureAlreadyExecuted();
     error InvalidSignature();
-    error InvalidSender();
     
+    // claimRewards
+    error StakingPowerDistribution();
+
+    // migrate vaults
+    error UserHasNothingStaked(bytes32 vaultId, address user);
+
     // updateVaultFees
-    error UserIsNotCreator();
-    error NftFeeCanOnlyBeIncreased();
     error CreatorFeeCanOnlyBeDecreased();
 
-    // _cache
-    error NonExistentVault(bytes32 vaultId);
-
+    // setupDistribution
+    error ZeroTokenPrecision();
+    error ZeroEmissionRate();
+    error InvalidDistributionStartTime();
+    error InvalidDistributionEndTime();
+    error InvalidDstEid();
+    error InvalidTokenAddress();
+    error DistributionAlreadySetup();
     // updateDistribution
     error InvalidDistributionParameters();
     error NonExistentDistribution();
     error DistributionStarted();
     error DistributionEnded();
-    error InvalidDistributionStartTime();
-    error InvalidDistributionEndTime();
-
-    // setupDistribution
-    error ZeroEmissionRate();
-    error ZeroTokenPrecision();
-    error DistributionAlreadySetup();
-    error InvalidDstEid();
-    error InvalidTokenAddress();
-
-    // claimRewards
-    error StakingPowerDistribution();
-
-    // unstakeAll
-    error UserHasNothingStaked(bytes32 vaultId, address user);
-    
-    // updateNftMultiplier
-    error InvalidMultiplier();
-
-    // updateBoostedBalances
-    error NoActiveDistributions();
-
     // endDistributionImmediately
     error DistributionManuallyEnded();
+
+    // updateNftMultiplier
+    error InvalidMultiplier();
 
     // freeze
     error IsFrozen();
     error NotFrozen();
 
     // Operator+Maintenance
-    error NotOperatorOrOwner();
-    error AlreadyInMaintenance();
     error NotInMaintenance();
     error InMaintenance();
 }

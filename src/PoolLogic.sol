@@ -145,19 +145,25 @@ library PoolLogic {
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
-        DataTypes.UpdateAccountsIndexesParams memory params,
-        uint256 nftMultiplier
+        DataTypes.UpdateAccountsIndexesParams calldata params,
+        uint256 nftMultiplier,
+        uint256 amount,
+        uint256[] calldata tokenIds
     ) external returns (uint256, uint256, uint256, uint256, uint256, uint256[] memory) {
 
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
 
         // get user staked assets: old values for events
-        uint256 numOfNfts = userVaultAssets.tokenIds.length;
         uint256 stakedTokens = userVaultAssets.stakedTokens;  
+        uint256 numOfNfts = userVaultAssets.tokenIds.length;
 
-        // check if user has non-zero holdings
-        if(stakedTokens + numOfNfts == 0) revert Errors.UserHasNothingStaked(params.vaultId, params.user);
+        // to unstake
+        uint256 numOfNftsToUnstake = tokenIds.length;
+
+        // check if sufficient assets to unstake
+        if(stakedTokens < amount) revert Errors.InvalidAmount();
+        if(numOfNfts < numOfNftsToUnstake) revert Errors.InvalidAmount();
 
         // storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, vault, userVaultAssets, params);
@@ -168,42 +174,41 @@ library PoolLogic {
         uint256 deltaVaultBoostedStakedTokens;
 
         // update tokens
-        if(stakedTokens > 0){
+        if(amount > 0){
 
             // calc. boosted values
-            userBoostedStakedTokens = (stakedTokens * vault.totalBoostFactor) / params.PRECISION_BASE;
+            userBoostedStakedTokens = (amount * vault.totalBoostFactor) / params.PRECISION_BASE;
 
             // update vault
-            vault.stakedTokens -= stakedTokens;
+            vault.stakedTokens -= amount;
             vault.boostedStakedTokens -= userBoostedStakedTokens;
-            
+
             // update user
-            delete userVaultAssets.stakedTokens;
+            userVaultAssets.stakedTokens -= amount;
         
-            emit UnstakedTokens(params.user, params.vaultId, stakedTokens);             
+            emit UnstakedTokens(params.user, params.vaultId, amount);             
         }
 
         // update nfts
-        if(numOfNfts > 0){
+        if(numOfNftsToUnstake > 0){
             
             // calc. deltas for vault
-            uint256 deltaBoostFactor = numOfNfts * nftMultiplier;
+            uint256 deltaBoostFactor = numOfNftsToUnstake * nftMultiplier;
             deltaVaultBoostedStakedTokens = (deltaBoostFactor * vault.stakedTokens) / params.PRECISION_BASE;
             deltaVaultBoostedRealmPoints = (deltaBoostFactor * vault.stakedRealmPoints) / params.PRECISION_BASE;
             
             // update vault
-            vault.stakedNfts -= numOfNfts;            
+            vault.stakedNfts -= numOfNftsToUnstake;            
             vault.totalBoostFactor -= deltaBoostFactor;
 
             // recalc vault's boosted balances, based on remaining staked assets
             if (vault.stakedTokens > 0) vault.boostedStakedTokens -= deltaVaultBoostedStakedTokens;            
             if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints -= deltaVaultBoostedRealmPoints;
 
-            // update user
-            userTokenIds = userVaultAssets.tokenIds;
-            delete userVaultAssets.tokenIds;
+            // update user: will revert if tokenIds are not found in userVaultAssets.tokenIds
+            userVaultAssets.tokenIds = _removeFromArray(userVaultAssets.tokenIds, tokenIds);
 
-            emit UnstakedNfts(params.user, params.vaultId, userTokenIds);   
+            emit UnstakedNfts(params.user, params.vaultId, tokenIds);   
         }
 
         // update storage: mappings 
@@ -1088,6 +1093,34 @@ library PoolLogic {
         uint256 j;
         while (j < len2) {
             resArr[i++] = arr2[j++];
+        }
+
+        return resArr;
+    }
+
+    ///@dev will revert if arrToRemove contains elements not found within originalArr
+    function _removeFromArray(uint256[] memory originalArr, uint256[] memory arrToRemove) internal pure returns (uint256[] memory) {
+        uint256 originalLength = originalArr.length;
+        uint256 toRemoveLength = arrToRemove.length;
+        
+        uint256[] memory resArr = new uint256[](originalLength - toRemoveLength);
+        uint256 k;
+
+        for(uint256 i; i < originalLength; ++i){
+            bool shouldKeep = true;
+            
+            // Check if current element should be removed
+            for(uint256 j; j < toRemoveLength; ++j){
+                if(originalArr[i] == arrToRemove[j]){
+                    shouldKeep = false;
+                    break;
+                } 
+            }
+
+            if(shouldKeep) {
+                resArr[k] = originalArr[i];
+                ++k;
+            }            
         }
 
         return resArr;
