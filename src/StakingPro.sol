@@ -360,9 +360,8 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @dev Updates accounting for both vaults and user's assets, including NFT boost factors
      * @param oldVaultId ID of the vault to migrate assets from
      * @param newVaultId ID of the vault to migrate assets to
-     * @custom:throws InvalidVaultId if either vault ID is 0
      * @custom:emits VaultMigrated when migration is complete
-     * @custom:emits VaultBoostFactorUpdated when boost factors are updated
+     * @custom:emits VaultBoostFactorUpdated when boost factors are updated for both old and new vaults 
      */
     function migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(oldVaultId == 0) revert Errors.InvalidVaultId();
@@ -435,7 +434,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @param nftFeeFactor The new NFT fee factor factor
      * @param creatorFeeFactor The new creator fee factor
      * @param realmPointsFeeFactor The new realm points fee factor
-    */
+     */
     function updateVaultFees(bytes32 vaultId, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(vaultId == 0) revert Errors.InvalidVaultId();
 
@@ -451,9 +450,9 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     /**
-     * @notice Activates the cooldown period for a vault
-     * @dev If VAULT_COOLDOWN_DURATION is 0, vault is immediately removed from circulation
-     * @dev When removed, all vault's staked assets are deducted from global totals
+     * @notice Activates the cooldown period for a vault, after which it can be removed from circulation
+     * @dev If VAULT_COOLDOWN_DURATION is 0, vault is removed immediately
+     * @dev When vault is removed, all staked assets are removed from circulation and global totals are updated
      * @param vaultId The ID of the vault to activate cooldown
      */
     function activateCooldown(bytes32 vaultId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
@@ -484,6 +483,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             totalBoostedRealmPoints -= vault.boostedRealmPoints;
             totalBoostedStakedTokens -= vault.boostedStakedTokens;
 
+            emit VaultCooldownInitiated(vaultId);
             emit VaultRemoved(vaultId);
 
         } else {
@@ -521,7 +521,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             uint256 totalBoostedTokensToRemove, 
             uint256 totalBoostedRealmPointsToRemove
         ) 
-            = PoolLogic.executeEndVaults(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
+            = PoolLogic.executeEndVaults(activeDistributions, vaults, distributions, vaultAccounts, params, 
                 vaultIds, numOfVaults);
 
         // Update global state
@@ -818,7 +818,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
-        PoolLogic.executeUpdateVaultsAndAccounts(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, vaultIds, numOfVaults);
+        PoolLogic.executeUpdateVaultsAndAccounts(activeDistributions, distributions, vaults, vaultAccounts, params, vaultIds, numOfVaults);
 
         emit VaultAccountsUpdated(vaultIds);
     }    

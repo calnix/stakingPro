@@ -42,10 +42,15 @@ event CreatorFeeFactorUpdated(bytes32 indexed vaultId, uint256 oldFactor, uint25
 event NftFeeFactorUpdated(bytes32 indexed vaultId, uint256 oldFactor, uint256 newFactor);
 event RealmPointsFeeFactorUpdated(bytes32 indexed vaultId, uint256 oldFactor, uint256 newFactor);
 
-// vault management
-event VaultRemoved(bytes32 indexed vaultId);
-event VaultsRemoved(bytes32[] vaultIds, uint256 vaultsNotEnded);
+// activateCooldown
 event VaultCooldownInitiated(bytes32 indexed vaultId);
+event VaultRemoved(bytes32 indexed vaultId);
+
+// executeEndVaults
+event VaultsRemoved(bytes32[] vaultIds, uint256 vaultsNotEnded);
+
+
+// updateAllVaultAccounts
 event VaultAccountsUpdated(bytes32[] vaultIds);
 
 

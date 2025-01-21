@@ -4,16 +4,16 @@ Handling varying decimal precision for reward tokens, and ensuring that the inde
 
 ## 1. Decimal Precision for indexes and rewards
 
-indexes are denominated in the distribution's precision
-rewards calculated and stored in the distribution's precision
+Indexes are denominated in the distribution's precision.
+Rewards calculated and stored in the distribution's precision.
 
 At the end of the day, we are paying out different rewards - so adhere to their respective precision.
 
 However, when calculating rewards, in both `_updateUserAccount` and `_updateVaultAccount`, we must convert the decimal precision of `stakedBase` to the distribution's precision.
-Since `stakedBase` is denominated in `1E18`, we must convert it to the distribution's precision.
+`stakedBase` is denominated in `1E18`, we must convert it to the distribution's precision.
 
 If the distribution's precision is lower than `1E18`, we are rounding down `stakedBase`, and therefore calculated rewards will be lower than they should be.
-If the distribution's precision is higher than `1E18`, we are simply adding zeros to `stakedBase`; this does not impact the rewards calculation. **[TODO: check if this is correct]**
+If the distribution's precision is higher than `1E18`, we are simply adding zeros to `stakedBase`; this does not impact the rewards calculation.
 
 ```solidity
     uint256 balanceRebased = (user.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
@@ -34,8 +34,8 @@ If the distribution's precision is higher than `1E18`, we are simply adding zero
 When going from 18 dp to 6 dp, we lose 12 dp of precision.
 
 **Example: 1.2345678 MOCA staked**
- 
-- 1.23456 MOCA rebased to 1e6 precision: `1_234_567_800_000_000_000` -> `1_234_567`
+
+- 1.23456 MOCA rebased to `1E6` precision: `1_234_567_800_000_000_000` -> `1_234_567`
 - Precision is reduced by 12 dp; so `800_000_000_000` is lost.
 
 User's rewards are calculated based on the rebased value: `1_234_567`
@@ -71,7 +71,7 @@ When going from 18 dp to 21 dp, we add 3 dp to precision.
 
 **This would not pose issues for us.**
 
-**CONCLUSION: there are no issues with rebasing the staked MOCA to the distribution's precision, as there is no negative impact on the rewards calculation.**
+**CONCLUSION: There are no issues with rebasing the staked MOCA to the distribution's precision, as there is no negative impact on the rewards calculation.**
 
 ```solidity
     function sec2() public view returns(uint256) {
@@ -99,7 +99,7 @@ When going from 18 dp to 21 dp, we add 3 dp to precision.
         
         return stakedMocaRebased;   // 12
     }
-``` 
+```
 
 1.2345678 MOCA rebased to 1E1 precision: `1_234_567_800_000_000_000_000` -> `12`
 
@@ -558,7 +558,7 @@ Allows users to stake Realm Points into a specified vault:
 ## unstakeAll
 
 ```solidity
-unstakeAll(bytes32 vaultId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+unstakeAll(bytes32 vaultId) external whenStarted whenNotPaused whenNotUnderMaintenance
 ```
 
 Allows users to unstake all their staked tokens and Nfts from a specified vault:
@@ -566,6 +566,8 @@ Allows users to unstake all their staked tokens and Nfts from a specified vault:
 - Checks that the vault exists and is not ended
 - Unstakes all staked tokens and Nfts
 - Updates NFT_REGISTRY to record unstake (NFT_REGISTRY.recordUnstake)
+
+**Users are able to unstake even if the contract's end time has been exceeded.**
 
 ## migrateVaults
 
@@ -583,13 +585,16 @@ Allows users to migrate their staked tokens and Nfts from one vault to another:
 ## claimRewards
 
 ```solidity
-claimRewards(bytes32 vaultId, uint256 distributionId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
+claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted whenNotPaused whenNotUnderMaintenance
 ```
 
 Allows users to claim rewards from a specified vault:
 
 - Checks that the distributionId is not 0.
 - Calls RewardsVault to transfer rewards to the user
+
+**Users are able to claim rewards even if the contract's end time has been exceeded.**
+
 
 ## updateVaultFees
 

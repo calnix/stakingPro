@@ -475,9 +475,7 @@ library PoolLogic {
         uint256[] storage activeDistributions,
         mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
         mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
-        mapping(address user => mapping(bytes32 vaultId => DataTypes.User userVaultAssets)) storage users,
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
-        mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
         DataTypes.UpdateAccountsIndexesParams memory params,
         bytes32[] calldata vaultIds,
@@ -608,12 +606,10 @@ library PoolLogic {
 
     function executeUpdateVaultsAndAccounts(
         uint256[] storage activeDistributions,
-        mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
         mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
-        mapping(address user => mapping(bytes32 vaultId => DataTypes.User userVaultAssets)) storage users,
+        mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
-        mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
-
+        
         DataTypes.UpdateAccountsIndexesParams memory params,
         bytes32[] calldata vaultIds,
         uint256 numOfVaults
