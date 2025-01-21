@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import './Events.sol';
 import {Errors} from "./Errors.sol";
 
 import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
@@ -31,6 +30,12 @@ contract RealmPoints is EIP712, Pausable, Ownable2Step {
 
     // has signature been executed: 1 is true, 0 is false [replay attack prevention]
     mapping(bytes signature => uint256 executed) public executedSignatures;
+    
+    // events
+    event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 amount);
+    event PoolSet(address indexed poolAddress);
+    event RPContractSet(address indexed oldRPContract, address indexed newRPContract);
+    event MinimumRealmPointsUpdated(uint256 oldAmount, uint256 newAmount);
 
     constructor(address owner, uint256 startTime_, uint256 minimumRealmPointsRequired, string memory name, string memory version) EIP712(name, version) Ownable(owner) {
         require(owner > address(0), "Zero address");

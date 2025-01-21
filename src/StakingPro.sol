@@ -351,7 +351,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             totalBoostedStakedTokens -= deltaVaultBoostedStakedTokens;
 
             // record unstake with registry
-            emit UnstakedNfts(msg.sender, vaultId, userTokenIds);   
             NFT_REGISTRY.recordUnstake(msg.sender, userTokenIds, vaultId);
         }
     }

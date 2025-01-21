@@ -179,7 +179,7 @@ library PoolLogic {
             
             // update user
             delete userVaultAssets.stakedTokens;
-
+        
             emit UnstakedTokens(params.user, params.vaultId, stakedTokens);             
         }
 
@@ -202,6 +202,8 @@ library PoolLogic {
             // update user
             userTokenIds = userVaultAssets.tokenIds;
             delete userVaultAssets.tokenIds;
+
+            emit UnstakedNfts(params.user, params.vaultId, userTokenIds);   
         }
 
         // update storage: mappings 
@@ -263,7 +265,9 @@ library PoolLogic {
         newVault.boostedRealmPoints = (newVault.stakedRealmPoints * newVault.totalBoostFactor) / params.PRECISION_BASE; 
 
         // emit events: new vault
-        emit VaultMigrated(params.user, params.vaultId, newVaultId, oldUserVaultAssets.stakedTokens, oldUserVaultAssets.stakedRealmPoints, oldUserVaultAssets.tokenIds);
+        emit VaultMigrated(
+            params.user, params.vaultId, newVaultId, 
+            oldUserVaultAssets.stakedTokens, oldUserVaultAssets.stakedRealmPoints, oldUserVaultAssets.tokenIds);
         emit VaultBoostFactorUpdated(newVaultId, newVaultTotalBoostFactor, newVault.totalBoostFactor);
 
         // decrement oldVault

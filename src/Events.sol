@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-// generic
-event PoolFrozen(uint256 timestamp);
-event RecoveredTokens(address indexed token, address indexed receiver, uint256 amount);
-
 // createVault
 event VaultCreated(
     bytes32 indexed vaultId,
@@ -28,6 +24,16 @@ event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 a
 event UnstakedTokens(address indexed user, bytes32 indexed vaultId, uint256 amount);
 event UnstakedNfts(address indexed user, bytes32 indexed vaultId, uint256[] tokenIds);
 
+// migrateVaults
+event VaultMigrated(
+    address indexed user,
+    bytes32 indexed oldVaultId,
+    bytes32 indexed newVaultId,
+    uint256 stakedTokens,
+    uint256 stakedRealmPoints,
+    uint256[] tokenIds
+);
+
 // claimRewards
 event RewardsClaimed(bytes32 indexed vaultId, address indexed user, uint256 amount);
 
@@ -42,15 +48,7 @@ event VaultsRemoved(bytes32[] vaultIds, uint256 vaultsNotEnded);
 event VaultCooldownInitiated(bytes32 indexed vaultId);
 event VaultAccountsUpdated(bytes32[] vaultIds);
 
-// migrateVaults
-event VaultMigrated(
-    address indexed user,
-    bytes32 indexed oldVaultId,
-    bytes32 indexed newVaultId,
-    uint256 stakedTokens,
-    uint256 stakedRealmPoints,
-    uint256[] tokenIds
-);
+
 
 // distribution management
 event DistributionCreated(uint256 indexed distributionId, uint256 startTime, uint256 endTime, uint256 emissionPerSecond, uint256 tokenPrecision);
@@ -81,6 +79,9 @@ event EndTimeSet(uint256 endTime);
 // stakeOnBehalfOf
 //event StakedOnBehalfOf(address indexed user, bytes32[] indexed vaultIds, uint256[] amounts);
 
+// generic
+event PoolFrozen(uint256 timestamp);
+
 // emergencyExit
 event UnstakedTokens(address indexed user, bytes32[] indexed vaultIds, uint256 amount);
 event UnstakedNfts(address indexed user, bytes32[] indexed vaultIds, uint256[] tokenIds);
@@ -92,6 +93,4 @@ event OperatorSet(address indexed oldOperator, address indexed newOperator);
 event OperatorReset(address indexed operator);
 
 //---------------- Realm Points contract ----------------
-event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 amount);
-event PoolSet(address indexed poolAddress);
-event RPContractSet(address indexed oldRPContract, address indexed newRPContract);
+
