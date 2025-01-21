@@ -405,35 +405,15 @@ Each vault has a unique id, that is generated randomly. See `_generateVaultId()`
 - A user has a separate account for each distribution, specific to a vault they have staked into.
 - Each user account records the user's accrued and claimed rewards for that specific vault and distribution.
 
+## Process of updating each vaultAccount and userAccount for a specific vault
 
-Each time a vault is updated we must update all the active tokenIndexes, which means we must loop through all the active indexes.
+Before enacting a state change upon a vault (i.e. stake/unstake, etc), it must be updated first.
+Consider the example where we want to stake to a vault. The process is as follows:
 
-
-    // staking power is distributionId:0 => tokenData{uint256 chainId:0, bytes32 tokenAddr: 0,...}
-
-## 1. explain the process of updating each vaultAccount and userAccount for a specific user's vault
-
-```solidity
-        /**
-            user to stake in a specific vault
-            that vault must be updated and booked first
-            - update all active distributions
-            - update all vault accounts for specified vault [per distribution]
-            - update all user accounts for specified vault  [per distribution]
-            - book stake and update vault assets
-            - book stake 
-         */
-
-
-        // update all vault accounts for specified vault [per distribution]
-        // - update all active distributions: book prior rewards, based on prior alloc points
-        // - update all vault accounts for each active distribution 
-        // - update user's account
-
-```
-
-## 2. how rewards are calculated: distribution, vault, user
-
+1. update all active distributions
+2. update all vault accounts for specified vault [per distribution]
+3. update all user accounts for specified vault  [per distribution]
+4. book stake and update vault assets
 
 # Contract Walkthrough
 
