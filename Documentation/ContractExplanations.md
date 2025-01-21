@@ -359,28 +359,81 @@ If we only wanted to express fee factors in integer values, (meaning 0 precision
 
 ---
 
-# Distributions
+# Distributions, Vaults and Accounts
+
+## Distributions
+
+A distribution is a schedule for distributing token rewards to users for a defined period of staking activity.
+
+Attributes of a distribution:
+
+-  id
+-  startTime
+-  endTime
+-  emissionPerSecond
+-  tokenPrecision
+
+Each distribution has an id. This allows for two different distributions to have the same token, but different distribution schedules.
+
+Distribution ids are expected to be sequential, starting from 0.
+
+### Staking Power
+
+Staking power is distributionId:0.
+
+- only distribution allowed to have an indefinite endTime
+- only distribution that does not require to emit token rewards
+
+## Vaults
+
+A vault is a collection of staked assets by users:
+
+-  users stake into vaults.
+-  users create vaults for staking.
+
+Each vault has a unique id, that is generated randomly. See `_generateVaultId()`.
+
+## Accounts [user, vault]
+
+### Vault Accounts
+
+- A vault has a separate account for each distribution.
+- Each vault account records the vault's accrued and claimed rewards for that specific distribution.
+
+### User Accounts
+
+- A user has a separate account for each distribution, specific to a vault they have staked into.
+- Each user account records the user's accrued and claimed rewards for that specific vault and distribution.
 
 
-    /** track token distributions
+Each time a vault is updated we must update all the active tokenIndexes, which means we must loop through all the active indexes.
 
-        each distribution has an id
-        two different distributionsIds could lead to the same token - w/ just different distribution schedules
-        
-        each time a vault is updated we must update all the active tokenIndexes,
-        which means we must loop through all the active indexes.
-     */
-
-
-    /**
-        users create vaults for staking
-        tokens are distributed via distributions
-        distributions are created and managed on an ad-hoc basis
-     */
-
-staking power
 
     // staking power is distributionId:0 => tokenData{uint256 chainId:0, bytes32 tokenAddr: 0,...}
+
+## 1. explain the process of updating each vaultAccount and userAccount for a specific user's vault
+
+```solidity
+        /**
+            user to stake in a specific vault
+            that vault must be updated and booked first
+            - update all active distributions
+            - update all vault accounts for specified vault [per distribution]
+            - update all user accounts for specified vault  [per distribution]
+            - book stake and update vault assets
+            - book stake 
+         */
+
+
+        // update all vault accounts for specified vault [per distribution]
+        // - update all active distributions: book prior rewards, based on prior alloc points
+        // - update all vault accounts for each active distribution 
+        // - update user's account
+
+```
+
+## 2. how rewards are calculated: distribution, vault, user
+
 
 # Contract Walkthrough
 
@@ -916,29 +969,8 @@ emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStar
 - This is done by checking the `onBehalfOf` address.
 - The reason for this is to allow both users and us to call the function, to allow for a swift exit.
 
-# Notes
-
-## 1. explain the process of updating each vaultAccount and userAccount for a specific user's vault
-
-```solidity
-        /**
-            user to stake in a specific vault
-            that vault must be updated and booked first
-            - update all active distributions
-            - update all vault accounts for specified vault [per distribution]
-            - update all user accounts for specified vault  [per distribution]
-            - book stake and update vault assets
-            - book stake 
-         */
 
 
-        // update all vault accounts for specified vault [per distribution]
-        // - update all active distributions: book prior rewards, based on prior alloc points
-        // - update all vault accounts for each active distribution 
-        // - update user's account
-
-```
-## 2. how rewards are calculated: distribution, vault, user
 
 # Execution Flow
 
