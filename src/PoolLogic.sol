@@ -539,7 +539,7 @@ library PoolLogic {
         
         // num. of vaults skipped 
         uint256 vaultsSkipped = numOfVaults - vaultsEnded; 
-        emit VaultsRemoved(vaultIds, vaultsSkipped);
+        emit VaultsEnded(vaultIds, vaultsSkipped);
 
         return (totalNftsToRemove, totalTokensToRemove, totalRealmPointsToRemove, totalBoostedTokensToRemove, totalBoostedRealmPointsToRemove);
     }
@@ -600,55 +600,10 @@ library PoolLogic {
             incomingTotalBoostedStakedTokens += boostedStakedTokens;
         }
 
+        emit StakedOnBehalfOf(onBehalfOfs, vaultIds, amounts);
 
         return (incomingTotalStakedTokens, incomingTotalBoostedStakedTokens);
     }    
-
-    function executeUpdateVaultsAndAccounts(
-        uint256[] storage activeDistributions,
-        mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
-        mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
-        mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
-        
-        DataTypes.UpdateAccountsIndexesParams memory params,
-        bytes32[] calldata vaultIds,
-        uint256 numOfVaults
-    ) external {
-
-        uint256 numOfDistributions = activeDistributions.length;
-
-        // For each distribution
-        for(uint256 i; i < numOfDistributions; ++i) {
-            
-            uint256 distributionId = activeDistributions[i];
-            DataTypes.Distribution memory distribution_ = distributions[distributionId];
-
-            // Update distribution first
-            DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_, activeDistributions, params.totalBoostedRealmPoints, params.totalBoostedStakedTokens, params.isPaused);
-
-            // Then update all vault accounts for this distribution
-            for(uint256 j; j < numOfVaults; ++j) {
-
-                // get vault and vault account from storage
-                bytes32 vaultId = vaultIds[j];
-                DataTypes.Vault memory vault = vaults[vaultId];
-                DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
-                
-                // vault has been removed from circulation: skip
-                if(vault.removed == 1) continue;
-
-                // Update storage: vault account 
-                (DataTypes.VaultAccount memory vaultAccount,) = _updateVaultAccount(vault, vaultAccount_, distribution, activeDistributions, params);
-                vaultAccounts[vaultId][distributionId] = vaultAccount;
-
-                // Update distribution storage if changed
-                if(distribution.lastUpdateTimeStamp > distribution_.lastUpdateTimeStamp) {
-                    distributions[distributionId] = distribution;
-                }
-            }
-        }
-
-    }
 
     function executeUpdateDistributionParams(
         uint256[] storage activeDistributions,
@@ -706,6 +661,54 @@ library PoolLogic {
 
         emit DistributionUpdated(distributionId, distribution.startTime, distribution.endTime, distribution.emissionPerSecond);
     }
+
+    function executeUpdateVaultsAndAccounts(
+        uint256[] storage activeDistributions,
+        mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
+        mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
+        mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
+        
+        DataTypes.UpdateAccountsIndexesParams memory params,
+        bytes32[] calldata vaultIds,
+        uint256 numOfVaults
+    ) external {
+
+        uint256 numOfDistributions = activeDistributions.length;
+
+        // For each distribution
+        for(uint256 i; i < numOfDistributions; ++i) {
+            
+            uint256 distributionId = activeDistributions[i];
+            DataTypes.Distribution memory distribution_ = distributions[distributionId];
+
+            // Update distribution first
+            DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_, activeDistributions, params.totalBoostedRealmPoints, params.totalBoostedStakedTokens, params.isPaused);
+
+            // Then update all vault accounts for this distribution
+            for(uint256 j; j < numOfVaults; ++j) {
+
+                // get vault and vault account from storage
+                bytes32 vaultId = vaultIds[j];
+                DataTypes.Vault memory vault = vaults[vaultId];
+                DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
+                
+                // vault has been removed from circulation: skip
+                if(vault.removed == 1) continue;
+
+                // Update storage: vault account 
+                (DataTypes.VaultAccount memory vaultAccount,) = _updateVaultAccount(vault, vaultAccount_, distribution, activeDistributions, params);
+                vaultAccounts[vaultId][distributionId] = vaultAccount;
+
+                // Update distribution storage if changed
+                if(distribution.lastUpdateTimeStamp > distribution_.lastUpdateTimeStamp) {
+                    distributions[distributionId] = distribution;
+                }
+            }
+        }
+
+    }
+
+
 
     function executeUpdateDistributionIndex(
         uint256[] storage activeDistributions,

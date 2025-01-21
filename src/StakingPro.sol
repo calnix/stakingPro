@@ -467,12 +467,17 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
         // only update storage for distributions, vaultAccounts, userAccounts
         DataTypes.Vault memory vault = PoolLogic.executeActivateCooldown(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params);
-        
+
+        uint256 vaultCoolDownDuration = VAULT_COOLDOWN_DURATION;
+
+        // set vault endTime
+        vault.endTime = block.timestamp + vaultCoolDownDuration;
+        emit VaultCooldownActivated(vaultId, vault.endTime);
+
         // if zero cooldown, remove vault from circulation immediately 
-        if(VAULT_COOLDOWN_DURATION == 0) {
+        if(vaultCoolDownDuration == 0) {  
             
-            // set endTime + removed
-            vault.endTime = block.timestamp;
+            // set removed
             vault.removed = 1;
 
             // decrement state vars
@@ -483,14 +488,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             totalBoostedRealmPoints -= vault.boostedRealmPoints;
             totalBoostedStakedTokens -= vault.boostedStakedTokens;
 
-            emit VaultCooldownInitiated(vaultId);
-            emit VaultRemoved(vaultId);
-
-        } else {
-
-            // set endTime       
-            vault.endTime = block.timestamp + VAULT_COOLDOWN_DURATION;
-            emit VaultCooldownInitiated(vaultId);
+            emit VaultEnded(vaultId);
         }
 
         // update storage
@@ -552,9 +550,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         ) 
             = PoolLogic.executeStakeOnBehalfOf(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, vaultIds, onBehalfOfs, amounts);
 
-        // EMIT
-        //emit StakedTokens(onBehalfOf, vaultIds, incomingTotalStakedTokens);
-
         // update storage: variables
         totalStakedTokens += incomingTotalStakedTokens;
         totalBoostedStakedTokens += incomingTotalBoostedStakedTokens;
@@ -579,7 +574,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
         endTime = endTime_;
 
-        emit EndTimeSet(endTime_);
+        emit StakingEndTimeSet(endTime_);
     }
 
     /**
