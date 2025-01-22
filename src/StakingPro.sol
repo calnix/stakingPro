@@ -912,7 +912,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @param vaultIds Array of vault IDs to recover assets from
      * @param onBehalfOf Address to receive the recovered assets
      */
-    function emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted whenPaused whenNotUnderMaintenance { 
+    function emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted { 
         if(isFrozen == 0) revert Errors.NotFrozen();
         if(vaultIds.length == 0) revert Errors.InvalidArray();
       
