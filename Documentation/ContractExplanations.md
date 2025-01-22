@@ -62,7 +62,10 @@ Consider the example where we want to stake to a vault. The process is as follow
 
 The vault account is updated first, accounting for boosting effects and fees. I.e. the vault considers its boosted balance relative to the total boosted balance of all vaults, to calculate the rewards accrued by the vault.
 
-The user account is updated next, accounting for the user's share of the rewards accrued by the vault. I.e. the user's account considers its unboosted balance relative to the vault's total unboosted balance of all users in the vault, to calculate the rewards accrued by the user. Unboosted balances are considered as all users within the same vault enjoy the same NFT_MULTIPLIER effects.
+The user account is updated next, accounting for the user's share of the rewards accrued by the vault.
+I.e., the user's account considers its unboosted balance relative to the vault's total unboosted balance of all users in the vault, to calculate the rewards accrued by the user.
+
+Unboosted balances are considered as all users within the same vault enjoy the same NFT_MULTIPLIER effects.
 
 ### Fees and rewards
 
@@ -687,7 +690,7 @@ That would be handled by the `endVaults()` function.
 ## endVaults
 
 ```solidity
-endVaults(bytes32[] calldata vaultIds) external onlyOwner
+endVaults(bytes32[] calldata vaultIds) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
 ```
 
 - Ends multiple vaults
@@ -695,10 +698,13 @@ endVaults(bytes32[] calldata vaultIds) external onlyOwner
 - Callable by anyone; no access control restrictions
 - Checks if endTime was set, as per `activateCooldown()`, else skips to next vault
 
+# Pool Management functions
+
+
 ## stakeOnBehalfOf
 
 ```solidity
-stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOfs, uint256[] calldata amounts) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance onlyOperatorOrOwner
+stakeOnBehalfOf(bytes32[] calldata vaultIds, address[] calldata onBehalfOfs, uint256[] calldata amounts) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance onlyRole(OPERATOR_ROLE)
 ```
 
 Allows the operator/owner to stake on behalf of users:
@@ -708,7 +714,6 @@ Allows the operator/owner to stake on behalf of users:
 
 
 
-# Pool Management functions
 
 ## setEndTime
 
