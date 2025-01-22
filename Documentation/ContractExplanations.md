@@ -518,6 +518,11 @@ This is to ensure that the operator role is kept unassigned, unless it is requir
 3. frozen: contract is frozen, all user functions revert except for emergencyExit().
 4. underMaintenance: contract is under maintenance, all user functions revert.
 
+Pausing should be used to verify any potential security issues.
+If they are not found, the contract can be unpaused.
+
+If there are security issues, the contract is frozen.
+
 ### Under Maintenance
 
 Contract is set to `underMaintenance` when there is a need to update the NFT_MULTIPLIER value.
