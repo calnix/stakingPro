@@ -1108,4 +1108,29 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         return _domainSeparatorV4();
     }
 
+    // note: update
+    function getRewards(address user, bytes32 vaultId, uint256 distributionId) external view returns(uint256) {
+        // cache
+        DataTypes.User memory userData = users[user][vaultId];
+
+        // staking not started: return early
+        if (block.timestamp <= startTime) {
+            return 0;
+        }
+
+        // calc. unbooked
+        if(userData.amount > 0) {
+            if(block.timestamp > userData.lastUpdateTimestamp){
+
+                uint256 timeDelta = _getTimeDelta(block.timestamp, userData.lastUpdateTimestamp);
+
+                uint256 unbookedWeight = userData.amount * timeDelta;
+                return (userData.cumulativeWeight + unbookedWeight);
+            }
+        }
+
+        // updated to latest, nothing unbooked 
+        return userData.cumulativeWeight;
+    }
+
 }

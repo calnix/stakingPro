@@ -628,11 +628,15 @@ unstake(bytes32 vaultId, uint256 amount, uint256[] calldata tokenIds) external w
 Allows users to unstake their staked tokens and Nfts from a specified vault:
 
 - Checks that the vault exists and is not ended
-- Unstakes the specified amount of staked tokens and Nfts
+- Unstakes the specified amount of staked tokens and/or Nfts
 - Updates NFT_REGISTRY to record unstake (NFT_REGISTRY.recordUnstake)
 - Users are able to unstake even if the contract's end time has been exceeded.
 
 **Will revert w/o error if the tokenIds provided are not staked by the user.**
+
+- The dynamic nature of the fn limits how many Nfts can be unstaked at once, due to gas cost involving array manipulations. 
+- The greater the number of Nfts needed to be unstaked at once, will result in increasing gas costs.
+- This has no impact on unstaking tokens.
 
 ## migrateVaults
 
