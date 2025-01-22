@@ -619,19 +619,20 @@ Allows users to stake Realm Points into a specified vault:
 - Signature must not be expired or already executed
 - Signature must be valid and from the stored signer
 
-## unstakeAll
+## unstake
 
 ```solidity
-unstakeAll(bytes32 vaultId) external whenStarted whenNotPaused whenNotUnderMaintenance
+unstake(bytes32 vaultId, uint256 amount, uint256[] calldata tokenIds) external whenStarted whenNotPaused whenNotUnderMaintenance
 ```
 
-Allows users to unstake all their staked tokens and Nfts from a specified vault:
+Allows users to unstake their staked tokens and Nfts from a specified vault:
 
 - Checks that the vault exists and is not ended
-- Unstakes all staked tokens and Nfts
+- Unstakes the specified amount of staked tokens and Nfts
 - Updates NFT_REGISTRY to record unstake (NFT_REGISTRY.recordUnstake)
+- Users are able to unstake even if the contract's end time has been exceeded.
 
-**Users are able to unstake even if the contract's end time has been exceeded.**
+**Will revert w/o error if the tokenIds provided are not staked by the user.**
 
 ## migrateVaults
 
@@ -700,7 +701,6 @@ endVaults(bytes32[] calldata vaultIds) external whenStartedAndNotEnded whenNotPa
 
 # Pool Management functions
 
-
 ## stakeOnBehalfOf
 
 ```solidity
@@ -711,9 +711,6 @@ Allows the operator/owner to stake on behalf of users:
 
 - Checks that the vault exists and is not ended
 - Transfers tokens from the function caller to the contract
-
-
-
 
 ## setEndTime
 

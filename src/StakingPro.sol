@@ -305,11 +305,14 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     /**
-     * @notice Unstakes all tokens and NFTs from a vault
+     * @notice Unstakes tokens and NFTs from a vault
      * @dev Updates accounting, transfers tokens, and records NFT unstaking
      * @param vaultId The ID of the vault to unstake from
+     * @param amount The amount of tokens to unstake
+     * @param tokenIds Array of NFT token IDs to unstake
+     * @custom: Will revert w/o error if the tokenIds provided are not staked by the user
      */
-    function unstakeAll(bytes32 vaultId, uint256 amount, uint256[] calldata tokenIds) external whenStarted whenNotPaused whenNotUnderMaintenance {
+    function unstake(bytes32 vaultId, uint256 amount, uint256[] calldata tokenIds) external whenStarted whenNotPaused whenNotUnderMaintenance {
         if(vaultId == 0) revert Errors.InvalidVaultId();
         if(amount == 0 && tokenIds.length == 0) revert Errors.InvalidAmount();
 
