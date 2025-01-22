@@ -310,7 +310,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @param vaultId The ID of the vault to unstake from
      * @param amount The amount of tokens to unstake
      * @param tokenIds Array of NFT token IDs to unstake
-     * @custom: Will revert w/o error if the tokenIds provided are not staked by the user
+     * @custom:revert Will revert w/o error if the tokenIds provided are not staked by the user
      */
     function unstake(bytes32 vaultId, uint256 amount, uint256[] calldata tokenIds) external whenStarted whenNotPaused whenNotUnderMaintenance {
         if(vaultId == 0) revert Errors.InvalidVaultId();
@@ -1110,27 +1110,26 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
     // note: update
     function getRewards(address user, bytes32 vaultId, uint256 distributionId) external view returns(uint256) {
-        // cache
-        DataTypes.User memory userData = users[user][vaultId];
 
         // staking not started: return early
         if (block.timestamp <= startTime) {
             return 0;
         }
 
+        DataTypes.UpdateAccountsIndexesParams memory params;
+            params.user = user;   
+            params.vaultId = vaultId;
+            params.PRECISION_BASE = PRECISION_BASE;
+            params.totalBoostedRealmPoints = totalBoostedRealmPoints;
+            params.totalBoostedStakedTokens = totalBoostedStakedTokens;
+
         // calc. unbooked
-        if(userData.amount > 0) {
-            if(block.timestamp > userData.lastUpdateTimestamp){
+        uint256 totalUnclaimedRewards
+         = PoolLogic.viewClaimRewards(vaults, distributions, users, vaultAccounts, userAccounts, params, 
+            distributionId);
 
-                uint256 timeDelta = _getTimeDelta(block.timestamp, userData.lastUpdateTimestamp);
-
-                uint256 unbookedWeight = userData.amount * timeDelta;
-                return (userData.cumulativeWeight + unbookedWeight);
-            }
-        }
-
-        // updated to latest, nothing unbooked 
-        return userData.cumulativeWeight;
+        // latest value, nothing unbooked 
+        return totalUnclaimedRewards;
     }
 
 }

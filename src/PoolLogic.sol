@@ -714,7 +714,6 @@ library PoolLogic {
     }
 
 
-
     function executeUpdateDistributionIndex(
         uint256[] storage activeDistributions,
         DataTypes.Distribution memory distribution,
@@ -729,7 +728,84 @@ library PoolLogic {
         return distribution;
     }
 
-//-----------------------------------internal-------------------------------------------
+    function viewClaimRewards(        
+        mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
+        mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
+        mapping(address user => mapping(bytes32 vaultId => DataTypes.User userVaultAssets)) storage users,
+        mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
+        mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
+
+        DataTypes.UpdateAccountsIndexesParams memory params,
+        uint256 distributionId
+    ) external view returns (uint256) {
+        
+        // cache vault and user data, reverts if vault does not exist
+        (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
+        
+        // get corresponding user+vault account for this active distribution 
+        DataTypes.Distribution memory distribution = distributions[distributionId];
+        DataTypes.VaultAccount memory vaultAccount = vaultAccounts[params.vaultId][distributionId];
+        DataTypes.UserAccount memory userAccount = userAccounts[params.user][params.vaultId][distributionId];
+
+        // only update specified distribution, and its accounts
+        (userAccount, vaultAccount, distribution) 
+            = _viewUserAccount(userVaultAssets, userAccount, vault, vaultAccount, distribution, params);
+      
+        //----------------------- calc. and update vault and user accounts ------------------------
+
+        uint256 totalUnclaimedRewards;
+        
+        // staking MOCA rewards
+        if (userAccount.accStakingRewards > userAccount.claimedStakingRewards) {
+
+            uint256 unclaimedRewards = userAccount.accStakingRewards - userAccount.claimedStakingRewards;
+
+            userAccount.claimedStakingRewards += unclaimedRewards;
+            vaultAccount.totalClaimedRewards += unclaimedRewards;
+
+            totalUnclaimedRewards += unclaimedRewards;
+        }
+
+        // staking RP rewards 
+        if (userAccount.accRealmPointsRewards > userAccount.claimedRealmPointsRewards) {
+
+            uint256 unclaimedRpRewards = userAccount.accRealmPointsRewards - userAccount.claimedRealmPointsRewards;
+
+            userAccount.claimedRealmPointsRewards += unclaimedRpRewards;
+            vaultAccount.totalClaimedRewards += unclaimedRpRewards;
+
+            totalUnclaimedRewards += unclaimedRpRewards;
+        }
+
+        // staking NFT rewards
+        if (userAccount.accNftStakingRewards > userAccount.claimedNftRewards) {
+
+            uint256 unclaimedNftRewards = userAccount.accNftStakingRewards - userAccount.claimedNftRewards;
+
+            userAccount.claimedNftRewards += unclaimedNftRewards;
+            vaultAccount.totalClaimedRewards += unclaimedNftRewards;
+
+            totalUnclaimedRewards += unclaimedNftRewards;
+        }
+
+        // creator rewards
+        if (vault.creator == params.user) {
+
+            uint256 unclaimedCreatorRewards = vaultAccount.accCreatorRewards - userAccount.claimedCreatorRewards;
+
+            if(unclaimedCreatorRewards > 0) {
+            
+                userAccount.claimedCreatorRewards += unclaimedCreatorRewards;
+                vaultAccount.totalClaimedRewards += unclaimedCreatorRewards;
+            
+                totalUnclaimedRewards += unclaimedCreatorRewards;
+            }
+        }
+
+        return totalUnclaimedRewards;
+    }
+
+//-----------------------------------internal-------------------------------------------  
 
     function _updateDistributionIndex(
         DataTypes.Distribution memory distribution, 
@@ -956,7 +1032,7 @@ library PoolLogic {
         DataTypes.VaultAccount memory vaultAccount_, 
         DataTypes.Distribution memory distribution_,
         DataTypes.UpdateAccountsIndexesParams memory params
-        ) internal returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
+    ) internal returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
         
         // get updated vaultAccount and distribution
         (DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateVaultAccount(vault, vaultAccount_, distribution_, activeDistributions, params);
@@ -1125,5 +1201,159 @@ library PoolLogic {
 
         return resArr;
     }
+
+    /*//////////////////////////////////////////////////////////////
+                                HELPERS
+    //////////////////////////////////////////////////////////////*/
+    
+    function _viewUserAccount(
+        DataTypes.User memory user, 
+        DataTypes.UserAccount memory userAccount,
+        DataTypes.Vault memory vault, 
+        DataTypes.VaultAccount memory vaultAccount_, 
+        DataTypes.Distribution memory distribution_,
+        DataTypes.UpdateAccountsIndexesParams memory params
+    ) internal view returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
+        
+        // get updated vaultAccount and distribution
+        (DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _viewVaultAccount(vault, vaultAccount_, distribution_, params);
+        
+        uint256 newUserIndex = vaultAccount.rewardsAccPerUnitStaked;
+
+        // if this index has not been updated, the subsequent ones would not have. check once here, no need repeat
+        if(userAccount.index != newUserIndex) { 
+
+            if(user.stakedTokens > 0) {
+                // users whom staked tokens are eligible for rewards less of fees
+                uint256 balanceRebased = (user.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
+                uint256 accruedRewards = _calculateRewards(balanceRebased, newUserIndex, userAccount.index, distribution.TOKEN_PRECISION);
+                userAccount.accStakingRewards += accruedRewards;
+            }
+
+
+            uint256 userStakedNfts = user.tokenIds.length;
+            if(userStakedNfts > 0) {
+
+                // total accrued rewards from staking NFTs
+                uint256 accNftStakingRewards = (vaultAccount.nftIndex - userAccount.nftIndex) * userStakedNfts;
+                userAccount.accNftStakingRewards += accNftStakingRewards;
+            }
+
+
+            if(user.stakedRealmPoints > 0){
+                
+                // users whom staked RP are eligible for a portion of RP fees
+                uint256 totalStakedRpRebased = (vault.stakedRealmPoints * distribution.TOKEN_PRECISION) / 1E18;
+
+                uint256 accRealmPointsRewards = (vaultAccount.rpIndex - userAccount.rpIndex) * totalStakedRpRebased;
+                userAccount.accRealmPointsRewards += accRealmPointsRewards;
+            }
+        }
+
+        // update user indexes
+        userAccount.index = vaultAccount.rewardsAccPerUnitStaked;   // less of fees
+        userAccount.nftIndex = vaultAccount.nftIndex;
+        userAccount.rpIndex = vaultAccount.rpIndex;
+
+        return (userAccount, vaultAccount, distribution);
+    }
+
+    function _viewVaultAccount(
+        DataTypes.Vault memory vault, 
+        DataTypes.VaultAccount memory vaultAccount, 
+        DataTypes.Distribution memory distribution_,
+        DataTypes.UpdateAccountsIndexesParams memory params
+    ) internal view returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
+
+        // get latest distributionIndex, if not already updated
+        DataTypes.Distribution memory distribution = _viewDistributionIndex(
+            distribution_, 
+            params.totalBoostedRealmPoints, 
+            params.totalBoostedStakedTokens
+        );
+        
+        // vault already been updated by a prior txn; skip updating vaultAccount
+        if(distribution.index == vaultAccount.index) return (vaultAccount, distribution);
+
+        // vault has been removed from circulation: final update done by endVaults()
+        if(vault.removed == 1) return (vaultAccount, distribution);
+        
+        // update vault rewards + fees
+        uint256 totalAccRewards; 
+        uint256 accCreatorFee; 
+        uint256 accTotalNftFee;
+        uint256 accRealmPointsFee;
+
+        // STAKING POWER: staked realm points | TOKENS: staked moca tokens
+        uint256 boostedBalance = distribution.distributionId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
+        uint256 totalBalanceRebased = (boostedBalance * distribution.TOKEN_PRECISION) / 1E18;  
+        // note: rewards calc. in reward token precision
+        totalAccRewards = _calculateRewards(totalBalanceRebased, distribution.index, vaultAccount.index, distribution.TOKEN_PRECISION);
+
+        // calc. creator fees
+        if(vault.creatorFeeFactor > 0) {
+            accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / params.PRECISION_BASE;
+        }
+
+        // nft fees accrued only if there were staked NFTs
+        if(vault.stakedNfts > 0) {
+            if(vault.nftFeeFactor > 0) {
+
+                accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / params.PRECISION_BASE;
+                vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);              // nftIndex: rewardsAccPerNFT
+            }
+        }
+
+        // rp fees accrued only if there were staked RP 
+        if(vault.stakedRealmPoints > 0) {
+            if(vault.realmPointsFeeFactor > 0) {
+                accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / params.PRECISION_BASE;
+
+                // accRealmPointsFee is in reward token precision
+                uint256 stakedRealmPointsRebased = (vault.stakedRealmPoints * distribution.TOKEN_PRECISION) / 1E18;  
+                vaultAccount.rpIndex += (accRealmPointsFee / stakedRealmPointsRebased);              // rpIndex: rewardsAccPerRP
+            }
+        } 
+        
+        // book rewards: total, Creator, NFT, RealmPoints | expressed in distri token precision
+        vaultAccount.totalAccRewards += totalAccRewards;
+        vaultAccount.accCreatorRewards += accCreatorFee;
+        vaultAccount.accNftStakingRewards += accTotalNftFee;
+        vaultAccount.accRealmPointsRewards += accRealmPointsFee;
+
+        // reference for moca stakers to calc. rewards net of fees
+        uint256 totalStakedRebased = (vault.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
+        vaultAccount.rewardsAccPerUnitStaked += (totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) / totalStakedRebased;  
+
+        // update vaultIndex
+        vaultAccount.index = distribution.index;
+
+        return (vaultAccount, distribution);
+    }
+
+    function _viewDistributionIndex(
+        DataTypes.Distribution memory distribution, 
+        uint256 totalBoostedRealmPoints, 
+        uint256 totalBoostedStakedTokens
+    ) internal view returns (DataTypes.Distribution memory) {
+        
+        // distribution already updated
+        if(distribution.lastUpdateTimeStamp == block.timestamp) return distribution;
+
+        // distribution has not started
+        if(block.timestamp < distribution.startTime) return distribution;
+
+        uint256 totalBoostedBalance = distribution.distributionId == 0 ? totalBoostedRealmPoints : totalBoostedStakedTokens;
+        (uint256 nextIndex, uint256 currentTimestamp, uint256 emittedRewards) = _calculateDistributionIndex(distribution, totalBoostedBalance);
+        
+        if (nextIndex > distribution.index) {
+
+            distribution.index = nextIndex;
+            distribution.totalEmitted += emittedRewards;
+            distribution.lastUpdateTimeStamp = currentTimestamp;
+        }
+
+        return distribution;
+    } 
 
 }
