@@ -462,11 +462,9 @@ This expects that the nft registry contract should be deployed in advance.
 
 We need to then deploy the following contracts:
 - RewardsVault
-- RealmPoints
 
 We need to then set the following, on the stakingPro contract:
 - RewardsVault address
-- RealmPoints address
 
 ## Roles & Addresses
 
