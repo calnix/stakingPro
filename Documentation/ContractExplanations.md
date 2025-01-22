@@ -405,7 +405,10 @@ Each vault has a unique id, that is generated randomly. See `_generateVaultId()`
 - A user has a separate account for each distribution, specific to a vault they have staked into.
 - Each user account records the user's accrued and claimed rewards for that specific vault and distribution.
 
-## Process of updating each vaultAccount and userAccount for a specific vault
+By this point, it should be clear that while for each distribution, a vault has a unique vaultAccount, a user has a unique userAccount for each vault.
+Implying, that if a user has staked into multiple vaults, they will have multiple userAccounts, for the same distribution.
+
+## Process of updating each vaultAccount and userAccount for a specific vault & distribution
 
 Before enacting a state change upon a vault (i.e. stake/unstake, etc), it must be updated first.
 Consider the example where we want to stake to a vault. The process is as follows:
@@ -414,6 +417,25 @@ Consider the example where we want to stake to a vault. The process is as follow
 2. update all vault accounts for specified vault [per distribution]
 3. update all user accounts for specified vault  [per distribution]
 4. book stake and update vault assets
+
+The vault account is updated first, accounting for boosting effects and fees. I.e. the vault considers its boosted balance relative to the total boosted balance of all vaults, to calculate the rewards accrued by the vault.
+
+The user account is updated next, accounting for the user's share of the rewards accrued by the vault. I.e. the user's account considers its unboosted balance relative to the vault's total unboosted balance of all users in the vault, to calculate the rewards accrued by the user. Unboosted balances are considered as all users within the same vault enjoy the same NFT_MULTIPLIER effects.
+
+### Fees and rewards
+
+Fees are levied on the vault's accrued rewards, before the rewards are distributed to the vault's stakers.
+
+- creatorFee: levied to pay for the creation of the vault
+- nftStakingFee: levied to pay for the staking of NFTs
+- rpStakingFee: levied to pay for the staking of RP
+
+Rewards accrued by a vault are paid out to it's stakers of moca tokens.
+
+- moca stakers earn rewards less of fees; token rewards or staking power.
+- moca stakers do not levy any fees.
+
+Hence, it can be said that the rewards paid out to the vault's stakers are the gross rewards accrued by the vault; less of fees.
 
 # Contract Walkthrough
 
@@ -640,19 +662,6 @@ Updates the fees for a specified vault:
 - Only the vault creator can update fees
 - Creator can only decrease their creator fee factor
 - Total of all fees cannot exceed 50% [MocaToken stakers receive at least 50% of rewards]
-
-### fees and rewards
-
-fees are levied on the gross amount of rewards accrued by the vault.
-
-- creatorFee: levied to pay for the creation of the vault
-- nftStakingFee: levied to pay for the staking of NFTs
-- rpStakingFee: levied to pay for the staking of RP
-
-rewards accrued by a vault are paid out to it's stakers of moca tokens.
-
-- moca stakers earn rewards less of fees; token rewards or staking power.
-- moca stakers do not levy any fees.
 
 ## activateCooldown
 
