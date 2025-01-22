@@ -641,6 +641,19 @@ Updates the fees for a specified vault:
 - Creator can only decrease their creator fee factor
 - Total of all fees cannot exceed 50% [MocaToken stakers receive at least 50% of rewards]
 
+### fees and rewards
+
+fees are levied on the gross amount of rewards accrued by the vault.
+
+- creatorFee: levied to pay for the creation of the vault
+- nftStakingFee: levied to pay for the staking of NFTs
+- rpStakingFee: levied to pay for the staking of RP
+
+rewards accrued by a vault are paid out to it's stakers of moca tokens.
+
+- moca stakers earn rewards less of fees; token rewards or staking power.
+- moca stakers do not levy any fees.
+
 ## activateCooldown
 
 ```solidity
