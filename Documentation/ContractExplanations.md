@@ -619,6 +619,18 @@ Allows users to stake Realm Points into a specified vault:
 - Signature must not be expired or already executed
 - Signature must be valid and from the stored signer
 
+## migrateRP
+
+```solidity
+migrateRP(bytes32 oldVaultId, bytes32 newVaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance 
+```
+
+Allows users to migrate their staked RP from one vault to another:
+
+- Checks that the old vault exists
+- Checks that the new vault exists and is not ended
+- Migrates the specified amount of staked RP from the old vault to the new vault
+
 ## unstake
 
 ```solidity
@@ -704,6 +716,8 @@ endVaults(bytes32[] calldata vaultIds) external whenStartedAndNotEnded whenNotPa
 - Checks if endTime was set, as per `activateCooldown()`, else skips to next vault
 
 # Pool Management functions
+
+OPERATOR_ROLE is required to call the following functions:
 
 ## stakeOnBehalfOf
 
@@ -869,7 +883,7 @@ This provides an emergency mechanism to halt reward distributions if needed, whi
 ## enableMaintenance
 
 ```solidity
-enableMaintenance() external whenNotPaused whenNotUnderMaintenance onlyOperatorOrOwner 
+enableMaintenance() external whenNotPaused whenNotUnderMaintenance onlyRole(OPERATOR_ROLE) 
 ```
 
 - Enables maintenance mode, which disables all user functions.
@@ -878,7 +892,7 @@ enableMaintenance() external whenNotPaused whenNotUnderMaintenance onlyOperatorO
 ## disableMaintenance
 
 ```solidity
-disableMaintenance() external whenNotPaused whenUnderMaintenance onlyOperatorOrOwner
+disableMaintenance() external whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE)
 ```
 
 - Disables maintenance mode, which re-enables all user functions.

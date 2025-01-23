@@ -218,6 +218,73 @@ library PoolLogic {
         return (stakedTokens, userBoostedStakedTokens, deltaVaultBoostedRealmPoints, deltaVaultBoostedStakedTokens, numOfNfts, userTokenIds);
     } 
 
+    function executeMigrateRP(
+        uint256[] storage activeDistributions,
+        mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
+        mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
+        mapping(address user => mapping(bytes32 vaultId => DataTypes.User userVaultAssets)) storage users,
+        mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
+        mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
+
+        DataTypes.UpdateAccountsIndexesParams memory params,
+        bytes32 newVaultId,
+        uint256 amount
+    ) external returns (uint256, uint256) {
+
+        // cache vault and user data, reverts if vault does not exist
+        (DataTypes.User memory oldUserVaultAssets, DataTypes.Vault memory oldVault) = _cache(params.vaultId, params.user, vaults, users);
+        (DataTypes.User memory newUserVaultAssets, DataTypes.Vault memory newVault) = _cache(newVaultId, params.user, vaults, users);
+
+        // vault cooldown activated: cannot migrate
+        if(newVault.endTime > 0) revert Errors.VaultEndTimeSet(newVaultId);
+
+        // sanity check: user must have sufficient RP in old vault
+        if(oldUserVaultAssets.stakedRealmPoints < amount) revert Errors.UserHasNothingStaked(params.vaultId, params.user);
+
+        // storage update: vault and user accounting across all active reward distributions
+        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, oldVault, oldUserVaultAssets, params);
+        // storage update: vault and user accounting across all active reward distributions
+        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, newVault, newUserVaultAssets, params);
+
+        // ---------------------------- update vaults ----------------------------------------------
+
+        // decrement oldVault
+        uint256 oldBoostedRealmPoints = (amount * oldVault.totalBoostFactor) / params.PRECISION_BASE; 
+        oldVault.stakedRealmPoints -= amount;
+        oldVault.boostedRealmPoints -= oldBoostedRealmPoints;
+        
+        // increment new vault
+        uint256 newBoostedRealmPoints = (amount * newVault.totalBoostFactor) / params.PRECISION_BASE; 
+        newVault.stakedRealmPoints += amount;
+        newVault.boostedRealmPoints += newBoostedRealmPoints;
+
+        // EMIT 
+        emit RPMigrated(params.user, params.vaultId, newVaultId, amount);
+
+        // Update storage for both vaults
+        vaults[params.vaultId] = oldVault;
+        vaults[newVaultId] = newVault;
+
+        // storage
+        users[params.user][params.vaultId] = oldUserVaultAssets;
+        users[params.user][newVaultId] = newUserVaultAssets;
+
+        // global delta
+        uint256 totalBoostedDelta;
+        if(newBoostedRealmPoints > oldBoostedRealmPoints) {
+            
+            totalBoostedDelta += (newBoostedRealmPoints - oldBoostedRealmPoints);    
+            //1: flag for incrementation
+            return(totalBoostedDelta, 1);
+
+        } else{
+
+            totalBoostedDelta += (oldBoostedRealmPoints - newBoostedRealmPoints);
+            //0: flag for decrementation
+            return(totalBoostedDelta, 0);
+        }
+    }
+
     function executeMigrateVaults(
         uint256[] storage activeDistributions,
         mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
@@ -424,17 +491,13 @@ library PoolLogic {
         if(vault.creator != params.user) revert Errors.UserIsNotCreator();
         if(creatorFeeFactor > vault.creatorFeeFactor) revert Errors.CreatorFeeCanOnlyBeDecreased();
 
-        // sanity check: new fee compositions cannot exceed 50%
-        uint256 totalFeeFactor = nftFeeFactor + creatorFeeFactor + realmPointsFeeFactor;
-        if(totalFeeFactor > 5000) revert Errors.TotalFeeFactorExceeded();     // 50% = 5000/10_000 = 5000/PRECISION_BASE
-
         // storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, vault, userVaultAssets, params);
 
-        // cache old fees for events
-        uint256 oldCreatorFeeFactor = vault.creatorFeeFactor;
-        uint256 oldNftFeeFactor = vault.nftFeeFactor;
-        uint256 oldRealmPointsFeeFactor = vault.realmPointsFeeFactor;
+        // emit events for fee changes
+        emit CreatorFeeFactorUpdated(params.vaultId, vault.creatorFeeFactor, creatorFeeFactor);    
+        emit NftFeeFactorUpdated(params.vaultId, vault.nftFeeFactor, nftFeeFactor);
+        emit RealmPointsFeeFactorUpdated(params.vaultId, vault.realmPointsFeeFactor, realmPointsFeeFactor);
 
         // update fees
         vault.nftFeeFactor = nftFeeFactor;
@@ -443,11 +506,6 @@ library PoolLogic {
         
         // update storage 
         vaults[params.vaultId] = vault;
-
-        // emit events for fee changes
-        emit CreatorFeeFactorUpdated(params.vaultId, oldCreatorFeeFactor, creatorFeeFactor);
-        emit NftFeeFactorUpdated(params.vaultId, oldNftFeeFactor, nftFeeFactor);
-        emit RealmPointsFeeFactorUpdated(params.vaultId, oldRealmPointsFeeFactor, realmPointsFeeFactor);
     }
 
     function executeActivateCooldown(
@@ -920,7 +978,6 @@ library PoolLogic {
 
         return (nextDistributionIndex, currentTimestamp, emittedRewards);
     }
-
 
     // update specified vault account
     // returns updated vault account and updated distribution structs 

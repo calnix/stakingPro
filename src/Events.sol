@@ -20,6 +20,9 @@ event VaultBoostFactorUpdated(bytes32 indexed vaultId, uint256 oldBoostFactor, u
 // stakeRP
 event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 amount, uint256 boostedAmount);
 
+// migrateRP
+event RPMigrated(address indexed user, bytes32 indexed vaultId, bytes32 indexed newVaultId, uint256 amount);
+
 // unstakeAll
 event UnstakedTokens(address indexed user, bytes32 indexed vaultId, uint256 amount);
 event UnstakedNfts(address indexed user, bytes32 indexed vaultId, uint256[] tokenIds);
@@ -57,6 +60,9 @@ event StakingEndTimeSet(uint256 endTime);
 
 // setRewardsVault
 event RewardsVaultSet(address indexed oldVault, address indexed newVault);
+
+// updateMaximumFeeFactor
+event MaximumFeeFactorUpdated(uint256 oldFactor, uint256 newFactor);
 
 // updateMinimumRealmPoints
 event MinimumRealmPointsUpdated(uint256 oldAmount, uint256 newAmount);

@@ -19,7 +19,7 @@ library Errors {
     // createVault
     error IncorrectCreationNfts();
     error InvalidNfts();
-    error TotalFeeFactorExceeded();
+    error MaximumFeeFactorExceeded();
 
     // stakeRealmPoints
     error SignatureExpired();

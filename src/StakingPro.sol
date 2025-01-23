@@ -55,6 +55,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     uint256 public constant PRECISION_BASE = 10_000;   // feeFactors & nft multiplier expressed in 2dp precision (XX.yy)
 
     // vault params
+    uint256 public MAXIMUM_FEE_FACTOR;
     uint256 public CREATION_NFTS_REQUIRED;
     uint256 public VAULT_COOLDOWN_DURATION;
     
@@ -102,6 +103,9 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         startTime = startTime_;
 
         // storage vars
+        MAXIMUM_FEE_FACTOR = 5000;      // 50%
+        MINIMUM_REALMPOINTS_REQUIRED = 250;  // 2.5%
+        
         NFT_MULTIPLIER = nftMultiplier;
         CREATION_NFTS_REQUIRED = creationNftsRequired;
         VAULT_COOLDOWN_DURATION = vaultCoolDownDuration;
@@ -143,7 +147,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     
         //note: MOCA stakers must receive at least 50% of rewards
         uint256 totalFeeFactor = nftFeeFactor + creatorFeeFactor + realmPointsFeeFactor;
-        if(totalFeeFactor > 5000) revert Errors.TotalFeeFactorExceeded();
+        if(totalFeeFactor > MAXIMUM_FEE_FACTOR) revert Errors.MaximumFeeFactorExceeded();
 
         // vaultId generation
         bytes32 vaultId;
@@ -305,6 +309,41 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     /**
+     * @notice Moves realm points from one vault to another
+     * @dev Updates accounting for both vaults and recalculates boosted amounts
+     * @param oldVaultId The ID of the vault to move realm points from
+     * @param newVaultId The ID of the vault to move realm points to
+     * @param amount The amount of realm points to move
+     */
+    function migrateRP(bytes32 oldVaultId, bytes32 newVaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
+        if(amount == 0) revert Errors.InvalidAmount();
+        if(oldVaultId == 0) revert Errors.InvalidVaultId();
+        if(newVaultId == 0) revert Errors.InvalidVaultId();
+
+        DataTypes.UpdateAccountsIndexesParams memory params;
+            params.user = msg.sender;
+            params.vaultId = oldVaultId;
+            params.PRECISION_BASE = PRECISION_BASE;
+            params.totalBoostedRealmPoints = totalBoostedRealmPoints;
+            params.totalBoostedStakedTokens = totalBoostedStakedTokens;
+
+        (
+            uint256 totalBoostedDelta,
+            uint256 flag
+        ) 
+            = PoolLogic.executeMigrateRP(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
+                newVaultId, amount);
+        
+        if(flag == 1) {
+            // newBoostedRealmPoints > oldBoostedRealmPoints
+            totalBoostedRealmPoints += totalBoostedDelta;
+        } else{
+            // newBoostedRealmPoints < oldBoostedRealmPoints
+            totalBoostedRealmPoints -= totalBoostedDelta;
+        }
+    }
+
+    /**
      * @notice Unstakes tokens and NFTs from a vault
      * @dev Updates accounting, transfers tokens, and records NFT unstaking
      * @param vaultId The ID of the vault to unstake from
@@ -429,10 +468,9 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     /**
-     * @notice Updates the fee structure for a vault
-     * @dev Only the vault creator can update fees
+     * @notice Updates the fee structure for a vault. Only the vault creator can update fees
      * @dev Creator can only decrease their creator fee factor
-     * @dev Total of all fees cannot exceed 50%
+     * @dev Total of all fees cannot exceed maximum fee factor
      * @param vaultId The ID of the vault to update fees for
      * @param nftFeeFactor The new NFT fee factor factor
      * @param creatorFeeFactor The new creator fee factor
@@ -440,6 +478,10 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      */
     function updateVaultFees(bytes32 vaultId, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(vaultId == 0) revert Errors.InvalidVaultId();
+
+        // sanity check: new fee compositions cannot exceed max
+        uint256 totalFeeFactor = nftFeeFactor + creatorFeeFactor + realmPointsFeeFactor;
+        if(totalFeeFactor > MAXIMUM_FEE_FACTOR) revert Errors.MaximumFeeFactorExceeded();     //e.g.: 50% = 5000/10_000 = 5000/PRECISION_BASE
 
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.user = msg.sender; 
@@ -589,6 +631,20 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
         emit RewardsVaultSet(address(REWARDS_VAULT), newRewardsVault);
         REWARDS_VAULT = IRewardsVault(newRewardsVault);    
+    }
+
+    /**
+     * @notice Updates the maximum fee factor for the staking pool
+     * @dev Fee factor must be non-zero
+     * @param newFactor The new maximum fee factor to set
+     */
+    function updateMaximumFeeFactor(uint256 newFactor) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
+        if(newFactor == 0) revert Errors.InvalidAmount();
+
+        uint256 oldFactor = MAXIMUM_FEE_FACTOR;
+        MAXIMUM_FEE_FACTOR = newFactor;
+
+        emit MaximumFeeFactorUpdated(oldFactor, newFactor);
     }
 
     /**
@@ -761,7 +817,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(isUnderMaintenance == 1) revert Errors.InMaintenance();
         
         isUnderMaintenance = 1;
-        
         emit MaintenanceEnabled(block.timestamp);
     }
 
@@ -772,7 +827,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(isUnderMaintenance == 0) revert Errors.NotInMaintenance();
         
         isUnderMaintenance = 0;
-        
         emit MaintenanceDisabled(block.timestamp);
     }
 
@@ -900,9 +954,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      */
     function freeze() external whenPaused onlyRole(DEFAULT_ADMIN_ROLE) {
         if(isFrozen == 1) revert Errors.IsFrozen();
-        
         isFrozen = 1;
-
         emit PoolFrozen(block.timestamp);
     }  
 
