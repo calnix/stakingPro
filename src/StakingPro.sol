@@ -90,7 +90,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
     constructor(
         address nftRegistry, address stakedToken, uint256 startTime_, 
-        uint256 maxFeeFactor, uint256 minRpRequired, uint256 nftMultiplier, 
+        /*uint256 maxFeeFactor, uint256 minRpRequired,*/ uint256 nftMultiplier, 
         uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
         address owner, address monitor, 
         string memory name, string memory version) payable EIP712(name, version) {
@@ -107,11 +107,8 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         startTime = startTime_;
 
         // storage vars
-        MAXIMUM_FEE_FACTOR = maxFeeFactor;      // 50%:5000
-        if(maxFeeFactor > PRECISION_BASE) revert Errors.InvalidMaxFeeFactor();
-
-        MINIMUM_REALMPOINTS_REQUIRED = minRpRequired;
-        
+        MAXIMUM_FEE_FACTOR = 5000;      // 50%:5000
+        MINIMUM_REALMPOINTS_REQUIRED = 250;
         NFT_MULTIPLIER = nftMultiplier;
         CREATION_NFTS_REQUIRED = creationNftsRequired;
         VAULT_COOLDOWN_DURATION = vaultCoolDownDuration;
