@@ -35,6 +35,9 @@ library Errors {
 
     // updateVaultFees
     error CreatorFeeCanOnlyBeDecreased();
+    error NftFeeCanOnlyBeIncreased();
+    error RealmPointsFeeCanOnlyBeIncreased();
+    error IncorrectFeeComposition();
 
     // setupDistribution
     error ZeroTokenPrecision();

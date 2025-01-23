@@ -285,101 +285,6 @@ library PoolLogic {
         }
     }
 
-    function executeMigrateVaults(
-        uint256[] storage activeDistributions,
-        mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
-        mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
-        mapping(address user => mapping(bytes32 vaultId => DataTypes.User userVaultAssets)) storage users,
-        mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
-        mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
-
-        DataTypes.UpdateAccountsIndexesParams memory params,
-        bytes32 newVaultId,
-        uint256 NFT_MULTIPLIER
-    ) external returns (uint256, uint256, uint256, uint256, uint256[] memory oldVaultTokenIds, uint256[] memory newVaultTokenIds) {
-
-        // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory oldUserVaultAssets, DataTypes.Vault memory oldVault) = _cache(params.vaultId, params.user, vaults, users);
-        (DataTypes.User memory newUserVaultAssets, DataTypes.Vault memory newVault) = _cache(newVaultId, params.user, vaults, users);
-
-        // vault cooldown activated: cannot migrate
-        if(newVault.endTime > 0) revert Errors.VaultEndTimeSet(newVaultId);
-
-        // sanity check: user must have non-zero holdings in old vault
-        if (oldUserVaultAssets.stakedTokens == 0 && 
-            oldUserVaultAssets.tokenIds.length == 0 && 
-            oldUserVaultAssets.stakedRealmPoints == 0) {
-            revert Errors.UserHasNothingStaked(params.vaultId, params.user);
-        }
-
-        // storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, oldVault, oldUserVaultAssets, params);
-        // storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, newVault, newUserVaultAssets, params);
-
-        // ---------------------------- update vaults ----------------------------------------------
-        
-        // cache: event 
-        uint256 newVaultTotalBoostFactor = newVault.totalBoostFactor;
-        uint256 oldVaultTotalBoostFactor = oldVault.totalBoostFactor;
-
-        // increment new vault: base assets
-        newVault.stakedNfts += oldUserVaultAssets.tokenIds.length;
-        newVault.stakedTokens += oldUserVaultAssets.stakedTokens;
-        newVault.stakedRealmPoints += oldUserVaultAssets.stakedRealmPoints;
-
-        // boostFactor delta
-        uint256 boostFactorDelta = oldUserVaultAssets.tokenIds.length * NFT_MULTIPLIER;
-        
-        // update boost on newVault
-        newVault.totalBoostFactor += boostFactorDelta;
-        newVault.boostedStakedTokens = (newVault.stakedTokens * newVault.totalBoostFactor) / params.PRECISION_BASE; 
-        newVault.boostedRealmPoints = (newVault.stakedRealmPoints * newVault.totalBoostFactor) / params.PRECISION_BASE; 
-
-        // emit events: new vault
-        emit VaultMigrated(
-            params.user, params.vaultId, newVaultId, 
-            oldUserVaultAssets.stakedTokens, oldUserVaultAssets.stakedRealmPoints, oldUserVaultAssets.tokenIds);
-        emit VaultBoostFactorUpdated(newVaultId, newVaultTotalBoostFactor, newVault.totalBoostFactor);
-
-        // decrement oldVault
-        oldVault.stakedNfts -= oldUserVaultAssets.tokenIds.length;
-        oldVault.stakedTokens -= oldUserVaultAssets.stakedTokens;
-        oldVault.stakedRealmPoints -= oldUserVaultAssets.stakedRealmPoints;
-        
-        // update boost on oldVault
-        oldVault.totalBoostFactor -= boostFactorDelta;
-        oldVault.boostedStakedTokens = (oldVault.stakedTokens * oldVault.totalBoostFactor) / params.PRECISION_BASE; 
-        oldVault.boostedRealmPoints = (oldVault.stakedRealmPoints * oldVault.totalBoostFactor) / params.PRECISION_BASE; 
-        
-        // emit events: old vault
-        emit VaultBoostFactorUpdated(params.vaultId, oldVaultTotalBoostFactor, oldVault.totalBoostFactor);
-
-
-        // ---------------------------- update user ----------------------------------------------
-
-        // Update user's account for new vault: combine NFTs and add migrated assets
-        newUserVaultAssets.tokenIds = _concatArrays(newUserVaultAssets.tokenIds, oldUserVaultAssets.tokenIds);
-        newUserVaultAssets.stakedTokens += oldUserVaultAssets.stakedTokens;
-        newUserVaultAssets.stakedRealmPoints += oldUserVaultAssets.stakedRealmPoints;
-
-        // ---------------------------- update storage ----------------------------------------------
-
-        // Update storage for both vaults
-        vaults[params.vaultId] = oldVault;
-        vaults[newVaultId] = newVault;
-
-        // Clear old user assets and update new user assets
-        delete users[params.user][params.vaultId];
-        users[params.user][newVaultId] = newUserVaultAssets;
-
-        return(
-                oldVault.boostedStakedTokens, newVault.boostedStakedTokens, 
-                oldVault.boostedRealmPoints, newVault.boostedRealmPoints, 
-                oldUserVaultAssets.tokenIds, newUserVaultAssets.tokenIds
-                );
-    }
-
     function executeClaimRewards(        
         uint256[] storage activeDistributions,
         mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
@@ -487,10 +392,23 @@ library PoolLogic {
         // vault cooldown activated: cannot update fees
         if(vault.endTime > 0) revert Errors.VaultEndTimeSet(params.vaultId);
 
-        // sanity check: user must be creator + incoming creatorFeeFactor must be lower than current
+        // sanity check: user must be creator 
         if(vault.creator != params.user) revert Errors.UserIsNotCreator();
-        if(creatorFeeFactor > vault.creatorFeeFactor) revert Errors.CreatorFeeCanOnlyBeDecreased();
 
+        // sanity check: incoming creatorFeeFactor must be lower than current
+        if(creatorFeeFactor > vault.creatorFeeFactor) revert Errors.CreatorFeeCanOnlyBeDecreased();
+        // sanity check: nftFeeFactor + realmPointsFeeFactor cannot be decreased
+        if(nftFeeFactor < vault.nftFeeFactor) revert Errors.NftFeeCanOnlyBeIncreased();
+        if(realmPointsFeeFactor < vault.realmPointsFeeFactor) revert Errors.RealmPointsFeeCanOnlyBeIncreased();
+
+        // calculate deltas for each fee factor
+        uint256 deltaCreatorFeeFactor = vault.creatorFeeFactor - creatorFeeFactor;
+        uint256 deltaNftFeeFactor = nftFeeFactor - vault.nftFeeFactor;
+        uint256 deltaRealmPointsFeeFactor = realmPointsFeeFactor - vault.realmPointsFeeFactor;
+
+        // creator can only increase other fees, by the portion he is reducing creator fees
+        if(deltaCreatorFeeFactor < deltaNftFeeFactor + deltaRealmPointsFeeFactor) revert Errors.IncorrectFeeComposition();
+        
         // storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, vault, userVaultAssets, params);
 

@@ -398,45 +398,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     /**
-     * @notice Migrates user's assets from one vault to another
-     * @dev Updates accounting for both vaults and user's assets, including NFT boost factors
-     * @param oldVaultId ID of the vault to migrate assets from
-     * @param newVaultId ID of the vault to migrate assets to
-     * @custom:emits VaultMigrated when migration is complete
-     * @custom:emits VaultBoostFactorUpdated when boost factors are updated for both old and new vaults 
-     */
-    function migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
-        if(oldVaultId == 0) revert Errors.InvalidVaultId();
-        if(newVaultId == 0) revert Errors.InvalidVaultId();
-        
-        DataTypes.UpdateAccountsIndexesParams memory params;
-            params.user = msg.sender;
-            params.vaultId = oldVaultId;
-            params.PRECISION_BASE = PRECISION_BASE;
-            params.totalBoostedRealmPoints = totalBoostedRealmPoints;
-            params.totalBoostedStakedTokens = totalBoostedStakedTokens;
-
-        (
-            uint256 oldVaultBoostedStakedTokens, 
-            uint256 newVaultBoostedStakedTokens, 
-            uint256 oldVaultBoostedRealmPoints, 
-            uint256 newVaultBoostedRealmPoints,
-            uint256[] memory oldVaultTokenIds,
-            uint256[] memory newVaultTokenIds
-        ) 
-            = PoolLogic.executeMigrateVaults(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
-                newVaultId, NFT_MULTIPLIER);
-        
-        // Update global boosted totals
-        totalBoostedStakedTokens = totalBoostedStakedTokens + newVaultBoostedStakedTokens - oldVaultBoostedStakedTokens;
-        totalBoostedRealmPoints = totalBoostedRealmPoints + newVaultBoostedRealmPoints - oldVaultBoostedRealmPoints;
-
-        // NFT management
-        NFT_REGISTRY.recordUnstake(msg.sender, oldVaultTokenIds, oldVaultId);
-        NFT_REGISTRY.recordStake(msg.sender, newVaultTokenIds, newVaultId);
-    }
-
-    /**
      * @notice Claims all pending TOKEN rewards for a user from a specific vault and distribution
      * @param vaultId The ID of the vault to claim rewards from
      * @param distributionId The ID of the reward distribution to claim from
