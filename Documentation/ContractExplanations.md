@@ -448,8 +448,8 @@ If we only wanted to express fee factors in integer values, (meaning 0 precision
 ## Constructor & Initial setup
 
 ```solidity
-    constructor(address registry, address stakedToken, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
-        address owner) payable Ownable(owner) {...}
+    constructor(address nftRegistry, address stakedToken, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
+        address owner, address monitor, string memory name, string memory version) payable EIP712(name, version) {...}
 ```
 
 On deployment, the following must be defined:
@@ -650,19 +650,6 @@ Allows users to unstake their staked tokens and Nfts from a specified vault:
 - The greater the number of Nfts needed to be unstaked at once, will result in increasing gas costs.
 - This has no impact on unstaking tokens.
 
-## migrateVaults
-
-```solidity
-migrateVaults(bytes32 oldVaultId, bytes32 newVaultId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance 
-```
-
-Allows users to migrate their staked tokens and Nfts from one vault to another:
-
-- Checks that the old vault exists
-- Checks that the new vault exists and is not ended
-- Migrates all staked tokens and Nfts from the old vault to the new vault
-- Calls NFT_REGISTRY to record unstake on the old vault, and stake on the new vault
-
 ## claimRewards
 
 ```solidity
@@ -682,12 +669,10 @@ Allows users to claim rewards from a specified vault:
 ```solidity
 updateVaultFees(bytes32 vaultId, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance
 ```
+Updates the vault fee structure. Only the vault creator can update fees, with restrictions:
 
-Updates the fees for a specified vault:
-
-- Only the vault creator can update fees
-- Creator can only decrease their creator fee factor
-- Total of all fees cannot exceed 50% [MocaToken stakers receive at least 50% of rewards]
+- Creator can only decrease their creator fee factor (but may increase other fees proportionally)
+- Total fees (NFT + creator + realm points) cannot exceed `MAXIMUM_FEE_FACTOR`
 
 ## activateCooldown
 
@@ -756,6 +741,18 @@ Key aspects:
 - Takes effect immediately for future reward distributions
 
 This provides flexibility to upgrade reward distribution logic while maintaining core staking functionality.
+
+## updateMaximumFeeFactor
+
+```solidity
+updateMaximumFeeFactor(uint256 newFactor) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE)
+```
+
+- Updates the storage variable `MAXIMUM_FEE_FACTOR`; which is referenced in `updateVaultFees()`.
+- Can increase/decrease it to dictate total possible fees on a vault. 
+- Zero amount not allowed.
+
+> Moca stakers receive at rewards less of fees.
 
 ## updateMinimumRealmPoints
 

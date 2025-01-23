@@ -6,14 +6,14 @@ library Errors {
     // generic (used across multiple functions)
     error NotStarted();
     error StakingEnded();
+    error InvalidArray();
     error InvalidAmount();
+    error InvalidEndTime();
     error InvalidVaultId();
     error InvalidAddress();
-    error InvalidArray();
-    error VaultEndTimeSet(bytes32 vaultId);
     error InvalidStartTime();
-    error InvalidEndTime();
     error UserIsNotCreator();
+    error VaultEndTimeSet(bytes32 vaultId);
     error NonExistentVault(bytes32 vaultId);
 
     // createVault
@@ -26,12 +26,13 @@ library Errors {
     error MinimumRpRequired();
     error SignatureAlreadyExecuted();
     error InvalidSignature();
+    error UserHasNothingStaked(bytes32 vaultId, address user);
     
     // claimRewards
     error StakingPowerDistribution();
 
-    // migrate vaults
-    error UserHasNothingStaked(bytes32 vaultId, address user);
+    // updateMaximumFeeFactor   
+    error InvalidMaxFeeFactor();
 
     // updateVaultFees
     error CreatorFeeCanOnlyBeDecreased();

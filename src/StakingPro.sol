@@ -88,8 +88,12 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
 //-------------------------------constructor------------------------------------------
 
-    constructor(address nftRegistry, address stakedToken, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
-        address owner, address monitor, string memory name, string memory version) payable EIP712(name, version) {
+    constructor(
+        address nftRegistry, address stakedToken, uint256 startTime_, 
+        uint256 maxFeeFactor, uint256 minRpRequired, uint256 nftMultiplier, 
+        uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
+        address owner, address monitor, 
+        string memory name, string memory version) payable EIP712(name, version) {
 
         // sanity check input data: time, period, rewards
         if(owner == address(0)) revert Errors.InvalidAddress();
@@ -99,12 +103,14 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         NFT_REGISTRY = INftRegistry(nftRegistry);       
         STAKED_TOKEN = IERC20(stakedToken);
 
-        // set stakingPro startTime 
+        // set staking startTime 
         startTime = startTime_;
 
         // storage vars
-        MAXIMUM_FEE_FACTOR = 5000;      // 50%
-        MINIMUM_REALMPOINTS_REQUIRED = 250;  // 2.5%
+        MAXIMUM_FEE_FACTOR = maxFeeFactor;      // 50%:5000
+        if(maxFeeFactor > PRECISION_BASE) revert Errors.InvalidMaxFeeFactor();
+
+        MINIMUM_REALMPOINTS_REQUIRED = minRpRequired;
         
         NFT_MULTIPLIER = nftMultiplier;
         CREATION_NFTS_REQUIRED = creationNftsRequired;
@@ -430,7 +436,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
     /**
      * @notice Updates the fee structure for a vault. Only the vault creator can update fees
-     * @dev Creator can only decrease their creator fee factor
+     * @dev Creator can only decrease their creator fee factor (they may increase other fees by the same amount)
      * @dev Total of all fees cannot exceed maximum fee factor
      * @param vaultId The ID of the vault to update fees for
      * @param nftFeeFactor The new NFT fee factor factor
@@ -600,7 +606,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @param newFactor The new maximum fee factor to set
      */
     function updateMaximumFeeFactor(uint256 newFactor) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
-        if(newFactor == 0) revert Errors.InvalidAmount();
+        if(newFactor == 0) revert Errors.InvalidMaxFeeFactor();
 
         uint256 oldFactor = MAXIMUM_FEE_FACTOR;
         MAXIMUM_FEE_FACTOR = newFactor;

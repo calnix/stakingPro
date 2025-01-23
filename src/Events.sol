@@ -27,16 +27,6 @@ event RPMigrated(address indexed user, bytes32 indexed vaultId, bytes32 indexed 
 event UnstakedTokens(address indexed user, bytes32 indexed vaultId, uint256 amount);
 event UnstakedNfts(address indexed user, bytes32 indexed vaultId, uint256[] tokenIds);
 
-// migrateVaults
-event VaultMigrated(
-    address indexed user,
-    bytes32 indexed oldVaultId,
-    bytes32 indexed newVaultId,
-    uint256 stakedTokens,
-    uint256 stakedRealmPoints,
-    uint256[] tokenIds
-);
-
 // claimRewards
 event RewardsClaimed(bytes32 indexed vaultId, address indexed user, uint256 amount);
 
