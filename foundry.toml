@@ -8,7 +8,11 @@ via_ir = true
 
 remappings = [
     '@layerzerolabs/oapp-evm/=lib/devtools/packages/oapp-evm/',
-    '@layerzerolabs/lz-evm-protocol-v2/=lib/layerzero-v2/packages/layerzero-v2/evm/protocol',
+    '@layerzerolabs/lz-evm-protocol-v2/=lib/layerzero-v2/packages/layerzero-v2/evm/protocol/',
+    '@layerzerolabs/lz-evm-messagelib-v2/=lib/layerzero-v2/packages/layerzero-v2/evm/messagelib/', # ExecutorOptions, DVNOptions
+    '@layerzerolabs/oft-evm/=lib/layerzero-v2/packages/layerzero-v2/evm/oapp/',
+    #'@openzeppelin/=lib/openzeppelin-contracts/',
+    'solidity-bytes-utils/=lib/solidity-bytes-utils/',
 ]
 
 [rpc_endpoints]
