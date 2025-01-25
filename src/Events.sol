@@ -83,13 +83,31 @@ event NftMultiplierUpdated(uint256 oldMultiplier, uint256 newMultiplier);
 // updateBoostedBalances
 event BoostedBalancesUpdated(bytes32[] vaultIds);
 
-// distribution management
-event DistributionIndexUpdated(uint256 indexed distributionId, uint256 lastUpdateTimestamp, uint256 oldIndex, uint256 newIndex);
-event DistributionCompleted(uint256 indexed distributionId, uint256 endTime, uint256 totalEmitted);
-
 // freeze
 event PoolFrozen(uint256 timestamp);
 
 // emergencyExit
 event UnstakedTokens(address indexed user, bytes32[] indexed vaultIds, uint256 amount);
 event UnstakedNfts(address indexed user, bytes32[] indexed vaultIds, uint256[] tokenIds);
+
+//  --------------------------------------  PoolLogic --------------------------------------------------------------------
+
+// _updateUserAccount
+event UserAccountUpdated(address indexed user, bytes32 indexed vaultId, uint256 indexed distributionId, uint256 accruedStakingRewards, uint256 accNftStakingRewards, uint256 accRealmPointsRewards);
+
+// _updateVaultAccount
+event VaultAccountUpdated(bytes32 indexed vaultId, uint256 indexed distributionId, uint256 totalAccRewards, uint256 accCreatorFee, uint256 accTotalNftFee, uint256 accRealmPointsFee);
+
+// _updateDistribution
+event DistributionIndexUpdated(uint256 indexed distributionId, uint256 lastUpdateTimestamp, uint256 oldIndex, uint256 newIndex);
+event DistributionCompleted(uint256 indexed distributionId, uint256 endTime, uint256 totalEmitted);
+
+
+// -------------------------------------- RewardsVault --------------------------------------------------------------------
+event Deposit(uint256 indexed distributionId, uint32 dstEid, address indexed from, uint256 amount);
+event Withdraw(uint256 indexed distributionId, uint32 dstEid, address indexed to, uint256 amount);
+
+event DistributionCreated(uint256 indexed distributionId, uint32 dstEid, bytes32 tokenAddress);
+event DistributionEnded(uint256 indexed distributionId, uint256 finalTotalRequired);
+
+event PayRewards(uint256 indexed distributionId, address indexed to, bytes32 indexed receiver, uint256 amount);

@@ -483,6 +483,20 @@ Roles:
 2. OPERATOR_ROLE: for update various pool parameters and stakeOnBehalfOf()
 3. DEFAULT_ADMIN_ROLE: Owner multiSig; can assign/revoke roles to other addresses
 
+> Roles are referred to by their `bytes32` identifier
+
+Note:
+
+1. Admins can add other admins.
+2. Admins can grant and revoke roles to any addresses.
+3. The only way for an admin to lose its admin role is to renounce from it.
+
+By default, the admin role for all roles is `DEFAULT_ADMIN_ROLE`, which means that only accounts with this role will be able to grant or revoke other roles.
+The `DEFAULT_ADMIN_ROLE` is also its own admin: it has permission to grant and revoke this role.
+
+While the `DEFAULT_ADMIN_ROLE` is global admin, it does not mean it has access to call the other roles' functions.
+it can only set/revoke roles to addresses. if we want it to be able to call these restricted functions, it must grantRole to itself.
+
 ### Owner multiSig address is assigned:
 
 1. MONITOR_ROLE
@@ -702,7 +716,7 @@ endVaults(bytes32[] calldata vaultIds) external whenStartedAndNotEnded whenNotPa
 
 # Pool Management functions
 
-OPERATOR_ROLE is required to call the following functions:
+`OPERATOR_ROLE` is required to call the following functions:
 
 ## stakeOnBehalfOf
 

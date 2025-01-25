@@ -53,6 +53,7 @@ library Errors {
     error NonExistentDistribution();
     error DistributionStarted();
     error DistributionEnded();
+    error InvalidEmissionPerSecond();
     // endDistributionImmediately
     error DistributionManuallyEnded();
 
@@ -66,4 +67,17 @@ library Errors {
     // Operator+Maintenance
     error NotInMaintenance();
     error InMaintenance();
+
+// -------------------------------------- RewardsVault --------------------------------------------------------------------
+    
+    error InvalidDistributionId();
+    error InsufficientDeposits();
+    error DistributionNotSetup();
+    error ExcessiveDeposit();
+    
+    // payRewards::V2
+    error InsufficientGas();
+    // deposit::V2
+    error CallDepositOnRemote();
+
 }

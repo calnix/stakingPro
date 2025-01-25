@@ -97,7 +97,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
         // sanity check input data: time, period, rewards
         if(owner == address(0)) revert Errors.InvalidAddress();
-        if(startTime_ <= block.timestamp) revert Errors.InvalidStartTime();
+        if(startTime_ < block.timestamp) revert Errors.InvalidStartTime();
 
         // interfaces: supporting contracts
         NFT_REGISTRY = INftRegistry(nftRegistry);       
@@ -660,19 +660,18 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         uint32 dstEid, bytes32 tokenAddress
     ) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
             
-        if (tokenPrecision == 0) revert Errors.ZeroTokenPrecision();
-        if (emissionPerSecond == 0) revert Errors.ZeroEmissionRate();
+        if(tokenPrecision == 0) revert Errors.ZeroTokenPrecision();
+        if(emissionPerSecond == 0) revert Errors.ZeroEmissionRate();
 
         if(distributionStartTime < startTime) revert Errors.InvalidDistributionStartTime();
-
-        if (distributionStartTime <= block.timestamp) revert Errors.InvalidDistributionStartTime();
-        if (distributionEndTime <= distributionStartTime) revert Errors.InvalidDistributionEndTime();
+        if(distributionStartTime < block.timestamp) revert Errors.InvalidDistributionStartTime();
 
         if(distributionId > 0){
-
-            // only staking power can have indefinite endTime
+            
+            // token distributions must have valid endTime
             if(distributionEndTime == 0) revert Errors.InvalidDistributionEndTime();
-
+            if(distributionEndTime <= distributionStartTime) revert Errors.InvalidDistributionEndTime();
+            
             // LZ sanity checks
             if(dstEid == 0) revert Errors.InvalidDstEid();
             if(tokenAddress == bytes32(0)) revert Errors.InvalidTokenAddress();
@@ -706,7 +705,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(distributionId > 0) {
 
             uint256 totalRequired = (distributionEndTime - distributionStartTime) * emissionPerSecond;
-
             REWARDS_VAULT.setUpDistribution(distributionId, dstEid, tokenAddress, totalRequired);
         }
     }
@@ -727,8 +725,11 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
         if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert Errors.InvalidDistributionParameters(); 
 
-        PoolLogic.executeUpdateDistributionParams(activeDistributions, distributions, distributionId, newStartTime, newEndTime, newEmissionPerSecond, 
+        uint256 newTotalRequired = PoolLogic.executeUpdateDistributionParams(activeDistributions, distributions, distributionId, newStartTime, newEndTime, newEmissionPerSecond, 
             totalBoostedRealmPoints, totalBoostedStakedTokens, paused());
+
+        // transfer rewards to user, from rewardsVault
+        if(distributionId > 0) REWARDS_VAULT.updateDistribution(distributionId, newTotalRequired);
     }
 
     /**
@@ -755,7 +756,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         emit DistributionEnded(distributionId, distribution.endTime, distribution.totalEmitted);
 
         // only for token distributions
-        if(distributionId > 0) REWARDS_VAULT.endDistributionImmediately(distributionId);
+        if(distributionId > 0) REWARDS_VAULT.endDistributionImmediately(distributionId, distribution.totalEmitted);
     }
     
 

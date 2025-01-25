@@ -596,7 +596,7 @@ library PoolLogic {
         uint256 totalBoostedRealmPoints,
         uint256 totalBoostedStakedTokens,
         bool isPaused
-    ) external {
+    ) external returns(uint256) {
         
         DataTypes.Distribution memory distribution = distributions[distributionId];
 
@@ -636,11 +636,19 @@ library PoolLogic {
 
         // emissionPerSecond modification 
         if(newEmissionPerSecond > 0) distribution.emissionPerSecond = newEmissionPerSecond;
+            
+        // recalc. new token requirements
+        uint256 newTotalRequired = distribution.emissionPerSecond  * (distribution.endTime - distribution.startTime);
+        
+        // invariant: newTotalRequired must be greater than totalEmitted
+        if(newTotalRequired < distribution.totalEmitted) revert Errors.InvalidEmissionPerSecond();
         
         // update storage
         distributions[distributionId] = distribution;
 
         emit DistributionUpdated(distributionId, distribution.startTime, distribution.endTime, distribution.emissionPerSecond);
+
+        return newTotalRequired;
     }
 
     function executeUpdateVaultsAndAccounts(
@@ -686,7 +694,6 @@ library PoolLogic {
                 }
             }
         }
-
     }
 
 
@@ -845,6 +852,7 @@ library PoolLogic {
             emit DistributionIndexUpdated(distribution.distributionId, distribution.lastUpdateTimeStamp, distribution.index, nextIndex);
         }
 
+
         return distribution;
     }
 
@@ -879,16 +887,13 @@ library PoolLogic {
         uint256 timeDelta = currentTimestamp - distribution.lastUpdateTimeStamp;
         
         // emissionPerSecond expressed w/ full token precision 
-        uint256 emittedRewards;
-        unchecked {
-            // Overflow is unlikely as timeDelta is bounded by block times
-            emittedRewards = distribution.emissionPerSecond * timeDelta;
-        }
-
+        uint256 emittedRewards = distribution.emissionPerSecond * timeDelta;
+        
         /* note: totalBalance is expressed 1e18. 
-                 emittedRewards is variable as per distribution.TOKEN_PRECISION
+                 emittedRewards is variable; as per distribution.TOKEN_PRECISION
                  normalize totalBalance to reward token's native precision
-                 why: paying out rewards token, standardize to that */
+                 why: paying out rewards token, standardize to that 
+        */
         uint256 totalBalanceRebased = (totalBalance * distribution.TOKEN_PRECISION) / 1E18;
     
         //note: indexes are denominated in the distribution's precision
@@ -924,26 +929,15 @@ library PoolLogic {
 
         // If vault has ended, vaultIndex should not be updated, beyond the final update.
         /** note:
-            - vaults are removed from circulation via endVaults
-            - endVaults is responsible for the final update and setting `vault.removed = 1`
+            - vaults are removed from circulation via endVaults()
+            - endVaults() is responsible for the final update and setting `vault.removed = 1`
             - final update involves updating all vault accounts, indexes and removing assets from global state
-            - we cannot be sure that endVaults would be called precisely at the endTime for each vault
+            - we cannot be sure that endVaults() would be called precisely at the endTime for each vault
             - therefore we must allow for some drift
             - as such, the check below cannot be implemented. 
-         */
+        */
         //if(vault.endTime > 0 && block.timestamp >= vault.endTime) return (vaultAccount, distribution);
-        
-        /**note:
-            - what about implementing the check with a buffer? 
-            - e.g. if(vault.endTime > 0 && block.timestamp + 7 days >= vault.endTime)
-            - this would allow for some drift, but not too much
 
-            smart over/under updates (?)
-            - under: update distri to vault.Endtime and update the vault indexes till endTime
-            - over: update distri to block.timestamp and update the vault indexes till endTime
-         */
-
-        
         // update vault rewards + fees
         uint256 totalAccRewards; 
         uint256 accCreatorFee; 
@@ -994,7 +988,7 @@ library PoolLogic {
         // update vaultIndex
         vaultAccount.index = distribution.index;
 
-        // emit VaultIndexUpdated    
+        emit VaultAccountUpdated(params.vaultId, distribution.distributionId, totalAccRewards, accCreatorFee, accTotalNftFee, accRealmPointsFee);
 
         return (vaultAccount, distribution);
     }
@@ -1014,39 +1008,35 @@ library PoolLogic {
         
         uint256 newUserIndex = vaultAccount.rewardsAccPerUnitStaked;
 
+        uint256 accruedStakingRewards;
+        uint256 accNftStakingRewards;
+        uint256 accRealmPointsRewards;
+
         // if this index has not been updated, the subsequent ones would not have. check once here, no need repeat
         if(userAccount.index != newUserIndex) { 
-
+            
             if(user.stakedTokens > 0) {
                 // users whom staked tokens are eligible for rewards less of fees
                 uint256 balanceRebased = (user.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
-                uint256 accruedRewards = _calculateRewards(balanceRebased, newUserIndex, userAccount.index, distribution.TOKEN_PRECISION);
-                userAccount.accStakingRewards += accruedRewards;
-
-                // emit RewardsAccrued(user, accruedRewards, distributionPrecision);
+                accruedStakingRewards = _calculateRewards(balanceRebased, newUserIndex, userAccount.index, distribution.TOKEN_PRECISION);
+                userAccount.accStakingRewards += accruedStakingRewards;
             }
-
 
             uint256 userStakedNfts = user.tokenIds.length;
             if(userStakedNfts > 0) {
 
                 // total accrued rewards from staking NFTs
-                uint256 accNftStakingRewards = (vaultAccount.nftIndex - userAccount.nftIndex) * userStakedNfts;
+                accNftStakingRewards = (vaultAccount.nftIndex - userAccount.nftIndex) * userStakedNfts;
                 userAccount.accNftStakingRewards += accNftStakingRewards;
-
-                //emit NftRewardsAccrued(user, accNftStakingRewards);
             }
-
 
             if(user.stakedRealmPoints > 0){
                 
                 // users whom staked RP are eligible for a portion of RP fees
                 uint256 totalStakedRpRebased = (vault.stakedRealmPoints * distribution.TOKEN_PRECISION) / 1E18;
 
-                uint256 accRealmPointsRewards = (vaultAccount.rpIndex - userAccount.rpIndex) * totalStakedRpRebased;
+                accRealmPointsRewards = (vaultAccount.rpIndex - userAccount.rpIndex) * totalStakedRpRebased;
                 userAccount.accRealmPointsRewards += accRealmPointsRewards;
-
-                //emit something
             }
         }
 
@@ -1055,7 +1045,7 @@ library PoolLogic {
         userAccount.nftIndex = vaultAccount.nftIndex;
         userAccount.rpIndex = vaultAccount.rpIndex;
 
-        // emit UserIndexesUpdated(user, vault.vaultId, newUserIndex, newUserNftIndex, userInfo.accStakingRewards);
+        emit UserAccountUpdated(params.user, params.vaultId, distribution.distributionId, accruedStakingRewards, accNftStakingRewards, accRealmPointsRewards);
 
         return (userAccount, vaultAccount, distribution);
     }
@@ -1080,7 +1070,7 @@ library PoolLogic {
             -- distr_1: distriData, vaultAccount, userAccount
 
             loop thru userAccounts -> vaultAccounts -> distri
-         */
+        */
 
         // always > 0, staking power is setup on deployment
         uint256 numOfDistributions = activeDistributions.length;
@@ -1094,9 +1084,12 @@ library PoolLogic {
             DataTypes.Distribution memory distribution_ = distributions[distributionId];
             DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[params.vaultId][distributionId];
             DataTypes.UserAccount memory userAccount_ = userAccounts[params.user][params.vaultId][distributionId];
-
             
-            (DataTypes.UserAccount memory userAccount, DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateUserAccount(activeDistributions, userVaultAssets, userAccount_, vault, vaultAccount_, distribution_, params);
+            (
+                DataTypes.UserAccount memory userAccount, 
+                DataTypes.VaultAccount memory vaultAccount, 
+                DataTypes.Distribution memory distribution
+            ) = _updateUserAccount(activeDistributions, userVaultAssets, userAccount_, vault, vaultAccount_, distribution_, params);
 
             //update storage: accounts and distributions
             distributions[distributionId] = distribution;     

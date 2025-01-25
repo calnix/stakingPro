@@ -2,20 +2,16 @@
 pragma solidity 0.8.26;
 
 interface IRewardsVault {
-    // State vars
-    function pool() external view returns(address);
-    function srcEid() external view returns(uint32);
-    
-    // Roles
-    function ADMIN_ROLE() external view returns(bytes32);
-    function MONEY_MANAGER_ROLE() external view returns(bytes32);
 
-    // Core functions
+    // distribution functions
     function setUpDistribution(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress, uint256 totalRequired) external;
-    function endDistributionImmediately(uint256 distributionId) external;
+    function endDistributionImmediately(uint256 distributionId, uint256 totalEmitted) external;
+    function updateDistribution(uint256 distributionId, uint256 newTotalRequired) external;
     
-    function payRewards(uint256 distributionId, uint256 amount, address to) external;
+    // reward functions
+    function payRewards(uint256 distributionId, uint256 amount, address to) external payable;
 
+    // deposit/withdraw functions
     function deposit(uint256 distributionId, uint256 amount, address from) external;
     function withdraw(uint256 distributionId, uint256 amount, address to) external;
 
