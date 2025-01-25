@@ -8,8 +8,10 @@ import "../src/RewardsVaultV1.sol";
 
 // mocks
 import "../test/mocks/MocaToken.sol";
-import {MockRegistry} from "../test/mocks/MockRegistry.sol";
-import "../lib/openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
+import "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+
+import {NftRegistry} from "../lib/NftLocker/src/NftRegistry.sol";
+
 
 abstract contract PoolSetup is Test {
     using stdStorage for StdStorage;
@@ -20,7 +22,7 @@ abstract contract PoolSetup is Test {
 
     // staking assets
     MocaToken public mocaToken;  
-    MockRegistry public nftRegistry;   
+    NftRegistry public nftRegistry;   
     
     // rewards
     ERC20Mock public mockToken1;
@@ -65,7 +67,7 @@ abstract contract PoolSetup is Test {
         depositor = makeAddr("depositor");
 
         // address endpoint, address owner, address pool, uint32 dstEid
-        nftRegistry = new MockRegistry(address(0), owner, address(pool), 0);
+        nftRegistry = new NftRegistry(address(0), owner, address(pool), 0);
 
         // mocaToken
         mocaToken = new MocaToken("MocaToken", "MOCA");   
