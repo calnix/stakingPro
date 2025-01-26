@@ -60,7 +60,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     uint256 public VAULT_COOLDOWN_DURATION;
     
     // signature params
-    address internal immutable STORED_SIGNER;                 // can this be immutable? 
+    address public immutable STORED_SIGNER;                 
     uint256 public MINIMUM_REALMPOINTS_REQUIRED;
 
     // distributions
@@ -93,7 +93,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         /*uint256 maxFeeFactor, uint256 minRpRequired,*/ uint256 nftMultiplier, 
         uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
         address owner, address monitor, 
-        string memory name, string memory version) payable EIP712(name, version) {
+        address storedSigner, string memory name, string memory version) payable EIP712(name, version) {
 
         // sanity check input data: time, period, rewards
         if(owner == address(0)) revert Errors.InvalidAddress();
@@ -112,6 +112,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         NFT_MULTIPLIER = nftMultiplier;
         CREATION_NFTS_REQUIRED = creationNftsRequired;
         VAULT_COOLDOWN_DURATION = vaultCoolDownDuration;
+        STORED_SIGNER = storedSigner;
 
         // access control
         _grantRole(DEFAULT_ADMIN_ROLE, owner);  // default admin role for all roles

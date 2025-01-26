@@ -40,6 +40,7 @@ contract DeployInterim is Script {
         uint256 creationNftsRequired = 5;
         uint256 vaultCoolDownDuration = 7 days;
         address owner = 0x8C9C001F821c04513616fd7962B2D8c62f925fD2;
+        address storedSigner = address(0);
 
         console.log("Current timestamp:", block.timestamp);
         console.log("Start time:", startTime_);
@@ -54,6 +55,7 @@ contract DeployInterim is Script {
             vaultCoolDownDuration,
             owner,
             owner,
+            storedSigner,
             "StakingPro",
             "1"
         );
