@@ -3,10 +3,11 @@ pragma solidity ^0.8.26;
 
 import "forge-std/Test.sol";
 
-import {TestingHarness} from "./TestingHarness.sol";
+import "./TestingHarness.sol";
 
 abstract contract StateDeploy is TestingHarness {    
 
+    pool.grantRole(pool.OPERATOR_ROLE(), operator);
 }
 
 contract StateDeployTest is StateDeploy {
@@ -29,7 +30,41 @@ contract StateDeployTest is StateDeploy {
         assertEq(pool.hasRole(pool.MONITOR_ROLE(), monitor), true);
     }
 
-    function testUserCannotClaim() public {
+    function testCannotCreateVault() public {
+        vm.prank(user1);
 
+        vm.expectRevert(Errors.NotStarted.selector);
+
+        uint256 nftFeeFactor = 1000;
+        uint256 creatorFeeFactor = 1000;
+        uint256 realmPointsFeeFactor = 1000;
+        pool.createVault(user1NftsArray, nftFeeFactor, creatorFeeFactor, realmPointsFeeFactor);
     }
+
+
+    function testOperatorCanSetupDistribution() public {
+        vm.prank(operator);
+        
+        // staking power
+            uint256 distributionId = 0;
+            uint256 distributionStartTime = 1;
+            uint256 distributionEndTime;
+            uint256 emissionPerSecond = 1 ether;
+            uint256 tokenPrecision = 1E18;
+            uint32 dstEid = 0;
+            bytes32 tokenAddress = address(0);
+        pool.setupDistribution(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision, dstEid, tokenAddress);
+
+        
+    }
+
+    /**
+        note: test the other whenNotStarted
+        - all stake fns
+        - claim, etc
+     */   
+}
+
+abstract contract StateStart {
+
 }

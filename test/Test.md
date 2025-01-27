@@ -7,10 +7,9 @@
 - setup 2 vaults: vault1, vault2
 - 3 users: user1, user2, user3
 
-
-- StateDeploy
-- StateStartTime
-**- StateSetUpDistribution: staking power**
+**Deploy**
+- StateSetUpDistribution: staking power
+**StartTime**
 - StateCreateVault
 - StateStakeTokens
 - StateStakeNfts
