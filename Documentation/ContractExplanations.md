@@ -633,6 +633,11 @@ Allows users to stake Realm Points into a specified vault:
 - Signature must not be expired or already executed
 - Signature must be valid and from the stored signer
 
+While OZ's ECDSA.sol::recover() handles signature malleability, we incorporate a nonce to prevent race conditions.
+I.e. multiple payloads with same nonce for a user can only be executed once.
+
+> [signature malleability](https://github.com/kadenzipfel/smart-contract-vulnerabilities/blob/master/vulnerabilities/signature-malleability.md)
+
 ## migrateRP
 
 ```solidity
