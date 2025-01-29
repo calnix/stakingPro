@@ -1,3 +1,7 @@
+[profile.lite]
+optimizer = false
+via_ir = false
+
 [profile.default]
 src = "src"
 out = "out"

@@ -278,7 +278,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(vaultId == 0) revert Errors.InvalidVaultId();
         if(expiry < block.timestamp) revert Errors.SignatureExpired();
         if(amount < MINIMUM_REALMPOINTS_REQUIRED) revert Errors.MinimumRpRequired();
-        
+
         // verify signature
         bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
             keccak256("StakeRp(address user,bytes32 vaultId,uint256 amount,uint256 expiry,uint256 nonce)"), 
@@ -931,7 +931,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @param vaultIds Array of vault IDs to recover assets from
      * @param onBehalfOf Address to receive the recovered assets
      */
-    function emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted { 
+    function emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted onlyRole(OPERATOR_ROLE){ 
         if(isFrozen == 0) revert Errors.NotFrozen();
         if(vaultIds.length == 0) revert Errors.InvalidArray();
       
