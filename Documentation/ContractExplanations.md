@@ -636,6 +636,9 @@ Allows users to stake Realm Points into a specified vault:
 While OZ's ECDSA.sol::recover() handles signature malleability, we incorporate a nonce to prevent race conditions.
 I.e. multiple payloads with same nonce for a user can only be executed once.
 
+Hence, the mapping `mapping(address user => uint256 nonce) public userNonces;`, reflects the next nonce for a user.
+All prior nonces have been used up.
+
 > [signature malleability](https://github.com/kadenzipfel/smart-contract-vulnerabilities/blob/master/vulnerabilities/signature-malleability.md)
 
 ## migrateRP
