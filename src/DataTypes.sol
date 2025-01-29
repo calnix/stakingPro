@@ -120,6 +120,7 @@ contract DataTypes {
         bytes32 vaultId;
         uint256 amount;
         uint256 expiry;
+        uint256 nonce;
     }
 
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import {Errors} from "./Errors.sol";
+import {Errors} from "../Errors.sol";
 
 import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
@@ -60,7 +60,7 @@ contract RealmPoints is EIP712, Pausable, Ownable2Step {
         if(amount < MINIMUM_REALMPOINTS_REQUIRED) revert Errors.MinimumRpRequired();
         
         // replay attack prevention
-        if(executedSignatures[signature] == 1) revert Errors.SignatureAlreadyExecuted();
+        //if(executedSignatures[signature] == 1) revert Errors.SignatureAlreadyExecuted();
 
         // verify signature
         bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(

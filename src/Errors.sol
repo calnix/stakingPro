@@ -24,7 +24,6 @@ library Errors {
     // stakeRealmPoints
     error SignatureExpired();
     error MinimumRpRequired();
-    error SignatureAlreadyExecuted();
     error InvalidSignature();
     error UserHasNothingStaked(bytes32 vaultId, address user);
     

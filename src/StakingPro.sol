@@ -83,8 +83,8 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     // rewards accrued per user, per distribution
     mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) public userAccounts;
 
-    // has signature been executed: 1 is true, 0 is false [replay attack prevention]
-    mapping(bytes signature => uint256 executed) public executedSignatures;
+    // nonces for preventing race conditions [ECDSA.sol::recover handles sig.mal]
+    mapping(address user => uint256 nonce) public userNonces;
 
 //-------------------------------constructor------------------------------------------
 
@@ -278,21 +278,17 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(vaultId == 0) revert Errors.InvalidVaultId();
         if(expiry < block.timestamp) revert Errors.SignatureExpired();
         if(amount < MINIMUM_REALMPOINTS_REQUIRED) revert Errors.MinimumRpRequired();
-
-        // replay attack prevention
-        if(executedSignatures[signature] == 1) revert Errors.SignatureAlreadyExecuted();
-
+        
         // verify signature
         bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
-            keccak256("StakeRp(address user,bytes32 vaultId,uint256 amount,uint256 expiry)"), 
-            msg.sender, vaultId, amount, expiry)));
+            keccak256("StakeRp(address user,bytes32 vaultId,uint256 amount,uint256 expiry,uint256 nonce)"), 
+            msg.sender, vaultId, amount, expiry, userNonces[msg.sender])));
         
         address signer = ECDSA.recover(digest, signature);
         if(signer != STORED_SIGNER) revert Errors.InvalidSignature(); 
 
-
-        // set signature to executed
-        executedSignatures[signature] = 1;
+        // increment nonce
+        ++userNonces[msg.sender];
 
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.user = msg.sender;

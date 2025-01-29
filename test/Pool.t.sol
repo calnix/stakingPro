@@ -7,7 +7,14 @@ import "./TestingHarness.sol";
 
 abstract contract StateDeploy is TestingHarness {    
 
-    pool.grantRole(pool.OPERATOR_ROLE(), operator);
+    function setUp() public virtual override {
+        super.setUp();
+
+        // Grant operator role
+        vm.startPrank(owner);      
+        pool.grantRole(pool.OPERATOR_ROLE(), operator);
+        vm.stopPrank();
+    }
 }
 
 contract StateDeployTest is StateDeploy {
@@ -28,6 +35,9 @@ contract StateDeployTest is StateDeploy {
         assertEq(pool.hasRole(pool.OPERATOR_ROLE(), owner), true);
         assertEq(pool.hasRole(pool.MONITOR_ROLE(), owner), true);
         assertEq(pool.hasRole(pool.MONITOR_ROLE(), monitor), true);
+        
+        assertEq(pool.hasRole(pool.OPERATOR_ROLE(), operator), true);
+
     }
 
     function testCannotCreateVault() public {
@@ -52,7 +62,7 @@ contract StateDeployTest is StateDeploy {
             uint256 emissionPerSecond = 1 ether;
             uint256 tokenPrecision = 1E18;
             uint32 dstEid = 0;
-            bytes32 tokenAddress = address(0);
+            bytes32 tokenAddress = 0x00;
         pool.setupDistribution(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision, dstEid, tokenAddress);
 
         
