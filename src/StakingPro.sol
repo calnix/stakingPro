@@ -147,7 +147,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(incomingNfts != CREATION_NFTS_REQUIRED) revert Errors.IncorrectCreationNfts();
         
         uint256 check = NFT_REGISTRY.checkIfUnassignedAndOwned(msg.sender, tokenIds);
-        if(check > 0) revert Errors.InvalidNfts();
+        if(check == 0) revert Errors.InvalidNfts();
     
         //note: MOCA stakers must receive at least 50% of rewards
         uint256 totalFeeFactor = nftFeeFactor + creatorFeeFactor + realmPointsFeeFactor;
@@ -196,7 +196,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      */
     function stakeTokens(bytes32 vaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(amount == 0) revert Errors.InvalidAmount();
-        if(vaultId == 0) revert Errors.InvalidVaultId();
         
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.user = msg.sender;
@@ -228,8 +227,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      */
     function stakeNfts(bytes32 vaultId, uint256[] calldata tokenIds) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         uint256 incomingNfts = tokenIds.length;
-
-        if(vaultId == 0) revert Errors.InvalidVaultId();
         if(incomingNfts == 0) revert Errors.InvalidAmount();
 
         // check if NFTs are unassigned and owned by msg.sender
@@ -275,7 +272,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * - Contract must not be paused and staking must have started
      */
     function stakeRP(bytes32 vaultId, uint256 amount, uint256 expiry, bytes calldata signature) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
-        if(vaultId == 0) revert Errors.InvalidVaultId();
         if(expiry < block.timestamp) revert Errors.SignatureExpired();
         if(amount < MINIMUM_REALMPOINTS_REQUIRED) revert Errors.MinimumRpRequired();
 
@@ -317,8 +313,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      */
     function migrateRP(bytes32 oldVaultId, bytes32 newVaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(amount == 0) revert Errors.InvalidAmount();
-        if(oldVaultId == 0) revert Errors.InvalidVaultId();
-        if(newVaultId == 0) revert Errors.InvalidVaultId();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.user = msg.sender;
@@ -352,7 +346,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @custom:revert Will revert w/o error if the tokenIds provided are not staked by the user
      */
     function unstake(bytes32 vaultId, uint256 amount, uint256[] calldata tokenIds) external whenStarted whenNotPaused whenNotUnderMaintenance {
-        if(vaultId == 0) revert Errors.InvalidVaultId();
         if(amount == 0 && tokenIds.length == 0) revert Errors.InvalidAmount();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
@@ -410,7 +403,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @dev Not applicable to distributionId:0 which is the staking power distribution
      */
     function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted whenNotPaused whenNotUnderMaintenance {   
-        if(vaultId == 0) revert Errors.InvalidVaultId();
         if(distributionId == 0) revert Errors.StakingPowerDistribution();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
@@ -438,8 +430,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @param realmPointsFeeFactor The new realm points fee factor
      */
     function updateVaultFees(bytes32 vaultId, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
-        if(vaultId == 0) revert Errors.InvalidVaultId();
-
         // sanity check: new fee compositions cannot exceed max
         uint256 totalFeeFactor = nftFeeFactor + creatorFeeFactor + realmPointsFeeFactor;
         if(totalFeeFactor > MAXIMUM_FEE_FACTOR) revert Errors.MaximumFeeFactorExceeded();     //e.g.: 50% = 5000/10_000 = 5000/PRECISION_BASE
@@ -462,7 +452,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @param vaultId The ID of the vault to activate cooldown
      */
     function activateCooldown(bytes32 vaultId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
-        if(vaultId == 0) revert Errors.InvalidVaultId();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.user = msg.sender; 
@@ -1144,6 +1133,14 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
         // latest value, nothing unbooked 
         return totalUnclaimedRewards;
+    }
+
+    /**
+     * @notice Returns the number of active distributions
+     * @return The length of the activeDistributions array
+     */
+    function getActiveDistributionsLength() external view returns (uint256) {
+        return activeDistributions.length;
     }
 
 }

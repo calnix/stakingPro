@@ -58,7 +58,6 @@ contract DataTypes {
     //////////////////////////////////////////////////////////////*/
 
     struct User {
-
         // onboarded RP
         uint256 realmPoints;
 

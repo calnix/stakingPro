@@ -37,7 +37,6 @@ contract StateDeployTest is StateDeploy {
         assertEq(pool.hasRole(pool.MONITOR_ROLE(), monitor), true);
         
         assertEq(pool.hasRole(pool.OPERATOR_ROLE(), operator), true);
-
     }
 
     function testCannotCreateVault() public {

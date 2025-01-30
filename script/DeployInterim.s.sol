@@ -8,6 +8,7 @@ import {RewardsVaultV1} from "../src/RewardsVaultV1.sol";
 
 // mocks
 import {ERC20Mock} from "./../lib/openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
+import {IERC20} from "./../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 contract DeployInterim is Script {
     StakingPro public pool;
@@ -116,5 +117,3 @@ contract DeployInterim is Script {
 }
 
 // forge script script/DeployInterim.s.sol:DeployInterim --rpc-url base_sepolia --broadcast --verify -vvvvv --etherscan-api-key base_sepolia
-
-// do ya wanna create2? https://book.getfoundry.sh/tutorials/create2-tutorial?highlight=create2#create2-factory
