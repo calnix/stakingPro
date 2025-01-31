@@ -1110,6 +1110,13 @@ The expectation is that we call endVaults() on all the vaults that have come to 
 
 Process:
 
+        1. enableMaintenance
+        2. updateDistributions
+        3. updateAllVaultAccounts
+        4. updateNftMultiplier
+        5. updateBoostedBalances
+        6. disableMaintenance
+        
 1. call `updateDistributionsAndPause()`: updates all distribution indexes, then pauses contract.
 2. call `updateAllVaultAccounts()`: updates all vault indexes
 3. update NFT multiplier: `updateNftMultiplier()`

@@ -29,6 +29,7 @@ library Errors {
     
     // claimRewards
     error StakingPowerDistribution();
+    error DistributionDoesNotExist();
 
     // updateMaximumFeeFactor   
     error InvalidMaxFeeFactor();

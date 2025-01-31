@@ -236,9 +236,9 @@ contract SetupDistributions is DeployedContracts {
         stakeTokens();
         console.log("Tokens staked");
 
-        uint256 distributionId = setupDistributionAndDeposit(180);    //note: 150 seconds delay with 8 distributions. started at 60
+        uint256 distributionId = setupDistributionAndDeposit(200);    //note: 150 seconds delay with 8 distributions. started at 60
         console.log("Distribution setup ID:", distributionId);
     }
 }
 
-// forge script script/StressTest.s.sol:SetupDistributions --rpc-url base_sepolia --broadcast --verify -vvvvv --etherscan-api-key base_sepolia
+// forge script script/StressTest.s.sol:SetupDistributions --rpc-url base_sepolia --broadcast

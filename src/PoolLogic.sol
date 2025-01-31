@@ -299,9 +299,13 @@ library PoolLogic {
         
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
-        
-        // get corresponding user+vault account for this active distribution 
+
+        // get corresponding user+vault account for this distribution 
         DataTypes.Distribution memory distribution = distributions[distributionId];
+        
+        // ensure distribution exists
+        if(distribution.startTime == 0) revert Errors.DistributionDoesNotExist();
+        
         DataTypes.VaultAccount memory vaultAccount = vaultAccounts[params.vaultId][distributionId];
         DataTypes.UserAccount memory userAccount = userAccounts[params.user][params.vaultId][distributionId];
 

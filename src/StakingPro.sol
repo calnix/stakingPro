@@ -146,9 +146,9 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         uint256 incomingNfts = tokenIds.length;
         if(incomingNfts != CREATION_NFTS_REQUIRED) revert Errors.IncorrectCreationNfts();
         
-        uint256 check = NFT_REGISTRY.checkIfUnassignedAndOwned(msg.sender, tokenIds);
-        if(check == 0) revert Errors.InvalidNfts();
-    
+        // revert if any NFTs are not unassigned OR not owned by msg.sender
+        NFT_REGISTRY.checkIfUnassignedAndOwned(msg.sender, tokenIds);
+        
         //note: MOCA stakers must receive at least 50% of rewards
         uint256 totalFeeFactor = nftFeeFactor + creatorFeeFactor + realmPointsFeeFactor;
         if(totalFeeFactor > MAXIMUM_FEE_FACTOR) revert Errors.MaximumFeeFactorExceeded();
@@ -229,9 +229,8 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         uint256 incomingNfts = tokenIds.length;
         if(incomingNfts == 0) revert Errors.InvalidAmount();
 
-        // check if NFTs are unassigned and owned by msg.sender
-        uint256 check = NFT_REGISTRY.checkIfUnassignedAndOwned(msg.sender, tokenIds);
-        if(check > 0) revert Errors.InvalidNfts();
+        // revert if any NFTs are not unassigned OR not owned by msg.sender
+        NFT_REGISTRY.checkIfUnassignedAndOwned(msg.sender, tokenIds);
 
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.user = msg.sender;
@@ -313,6 +312,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      */
     function migrateRP(bytes32 oldVaultId, bytes32 newVaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(amount == 0) revert Errors.InvalidAmount();
+        if(oldVaultId == newVaultId) revert Errors.InvalidVaultId();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.user = msg.sender;
@@ -471,26 +471,17 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
         // if zero cooldown, remove vault from circulation immediately 
         if(vaultCoolDownDuration == 0) {  
-            
-            // set removed
-            vault.removed = 1;
+            // end vault immediately
+            bytes32[] memory vaultIds = new bytes32[](1);
+            vaultIds[0] = vaultId;
+            _endVaults(vaultIds, 1);
 
-            // decrement state vars
-            totalStakedNfts -= vault.stakedNfts;
-            totalStakedTokens -= vault.stakedTokens;
-            totalStakedRealmPoints -= vault.stakedRealmPoints;
-
-            totalBoostedRealmPoints -= vault.boostedRealmPoints;
-            totalBoostedStakedTokens -= vault.boostedStakedTokens;
-
-            emit VaultEnded(vaultId);
+            // return creator NFTs
+            NFT_REGISTRY.recordUnstake(msg.sender, vault.creationTokenIds, vaultId);
         }
 
         // update storage
         vaults[vaultId] = vault;
-
-        // return creator NFs
-        NFT_REGISTRY.recordUnstake(msg.sender, vault.creationTokenIds, vaultId);
     }
 
     /**
@@ -501,6 +492,12 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     function endVaults(bytes32[] calldata vaultIds) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         uint256 numOfVaults = vaultIds.length;
         if(numOfVaults == 0) revert Errors.InvalidArray();
+
+        // updates all active distribution indexes, so that vaults' accounts can be updated in finality
+        _endVaults(vaultIds, numOfVaults);
+    }
+
+    function _endVaults(bytes32[] memory vaultIds, uint256 numOfVaults) internal {
 
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.PRECISION_BASE = PRECISION_BASE;
@@ -722,7 +719,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @notice Immediately ends a distribution
      * @param distributionId ID of the distribution to end
      */
-    function endDistributionImmediately(uint256 distributionId) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
+    function endDistributionImmediately(uint256 distributionId) external whenNotEnded onlyRole(OPERATOR_ROLE) {
         DataTypes.Distribution memory distribution = distributions[distributionId];
         
         if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
@@ -920,10 +917,15 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @param vaultIds Array of vault IDs to recover assets from
      * @param onBehalfOf Address to receive the recovered assets
      */
-    function emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted onlyRole(OPERATOR_ROLE){ 
+    function emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted { 
         if(isFrozen == 0) revert Errors.NotFrozen();
         if(vaultIds.length == 0) revert Errors.InvalidArray();
-      
+
+        // if caller is not OPERATOR, can only call for self
+        if(!hasRole(OPERATOR_ROLE, msg.sender)){
+            onBehalfOf = msg.sender;
+        }
+
         uint256 userTotalStakedNfts;
         uint256 userTotalStakedTokens;
         uint256 userTotalCreationNfts;
