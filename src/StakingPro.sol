@@ -496,33 +496,9 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         // updates all active distribution indexes, so that vaults' accounts can be updated in finality
         _endVaults(vaultIds, numOfVaults);
     }
-
-    function _endVaults(bytes32[] memory vaultIds, uint256 numOfVaults) internal {
-
-        DataTypes.UpdateAccountsIndexesParams memory params;
-            params.PRECISION_BASE = PRECISION_BASE;
-            params.totalBoostedRealmPoints = totalBoostedRealmPoints;
-            params.totalBoostedStakedTokens = totalBoostedStakedTokens;
-
-        (
-            uint256 totalNftsToRemove, 
-            uint256 totalTokensToRemove, 
-            uint256 totalRealmPointsToRemove, 
-            uint256 totalBoostedTokensToRemove, 
-            uint256 totalBoostedRealmPointsToRemove
-        ) 
-            = PoolLogic.executeEndVaults(activeDistributions, vaults, distributions, vaultAccounts, params, 
-                vaultIds, numOfVaults);
-
-        // Update global state
-        totalStakedNfts -= totalNftsToRemove;
-        totalStakedTokens -= totalTokensToRemove;
-        totalStakedRealmPoints -= totalRealmPointsToRemove;
-        totalBoostedStakedTokens -= totalBoostedTokensToRemove;
-        totalBoostedRealmPoints -= totalBoostedRealmPointsToRemove;
-    }
-
     
+//------------------------------ Operator functions ------------------------------------------------
+
     /**
      * @notice Stakes tokens on behalf of multiple users into multiple vaults
      * @param vaultIds Array of vault IDs to stake into
@@ -549,8 +525,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         // grab MOCA: from msg.sender to this contract
         STAKED_TOKEN.safeTransferFrom(msg.sender, address(this), incomingTotalStakedTokens);
     }
-
-//------------------------------ pool management -------------------------------------------
 
     /*//////////////////////////////////////////////////////////////
                             POOL MANAGEMENT
@@ -761,7 +735,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     /**
      * @notice Sets contract to maintenance mode for operational updates
      */
-    function enableMaintenance() external whenNotPaused whenNotUnderMaintenance onlyRole(OPERATOR_ROLE) {
+    function enableMaintenance() external whenNotEnded whenNotPaused whenNotUnderMaintenance onlyRole(OPERATOR_ROLE) {
         if(isUnderMaintenance == 1) revert Errors.InMaintenance();
         
         isUnderMaintenance = 1;
@@ -771,7 +745,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     /**
      * @notice Disables maintenance mode
      */
-    function disableMaintenance() external whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE) {
+    function disableMaintenance() external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE) {
         if(isUnderMaintenance == 0) revert Errors.NotInMaintenance();
         
         isUnderMaintenance = 0;
@@ -1007,6 +981,31 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
 //-------------------------------internal-----------------------------------------------------
+
+    function _endVaults(bytes32[] memory vaultIds, uint256 numOfVaults) internal {
+
+        DataTypes.UpdateAccountsIndexesParams memory params;
+            params.PRECISION_BASE = PRECISION_BASE;
+            params.totalBoostedRealmPoints = totalBoostedRealmPoints;
+            params.totalBoostedStakedTokens = totalBoostedStakedTokens;
+
+        (
+            uint256 totalNftsToRemove, 
+            uint256 totalTokensToRemove, 
+            uint256 totalRealmPointsToRemove, 
+            uint256 totalBoostedTokensToRemove, 
+            uint256 totalBoostedRealmPointsToRemove
+        ) 
+            = PoolLogic.executeEndVaults(activeDistributions, vaults, distributions, vaultAccounts, params, 
+                vaultIds, numOfVaults);
+
+        // Update global state
+        totalStakedNfts -= totalNftsToRemove;
+        totalStakedTokens -= totalTokensToRemove;
+        totalStakedRealmPoints -= totalRealmPointsToRemove;
+        totalBoostedStakedTokens -= totalBoostedTokensToRemove;
+        totalBoostedRealmPoints -= totalBoostedRealmPointsToRemove;
+    }
 
     ///@dev concat two uint256 arrays: [1,2,3],[4,5] -> [1,2,3,4,5]
     function _concatArrays(uint256[] memory arr1, uint256[] memory arr2) internal pure returns(uint256[] memory) {
