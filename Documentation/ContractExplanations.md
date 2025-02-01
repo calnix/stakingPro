@@ -749,6 +749,9 @@ setEndTime(uint256 endTime_) external whenNotEnded whenNotPaused onlyRole(OPERAT
 - endTime can be moved forward or backward; as long its a future timestamp
 - Only callable when contract is not ended or frozen
 
+> fn updates the endTime of active distributions that have far-dated endTimes(> endTime_)
+> on repeated calls, where the endTime is extended then shorted, we may want to separately update the endTime of the distributions
+
 ## setRewardsVault
 
 ```solidity

@@ -856,7 +856,6 @@ library PoolLogic {
             emit DistributionIndexUpdated(distribution.distributionId, distribution.lastUpdateTimeStamp, distribution.index, nextIndex);
         }
 
-
         return distribution;
     }
 
