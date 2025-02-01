@@ -67,7 +67,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @param dstEid LayerZero endpoint ID for the destination chain (0 for local chain)
      * @param tokenAddress The token address for this distribution encoded as bytes32
      */
-    function setUpDistribution(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress, uint256 totalRequired) external virtual onlyRole(POOL_ROLE) {
+    function setupDistribution(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress, uint256 totalRequired) external virtual onlyRole(POOL_ROLE) {
         // POOL ensures that:
         //  distributionId is > 0
         //  tokenAddress is not BYTES32(0)
@@ -77,6 +77,9 @@ contract RewardsVaultV1 is Pausable, AccessControl {
             distribution.dstEid = dstEid;
             distribution.tokenAddress = tokenAddress;
             distribution.totalRequired = totalRequired;
+
+        // sanity check: will revert if address is not a token contract
+        IERC20(bytes32ToAddress(tokenAddress)).balanceOf(address(this));
 
         // update
         distributions[distributionId] = distribution;
@@ -162,7 +165,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
         
         // sanity checks
         Distribution memory distribution = distributions[distributionId];
-        // only local deposits
+        // incorrect distribution Id: only local deposits
         if(distribution.dstEid != LOCAL_EID) revert Errors.CallDepositOnRemote();
         // distribution must be setup
         if(distribution.tokenAddress == bytes32(0)) revert Errors.DistributionNotSetup();
