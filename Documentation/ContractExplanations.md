@@ -535,10 +535,22 @@ This is to ensure that the operator role is kept unassigned, unless it is requir
 3. frozen: contract is frozen, all user functions revert except for emergencyExit().
 4. underMaintenance: contract is under maintenance, all user functions revert.
 
-Pausing should be used to verify any potential security issues.
-If they are not found, the contract can be unpaused.
+### Pause/Unpause
 
-If there are security issues, the contract is frozen.
+Pausing should be used to verify any potential security issues.
+
+- If they are not found, the contract can be unpaused.
+- If there are security issues, the contract is frozen.
+
+### Frozen
+
+Contract is set to `frozen` when there are irreparable issues with the contract.
+This is to prevent any further damage to the contract, and to ensure that the contract is not used anymore.
+
+Once frozen, users can only call `emergencyExit()`, which will allow users to reclaim their principal staked assets.
+Any unclaimed rewards and fees are forfeited.
+
+Note: `emergencyExit()` assumes that the contract is broken and any state updates made to be invalid; hence it does not update rewards and fee calculations.
 
 ### Under Maintenance
 
@@ -555,22 +567,13 @@ Process:
 Setting the contract to `underMaintenance` will prevent users from staking, unstaking, claiming rewards, or creating new vaults.
 This is to ensure that the NFT_MULTIPLIER is updated correctly, and that the boosted balances are updated correctly.
 
-### Pause/Unpause
+### Why have both states [paused & underMaintenance]?
 
-Contract is set to `paused` when there is a need to assess for possible security issues.
-If there are no security issues, the contract can be unpaused.
+- maintenance fns should not be callable during a paused state.
+- consider the case when a security event occurs during maintenance mode
+- maintenance should not be allowed to continue, should stop to assess the situation.
 
-If there are security issues, the contract is frozen.
-
-### Frozen
-
-Contract is set to `frozen` when there are irreparable issues with the contract.
-This is to prevent any further damage to the contract, and to ensure that the contract is not used anymore.
-
-Once frozen, users can only call `emergencyExit()`, which will allow users to reclaim their principal staked assets.
-Any unclaimed rewards and fees are forfeited.
-
-Note: `emergencyExit()` assumes that the contract is broken and any state updates made to be invalid; hence it does not update rewards and fee calculations.
+We want the risk controls to be able to override and lock the contract if an issue occurs during maintenance process.
 
 # User functions
 
@@ -980,7 +983,7 @@ unpause() external whenPaused onlyRole(DEFAULT_ADMIN_ROLE)
 ## freeze
 
 ```solidity
-freeze() external whenNotFrozen onlyRole(DEFAULT_ADMIN_ROLE)
+freeze() external whenPaused onlyRole(DEFAULT_ADMIN_ROLE)
 ```
 
 - freeze contract
@@ -995,7 +998,7 @@ Assuming black swan event, users call `emergencyExit` to exit.
 3. emergencyExit(): exfil all principal assets
 
 ```solidity
-emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted whenPaused whenNotUnderMaintenance
+emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStarted 
 ```
 
 - only callable when contract is paused and frozen
@@ -1106,24 +1109,18 @@ The expectation is that we call endVaults() on all the vaults that have come to 
 
 [!!!]: confirm that _udpateVaultsAndAccounts() is failing after endtime. consider a removed check?
 
-## 6. Updating NFT_MULTIPLIER (pause, update, unpause)
+## 6. Updating NFT_MULTIPLIER (enableMaintenance, update, disableMaintenance)
 
 Process:
 
         1. enableMaintenance
-        2. updateDistributions
-        3. updateAllVaultAccounts
-        4. updateNftMultiplier
-        5. updateBoostedBalances
+        2. updateDistributions: updates all distribution indexes
+        3. updateAllVaultAccounts: updates all vault indexes
+        4. updateNftMultiplier: updates NFT multiplier
+        5. updateBoostedBalances: updates boosted balances
         6. disableMaintenance
-        
-1. call `updateDistributionsAndPause()`: updates all distribution indexes, then pauses contract.
-2. call `updateAllVaultAccounts()`: updates all vault indexes
-3. update NFT multiplier: `updateNftMultiplier()`
-4. recalculate boostedBalance: `updateBoostedBalances(bytes32[] calldata vaultIds)`
-5. call `unpause()`: unpauses contract.
 
-We will need to call `updateBoostedBalances()` multiple times for all vaults that have been updated.
+We will need to call `updateBoostedBalances()` multiple times to ensure all vaults have been updated.
 During this process, user functions are disabled, as calling them during this process will result in incorrect calculations.
 
 E.g. an unstake() could slip in btw `updateBoostedBalances()` calls and wreck havoc on calculations.
@@ -1159,19 +1156,3 @@ If there are, we should end those distributions via `updateDistribution`.
 - This function enables immediate termination of a distribution by setting its end time to the current block timestamp. 
 - This effectively stops any further rewards from being distributed while preserving all rewards earned up to that point.
 - Distribution must exist and be active (not ended).
-
-## 10. States
-
-unpaused
-- all normal fns
-
-paused
-- claimRewards
-
-frozen
-- emergencyExit
-
-why disallow unstake when paused?
-- so that can update NFT multipliers w/o distruption
-- if users can unstake - this impacts base staked assets as well as boosted staked assets - causing drift in calculations
-- remember updateAllVaultsAndAccounts() is to executed repeatedly, and an unstake() could slip in btw calls the wreck havoc on calculations.

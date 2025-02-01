@@ -967,17 +967,18 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(userTotalStakedTokens > 0) STAKED_TOKEN.safeTransfer(onBehalfOf, userTotalStakedTokens); 
         emit UnstakedTokens(onBehalfOf, vaultIds, userTotalStakedTokens);      
 
-        /**
-            Note:
-            we do not zero out/decrement/re-calculate the following values: 
+        /** Note:
+            
+            `emergencyExit()` assumes that the contract is broken and any state updates made to be invalid; hence it does not update rewards and fee calculations.
+            Focus is for users to recover their principal assets as quickly as possible. 
+
+            To that end, we do not zero out/decrement/re-calculate the following values: 
                 1. totalBoostedRealmPoints
                 2. totalBoostedStakedTokens
                 3. vault.totalBoostFactor
                 4. vault.boostedRealmPoints
                 5. vault.boostedStakedTokens
-            These values are retained to preserve state history at time of failure.
-            This can serve as useful reference during post-mortem and potentially assist with any remediative actions.
-         */
+        */
     }
 
 //-------------------------------internal-----------------------------------------------------
