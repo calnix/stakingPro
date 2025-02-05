@@ -1159,3 +1159,16 @@ If there are, we should end those distributions via `updateDistribution`.
 - This function enables immediate termination of a distribution by setting its end time to the current block timestamp. 
 - This effectively stops any further rewards from being distributed while preserving all rewards earned up to that point.
 - Distribution must exist and be active (not ended).
+
+# 10. Migrating from old rewardsVault (V1) to new rewardsVault (V2)
+
+Process:
+
+1. end all active distributions on stakingPro  [users have may unclaimed rewards]
+2. switch to rewardsVaultV2
+3. setup old distributions on rewardsVaultV2 [via setupDistribution]
+
+Step 3 will require an EOA address to be granted the POOL_ROLE, to be able to call setupDistribution.
+
+Additionally, `totalClaimed` and ` totalDeposited` will start from 0 on rewardsVaultV2.
+These values will not be migrated over from V1 - so we must be mindful of this when migrating.
