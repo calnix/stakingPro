@@ -108,8 +108,8 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         startTime = startTime_;
 
         // storage vars
-        MAXIMUM_FEE_FACTOR = 5000;      // 50%:5000
-        MINIMUM_REALMPOINTS_REQUIRED = 250;
+        MAXIMUM_FEE_FACTOR = 5000;                  // 50%:5000
+        MINIMUM_REALMPOINTS_REQUIRED = 250 ether;
         NFT_MULTIPLIER = nftMultiplier;
         CREATION_NFTS_REQUIRED = creationNftsRequired;
         VAULT_COOLDOWN_DURATION = vaultCoolDownDuration;
@@ -355,7 +355,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
         (
-            uint256 userStakedTokens, 
             uint256 userBoostedStakedTokens, 
             uint256 deltaVaultBoostedRealmPoints,
             uint256 deltaVaultBoostedStakedTokens,
@@ -366,14 +365,14 @@ contract StakingPro is EIP712, Pausable, AccessControl {
                 NFT_MULTIPLIER, amount, tokenIds);
 
         // decrement user's staked tokens and boosted staked tokens
-        if(userStakedTokens > 0){
+        if(amount > 0){
 
             // update global
-            totalStakedTokens -= userStakedTokens;
+            totalStakedTokens -= amount;
             totalBoostedStakedTokens -= userBoostedStakedTokens;
 
             // return MOCA
-            STAKED_TOKEN.safeTransfer(msg.sender, userStakedTokens);
+            STAKED_TOKEN.safeTransfer(msg.sender, amount);
         }
 
         // update nfts
@@ -416,7 +415,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             distributionId);
 
         // transfer rewards to user, from rewardsVault
-        REWARDS_VAULT.payRewards(distributionId, totalUnclaimedRewards, msg.sender);
+        if(totalUnclaimedRewards > 0) REWARDS_VAULT.payRewards(distributionId, totalUnclaimedRewards, msg.sender);
     }
 
     /**
@@ -633,7 +632,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(distributionId > 0){
             
             // token distributions must have valid endTime
-            if(distributionEndTime == 0) revert Errors.InvalidDistributionEndTime();
             if(distributionEndTime <= distributionStartTime) revert Errors.InvalidDistributionEndTime();
             
             // LZ sanity checks

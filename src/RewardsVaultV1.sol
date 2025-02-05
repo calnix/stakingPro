@@ -119,7 +119,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @param to Address of the user receiving rewards
      * @param amount Reward amount (expressed in the token's precision)
      */
-    function payRewards(uint256 distributionId, address to, uint256 amount) external payable virtual onlyRole(POOL_ROLE) {
+    function payRewards(uint256 distributionId, uint256 amount, address to) external payable virtual onlyRole(POOL_ROLE) {
         // no need for input checks, as this is called by pool
 
         // get distribution + user

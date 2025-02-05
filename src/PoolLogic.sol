@@ -149,7 +149,7 @@ library PoolLogic {
         uint256 nftMultiplier,
         uint256 amount,
         uint256[] calldata tokenIds
-    ) external returns (uint256, uint256, uint256, uint256, uint256, uint256[] memory) {
+    ) external returns (uint256, uint256, uint256, uint256, uint256[] memory) {
 
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
@@ -215,7 +215,7 @@ library PoolLogic {
         vaults[params.vaultId] = vault;
         users[params.user][params.vaultId] = userVaultAssets;
 
-        return (stakedTokens, userBoostedStakedTokens, deltaVaultBoostedRealmPoints, deltaVaultBoostedStakedTokens, numOfNfts, userTokenIds);
+        return (userBoostedStakedTokens, deltaVaultBoostedRealmPoints, deltaVaultBoostedStakedTokens, numOfNfts, userTokenIds);
     } 
 
     function executeMigrateRP(
