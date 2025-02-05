@@ -827,12 +827,12 @@ library PoolLogic {
                 
                 // distributions w/ endTimes involve tokens, not realmPoints: use totalBoostedStakedTokens
                 (uint256 finalIndex, /*currentTimestamp*/, uint256 finalEmitted) = _calculateDistributionIndex(distribution, totalBoostedStakedTokens);
+                
+                emit DistributionIndexUpdated(distribution.distributionId, distribution.endTime, distribution.index, finalIndex);
 
                 distribution.index = finalIndex;
                 distribution.totalEmitted += finalEmitted;
-                distribution.lastUpdateTimeStamp = distribution.endTime;
-                
-                emit DistributionIndexUpdated(distribution.distributionId, distribution.lastUpdateTimeStamp, distribution.index, finalIndex);
+                distribution.lastUpdateTimeStamp = distribution.endTime;               
                 
                 // Remove from active distributions and mark as completed
                 for (uint256 i; i < activeDistributions.length; ++i) {
@@ -857,11 +857,11 @@ library PoolLogic {
         
         if (nextIndex > distribution.index) {
 
+            emit DistributionIndexUpdated(distribution.distributionId, currentTimestamp, distribution.index, nextIndex);
+
             distribution.index = nextIndex;
             distribution.totalEmitted += emittedRewards;
             distribution.lastUpdateTimeStamp = currentTimestamp;
-
-            emit DistributionIndexUpdated(distribution.distributionId, distribution.lastUpdateTimeStamp, distribution.index, nextIndex);
         }
 
         return distribution;
