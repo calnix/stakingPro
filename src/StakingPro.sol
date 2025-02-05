@@ -355,7 +355,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
         (
-            uint256 userBoostedStakedTokens, 
+            uint256 amountBoosted, 
             uint256 deltaVaultBoostedRealmPoints,
             uint256 deltaVaultBoostedStakedTokens,
             uint256 numOfNfts,
@@ -369,7 +369,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
             // update global
             totalStakedTokens -= amount;
-            totalBoostedStakedTokens -= userBoostedStakedTokens;
+            totalBoostedStakedTokens -= amountBoosted;
 
             // return MOCA
             STAKED_TOKEN.safeTransfer(msg.sender, amount);

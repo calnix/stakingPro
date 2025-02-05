@@ -169,7 +169,7 @@ library PoolLogic {
         _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, vault, userVaultAssets, params);
 
         uint256[] memory userTokenIds;
-        uint256 userBoostedStakedTokens; 
+        uint256 amountBoosted; 
         uint256 deltaVaultBoostedRealmPoints;
         uint256 deltaVaultBoostedStakedTokens;
 
@@ -177,11 +177,11 @@ library PoolLogic {
         if(amount > 0){
 
             // calc. boosted values
-            userBoostedStakedTokens = (amount * vault.totalBoostFactor) / params.PRECISION_BASE;
+            amountBoosted = (amount * vault.totalBoostFactor) / params.PRECISION_BASE;
 
             // update vault
             vault.stakedTokens -= amount;
-            vault.boostedStakedTokens -= userBoostedStakedTokens;
+            vault.boostedStakedTokens -= amountBoosted;
 
             // update user
             userVaultAssets.stakedTokens -= amount;
@@ -215,7 +215,7 @@ library PoolLogic {
         vaults[params.vaultId] = vault;
         users[params.user][params.vaultId] = userVaultAssets;
 
-        return (userBoostedStakedTokens, deltaVaultBoostedRealmPoints, deltaVaultBoostedStakedTokens, numOfNfts, userTokenIds);
+        return (amountBoosted, deltaVaultBoostedRealmPoints, deltaVaultBoostedStakedTokens, numOfNfts, userTokenIds);
     } 
 
     function executeMigrateRP(
