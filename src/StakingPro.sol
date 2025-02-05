@@ -701,7 +701,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @notice Immediately ends a distribution
      * @param distributionId ID of the distribution to end
      */
-    function endDistributionImmediately(uint256 distributionId) external whenNotEnded onlyRole(OPERATOR_ROLE) {
+    function endDistributionImmediately(uint256 distributionId) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
         DataTypes.Distribution memory distribution = distributions[distributionId];
         
         if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
