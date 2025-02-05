@@ -62,6 +62,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     // signature params
     address public immutable STORED_SIGNER;                 
     uint256 public MINIMUM_REALMPOINTS_REQUIRED;
+    bytes32 public constant STRUCT_HASH = keccak256("StakeRp(address user,bytes32 vaultId,uint256 amount,uint256 expiry,uint256 nonce)");
 
     // distributions
     uint256[] public activeDistributions;    // array stores key values for distributions mapping; includes not yet started distributions  
@@ -275,9 +276,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(amount < MINIMUM_REALMPOINTS_REQUIRED) revert Errors.MinimumRpRequired();
 
         // verify signature
-        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
-            keccak256("StakeRp(address user,bytes32 vaultId,uint256 amount,uint256 expiry,uint256 nonce)"), 
-            msg.sender, vaultId, amount, expiry, userNonces[msg.sender])));
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(STRUCT_HASH, msg.sender, vaultId, amount, expiry, userNonces[msg.sender])));
         
         address signer = ECDSA.recover(digest, signature);
         if(signer != STORED_SIGNER) revert Errors.InvalidSignature(); 
