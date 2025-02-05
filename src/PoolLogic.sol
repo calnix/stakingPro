@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import './Events.sol';
 import {Errors} from './Errors.sol';
 import {DataTypes} from './DataTypes.sol';
+import {INftRegistry} from "./interfaces/INftRegistry.sol";
 
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -464,7 +465,8 @@ library PoolLogic {
 
         DataTypes.UpdateAccountsIndexesParams memory params,
         bytes32[] calldata vaultIds,
-        uint256 numOfVaults
+        uint256 numOfVaults,
+        INftRegistry NFT_REGISTRY
     ) external returns (uint256, uint256, uint256, uint256, uint256) {
 
         // Track total assets to remove from global state
@@ -519,6 +521,10 @@ library PoolLogic {
                     totalRealmPointsToRemove += vault.stakedRealmPoints;
                     totalBoostedTokensToRemove += vault.boostedStakedTokens;
                     totalBoostedRealmPointsToRemove += vault.boostedRealmPoints;
+
+                    // return creator NFTs
+                    NFT_REGISTRY.recordUnstake(vault.creator, vault.creationTokenIds, vaultId);
+                    delete vaults[vaultId].creationTokenIds;
 
                     // Mark vault as removed
                     vaults[vaultId].removed = 1;

@@ -473,9 +473,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             bytes32[] memory vaultIds = new bytes32[](1);
             vaultIds[0] = vaultId;
             _endVaults(vaultIds, 1);
-
-            // return creator NFTs
-            NFT_REGISTRY.recordUnstake(msg.sender, vault.creationTokenIds, vaultId);
         }
 
         // update storage
@@ -494,6 +491,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         // updates all active distribution indexes, so that vaults' accounts can be updated in finality
         _endVaults(vaultIds, numOfVaults);
     }
+
     
 //------------------------------ Operator functions ------------------------------------------------
 
@@ -1003,7 +1001,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             uint256 totalBoostedRealmPointsToRemove
         ) 
             = PoolLogic.executeEndVaults(activeDistributions, vaults, distributions, vaultAccounts, params, 
-                vaultIds, numOfVaults);
+                vaultIds, numOfVaults, NFT_REGISTRY);
 
         // Update global state
         totalStakedNfts -= totalNftsToRemove;
