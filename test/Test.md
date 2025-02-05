@@ -52,3 +52,7 @@ import fork into separate file
 
 X-Chain
 - will involve EVMVault.sol
+
+## Migration
+
+- v1 to v2: rewardsVault

@@ -103,10 +103,10 @@ event DistributionCompleted(uint256 indexed distributionId, uint256 endTime, uin
 
 
 // -------------------------------------- RewardsVault --------------------------------------------------------------------
+event ReceiverSet(address indexed setter, address indexed evmAddress, bytes32 indexed solanaAddress);
+event DistributionCreated(uint256 indexed distributionId, uint32 dstEid, bytes32 tokenAddress);
+event DistributionUpdated(uint256 indexed distributionId, uint256 newTotalRequired);
+event DistributionEnded(uint256 indexed distributionId, uint256 finalTotalRequired);
+event PayRewards(uint256 indexed distributionId, address indexed to, bytes32 indexed receiver, uint256 amount);
 event Deposit(uint256 indexed distributionId, uint32 dstEid, address indexed from, uint256 amount);
 event Withdraw(uint256 indexed distributionId, uint32 dstEid, address indexed to, uint256 amount);
-
-event DistributionCreated(uint256 indexed distributionId, uint32 dstEid, bytes32 tokenAddress);
-event DistributionEnded(uint256 indexed distributionId, uint256 finalTotalRequired);
-
-event PayRewards(uint256 indexed distributionId, address indexed to, bytes32 indexed receiver, uint256 amount);

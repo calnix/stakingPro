@@ -56,8 +56,25 @@ contract RewardsVaultV1 is Pausable, AccessControl {
 
 //------- external functions -----------------------------------------------------
     
+    /**
+     * @notice Sets the receiver address for the user
+     * @dev Only callable when the contract is not paused
+     * @param evmAddress The EVM address of the user
+     * @param solanaAddress The Solana address of the user
+     */
+    function setReceiver(address evmAddress, bytes32 solanaAddress) external virtual whenNotPaused {
+        if(evmAddress == address(0)) revert Errors.InvalidAddress();
+        if(solanaAddress == bytes32(0)) revert Errors.InvalidAddress();
+
+        users[msg.sender] = UserAddresses(evmAddress, solanaAddress);
+
+        emit ReceiverSet(msg.sender, evmAddress, solanaAddress);
+    }
+
+
     /*//////////////////////////////////////////////////////////////
                               POOL
+
     //////////////////////////////////////////////////////////////*/
 
     /**
@@ -67,7 +84,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @param dstEid LayerZero endpoint ID for the destination chain (0 for local chain)
      * @param tokenAddress The token address for this distribution encoded as bytes32
      */
-    function setupDistribution(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress, uint256 totalRequired) external virtual onlyRole(POOL_ROLE) {
+    function setupDistribution(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress, uint256 totalRequired) external virtual whenNotPaused onlyRole(POOL_ROLE) {
         // POOL ensures that:
         //  distributionId is > 0
         //  tokenAddress is not BYTES32(0)
@@ -93,9 +110,10 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @param distributionId The ID of the distribution to update
      * @param newTotalRequired The new total required amount
      */
-    function updateDistribution(uint256 distributionId, uint256 newTotalRequired) external virtual onlyRole(POOL_ROLE) {
+    function updateDistribution(uint256 distributionId, uint256 newTotalRequired) external virtual whenNotPaused onlyRole(POOL_ROLE) {
         Distribution storage distributionPointer = distributions[distributionId];
         distributionPointer.totalRequired = newTotalRequired;
+        emit DistributionUpdated(distributionId, newTotalRequired);
     }
 
     /**
@@ -103,7 +121,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @dev Only callable by pool
      * @param distributionId The ID of the distribution to end
      */
-    function endDistributionImmediately(uint256 distributionId, uint256 totalEmitted) external virtual onlyRole(POOL_ROLE) {
+    function endDistributionImmediately(uint256 distributionId, uint256 totalEmitted) external virtual whenNotPaused onlyRole(POOL_ROLE) {
         Distribution storage distributionPointer = distributions[distributionId];
         distributionPointer.totalRequired = totalEmitted;
         emit DistributionEnded(distributionId, totalEmitted);
@@ -119,7 +137,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @param to Address of the user receiving rewards
      * @param amount Reward amount (expressed in the token's precision)
      */
-    function payRewards(uint256 distributionId, uint256 amount, address to) external payable virtual onlyRole(POOL_ROLE) {
+    function payRewards(uint256 distributionId, uint256 amount, address to) external payable virtual whenNotPaused onlyRole(POOL_ROLE) {
         // no need for input checks, as this is called by pool
 
         // get distribution + user
@@ -158,7 +176,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @param amount Amount of rewards to deposit (in wei)
      * @param from Address from which rewards will be pulled
      */
-    function deposit(uint256 distributionId, uint256 amount, address from) external onlyRole(MONEY_MANAGER_ROLE) {
+    function deposit(uint256 distributionId, uint256 amount, address from) external whenNotPaused onlyRole(MONEY_MANAGER_ROLE) {
         if(distributionId == 0) revert Errors.InvalidDistributionId();
         if(from == address(0)) revert Errors.InvalidAddress();
         if(amount == 0) revert Errors.InvalidAmount();
@@ -191,7 +209,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @param amount Amount of rewards to withdraw (in wei)
      * @param to Address to which rewards will be sent
      */
-    function withdraw(uint256 distributionId, uint256 amount, address to) external onlyRole(MONEY_MANAGER_ROLE) {
+    function withdraw(uint256 distributionId, uint256 amount, address to) external whenNotPaused onlyRole(MONEY_MANAGER_ROLE) {
         if(distributionId == 0) revert Errors.InvalidDistributionId();
         if(to == address(0)) revert Errors.InvalidAddress();
         if(amount == 0) revert Errors.InvalidAmount();
@@ -231,7 +249,18 @@ contract RewardsVaultV1 is Pausable, AccessControl {
         _unpause();
     }
 
+    /**
+     * @notice Allows the DEFAULT_ADMIN_ROLE to exfil any ERC20 tokens from the contract
+     * @dev Only callable when the contract is paused
+     * @param token Token address 
+     */
+    function exit(address token) external whenPaused onlyRole(DEFAULT_ADMIN_ROLE) {
+        IERC20(token).safeTransfer(msg.sender, IERC20(token).balanceOf(address(this)));
+    }
+
+
 //------------------------------- pure ---------------------------------
+
 
     function addressToBytes32(address addr) public pure returns(bytes32) {
         return bytes32(uint256(uint160(addr)));

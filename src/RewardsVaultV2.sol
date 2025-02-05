@@ -30,7 +30,7 @@ contract RewardsVaultV2 is RewardsVaultV1, OApp, Ownable2Step {
      * @param to Address of the user receiving rewards
      * @param amount Reward amount (expressed in the token's precision)
      */
-    function payRewards(uint256 distributionId, uint256 amount, address to) external payable override onlyRole(POOL_ROLE) {
+    function payRewards(uint256 distributionId, uint256 amount, address to) external payable override whenNotPaused onlyRole(POOL_ROLE) {
         // no need for input checks, as this is called by pool
 
         // get distribution + user
