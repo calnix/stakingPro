@@ -137,7 +137,7 @@ library PoolLogic {
         return incomingBoostedRealmPoints;
     }
 
-    function executeUnstakeTokens(
+    function executeUnstake(
         uint256[] storage activeDistributions,
         mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
         mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
@@ -273,13 +273,13 @@ library PoolLogic {
         uint256 totalBoostedDelta;
         if(newBoostedRealmPoints > oldBoostedRealmPoints) {
             
-            totalBoostedDelta += (newBoostedRealmPoints - oldBoostedRealmPoints);    
+            totalBoostedDelta = (newBoostedRealmPoints - oldBoostedRealmPoints);    
             //1: flag for incrementation
             return(totalBoostedDelta, 1);
 
         } else{
 
-            totalBoostedDelta += (oldBoostedRealmPoints - newBoostedRealmPoints);
+            totalBoostedDelta = (oldBoostedRealmPoints - newBoostedRealmPoints);
             //0: flag for decrementation
             return(totalBoostedDelta, 0);
         }

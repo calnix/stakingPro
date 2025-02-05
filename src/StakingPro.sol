@@ -363,7 +363,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             uint256 numOfNfts,
             uint256[] memory userTokenIds
         ) 
-            = PoolLogic.executeUnstakeTokens(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
+            = PoolLogic.executeUnstake(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
                 NFT_MULTIPLIER, amount, tokenIds);
 
         // decrement user's staked tokens and boosted staked tokens
