@@ -483,7 +483,7 @@ library PoolLogic {
             distributionsToProcess[i] = activeDistributions[i];
         }
 
-        // For each distribution
+        // For each distribution [always > 0 due to staking power]
         for(uint256 i; i < numOfDistributions; ++i) {
             
             uint256 distributionId = distributionsToProcess[i];
@@ -521,7 +521,7 @@ library PoolLogic {
                     totalBoostedRealmPointsToRemove += vault.boostedRealmPoints;
 
                     // Mark vault as removed
-                    vault.removed = 1;
+                    vaults[vaultId].removed = 1;
                     ++vaultsEnded;
                 }
             }
@@ -616,31 +616,34 @@ library PoolLogic {
         // update distribution index
         distribution = _updateDistributionIndex(distribution, activeDistributions, totalBoostedRealmPoints, totalBoostedStakedTokens, isPaused);
 
-        // startTime modification
-        if(newStartTime > 0) {
-            // Cannot update if distribution has already started
-            if(block.timestamp >= distribution.startTime) revert Errors.DistributionStarted();
-            
-            // newStartTime must be a future time
-            if(newStartTime <= block.timestamp) revert Errors.InvalidStartTime();
+        // staking power start/end times cannot be updated  
+        if(distributionId > 0){
+            // startTime modification
+            if(newStartTime > 0) {
+                // Cannot update if distribution has already started
+                if(block.timestamp >= distribution.startTime) revert Errors.DistributionStarted();
+                
+                // newStartTime must be a future time
+                if(newStartTime <= block.timestamp) revert Errors.InvalidStartTime();
 
-            distribution.startTime = newStartTime;
-        }
+                distribution.startTime = newStartTime;
+            }
 
-        // endTime modification
-        if(newEndTime > 0) {
+            // endTime modification
+            if(newEndTime > 0) {
 
-            // cannot be in the past
-            if(newEndTime <= block.timestamp) revert Errors.InvalidDistributionEndTime();
+                // cannot be in the past
+                if(newEndTime <= block.timestamp) revert Errors.InvalidDistributionEndTime();
 
-            // If only endTime is being updated, ensure it's after existing startTime
-            if(newStartTime == 0 && newEndTime <= distribution.startTime) revert Errors.InvalidDistributionEndTime();
-            
-            // If both times are being updated, ensure end is after start
-            if(newStartTime > 0 && newEndTime <= newStartTime) revert Errors.InvalidDistributionEndTime();
+                // If only endTime is being updated, ensure it's after existing startTime
+                if(newStartTime == 0 && newEndTime <= distribution.startTime) revert Errors.InvalidDistributionEndTime();
+                
+                // If both times are being updated, ensure end is after start
+                if(newStartTime > 0 && newEndTime <= newStartTime) revert Errors.InvalidDistributionEndTime();
 
-            // update endTime
-            distribution.endTime = newEndTime;
+                // update endTime
+                distribution.endTime = newEndTime;
+            }
         }
 
         // emissionPerSecond modification 
