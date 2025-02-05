@@ -467,8 +467,6 @@ library PoolLogic {
         uint256 numOfVaults
     ) external returns (uint256, uint256, uint256, uint256, uint256) {
 
-        uint256 numOfDistributions = activeDistributions.length;
-
         // Track total assets to remove from global state
         uint256 totalNftsToRemove;
         uint256 totalTokensToRemove; 
@@ -478,10 +476,17 @@ library PoolLogic {
             
         uint256 vaultsEnded;
 
+        // cache active distributions to avoid incorrect processing of distributions due to .pop() [in _updateDistributionIndex]
+        uint256 numOfDistributions = activeDistributions.length;
+        uint256[] memory distributionsToProcess = new uint256[](numOfDistributions);
+        for(uint256 i; i < numOfDistributions; ++i) {
+            distributionsToProcess[i] = activeDistributions[i];
+        }
+
         // For each distribution
         for(uint256 i; i < numOfDistributions; ++i) {
             
-            uint256 distributionId = activeDistributions[i];
+            uint256 distributionId = distributionsToProcess[i];
             DataTypes.Distribution memory distribution = distributions[distributionId];
 
             // Update distribution first
@@ -838,7 +843,7 @@ library PoolLogic {
 
                 emit DistributionCompleted(distribution.distributionId, distribution.endTime, distribution.totalEmitted);
             }
-            
+
             return distribution;
         }    
 
@@ -1064,7 +1069,7 @@ library PoolLogic {
         DataTypes.Vault memory vault, 
         DataTypes.User memory userVaultAssets,
         DataTypes.UpdateAccountsIndexesParams memory params
-        ) internal {
+    ) internal {
 
         /** user -> vaultId (stake)
             - this changes the composition for both the user and vault
@@ -1075,13 +1080,16 @@ library PoolLogic {
             loop thru userAccounts -> vaultAccounts -> distri
         */
 
-        // always > 0, staking power is setup on deployment
+        // cache active distributions to avoid incorrect processing of distributions due to .pop() [in _updateDistributionIndex]
         uint256 numOfDistributions = activeDistributions.length;
-        
-        // update each user account, looping thru distributions
+        uint256[] memory distributionsToProcess = new uint256[](numOfDistributions);
+        for(uint256 i; i < numOfDistributions; ++i) {
+            distributionsToProcess[i] = activeDistributions[i];
+        }
+
+        // process each distribution from our cached array
         for (uint256 i; i < numOfDistributions; ++i) {
-             
-            uint256 distributionId = activeDistributions[i];   
+            uint256 distributionId = distributionsToProcess[i];   
 
             // get corresponding user+vault account for this active distribution 
             DataTypes.Distribution memory distribution_ = distributions[distributionId];
