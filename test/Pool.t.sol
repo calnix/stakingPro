@@ -9,11 +9,6 @@ abstract contract StateDeploy is TestingHarness {
 
     function setUp() public virtual override {
         super.setUp();
-
-        // Grant operator role
-        vm.startPrank(owner);      
-        pool.grantRole(pool.OPERATOR_ROLE(), operator);
-        vm.stopPrank();
     }
 }
 
@@ -34,8 +29,8 @@ contract StateDeployTest is StateDeploy {
         assertEq(pool.hasRole(pool.DEFAULT_ADMIN_ROLE(), owner), true);
         assertEq(pool.hasRole(pool.OPERATOR_ROLE(), owner), true);
         assertEq(pool.hasRole(pool.MONITOR_ROLE(), owner), true);
+
         assertEq(pool.hasRole(pool.MONITOR_ROLE(), monitor), true);
-        
         assertEq(pool.hasRole(pool.OPERATOR_ROLE(), operator), true);
     }
 
@@ -50,7 +45,6 @@ contract StateDeployTest is StateDeploy {
         pool.createVault(user1NftsArray, nftFeeFactor, creatorFeeFactor, realmPointsFeeFactor);
     }
 
-
     function testOperatorCanSetupDistribution() public {
         vm.prank(operator);
         
@@ -62,9 +56,7 @@ contract StateDeployTest is StateDeploy {
             uint256 tokenPrecision = 1E18;
             uint32 dstEid = 0;
             bytes32 tokenAddress = 0x00;
-        pool.setupDistribution(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision, dstEid, tokenAddress);
-
-        
+        pool.setupDistribution(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision, dstEid, tokenAddress);        
     }
 
     /**
@@ -74,6 +66,38 @@ contract StateDeployTest is StateDeploy {
      */   
 }
 
-abstract contract StateStart {
+abstract contract StateStarted is StateDeploy {
+
+    function setUp() public virtual override {
+        super.setUp();
+
+        vm.prank(operator);
+        
+        // staking power
+            uint256 distributionId = 0;
+            uint256 distributionStartTime = 1;
+            uint256 distributionEndTime;
+            uint256 emissionPerSecond = 1 ether;
+            uint256 tokenPrecision = 1E18;
+            uint32 dstEid = 0;
+            bytes32 tokenAddress = 0x00;
+        pool.setupDistribution(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision, dstEid, tokenAddress);        
+
+        // starting point: T1
+        vm.warp(pool.startTime()); 
+        console.log("Current timestamp:", block.timestamp);
+    }
+}
+
+contract StateStartedTest is StateStarted {
+
+    function testCreateVault() public {
+        vm.prank(user1);
+
+            uint256 nftFeeFactor = 1000;
+            uint256 creatorFeeFactor = 1000; 
+            uint256 realmPointsFeeFactor = 1000;
+        pool.createVault(user1NftsArray, nftFeeFactor, creatorFeeFactor, realmPointsFeeFactor);
+    }
 
 }

@@ -63,7 +63,7 @@ contract DeployContracts is Contracts {
 
         pool = new StakingPro(registry, stakedToken, startTime,
             nftMultiplier, creationNftsRequired, vaultCoolDownDuration,
-            owner, owner, storedSigner,
+            owner, owner, owner, storedSigner,
             "StakingPro", "1"
         );
 

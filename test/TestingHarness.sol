@@ -100,6 +100,7 @@ abstract contract TestingHarness is Test {
             vaultCoolDownDuration,
             owner,
             monitor,
+            operator,
             storedSigner,
             "StakingPro",
             "1");

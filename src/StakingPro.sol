@@ -93,7 +93,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         address nftRegistry, address stakedToken, uint256 startTime_, 
         /*uint256 maxFeeFactor, uint256 minRpRequired,*/ uint256 nftMultiplier, 
         uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
-        address owner, address monitor, 
+        address owner, address monitor, address operator,
         address storedSigner, string memory name, string memory version) payable EIP712(name, version) {
 
         // sanity check input data: time, period, rewards
@@ -122,6 +122,9 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
         // monitor script: only calls pause
         _grantRole(MONITOR_ROLE, monitor);
+
+        // operator
+        _grantRole(OPERATOR_ROLE, operator);
     }
 
 
@@ -1043,7 +1046,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
     //REDUCES CONTRACT SIZE
     function _whenStarted() internal view {
-        if(block.timestamp < startTime) revert Errors.NotStarted();    
+        if(block.timestamp <= startTime) revert Errors.NotStarted();    
     }
 
     //note > or >= ?

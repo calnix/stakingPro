@@ -56,6 +56,7 @@ contract DeployInterim is Script {
             vaultCoolDownDuration,
             owner,
             owner,
+            owner,
             storedSigner,
             "StakingPro",
             "1"
