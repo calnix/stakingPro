@@ -97,7 +97,28 @@ contract StateStartedTest is StateStarted {
             uint256 nftFeeFactor = 1000;
             uint256 creatorFeeFactor = 1000; 
             uint256 realmPointsFeeFactor = 1000;
+            
+        // Get vault ID before creating vault
+        bytes32 expectedVaultId = generateVaultId(block.number - 1, user1);
+        
+        vm.expectEmit(true, true, true, true);
+        emit VaultCreated(expectedVaultId, user1, nftFeeFactor, creatorFeeFactor, realmPointsFeeFactor);
+        
         pool.createVault(user1NftsArray, nftFeeFactor, creatorFeeFactor, realmPointsFeeFactor);
+
+        // Verify vault was created correctly
+        DataTypes.Vault memory vault = pool.getVault(expectedVaultId);
+        
+        assertEq(vault.creator, user1, "Incorrect vault owner");
+        assertEq(vault.nftFeeFactor, nftFeeFactor, "Incorrect NFT fee factor");
+        assertEq(vault.creatorFeeFactor, creatorFeeFactor, "Incorrect creator fee factor"); 
+        assertEq(vault.realmPointsFeeFactor, realmPointsFeeFactor, "Incorrect realm points fee factor");
+
+        // Verify NFTs are registered to vault
+        for(uint256 i = 0; i < user1NftsArray.length; i++) {
+            (, bytes32 registeredVaultId) = nftRegistry.nfts(user1NftsArray[i]);
+            assertEq(registeredVaultId, expectedVaultId, "NFT not registered to vault correctly");
+        }
     }
 
 }

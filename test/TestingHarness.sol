@@ -138,7 +138,7 @@ abstract contract TestingHarness is Test {
         nftRegistry.register(user3, user3NftsArray);
 
         vm.stopPrank();
-        
+
         // 
         vm.prank(owner);
         nftRegistry.setPool(address(pool));
@@ -152,6 +152,11 @@ abstract contract TestingHarness is Test {
         bytes memory signature = abi.encodePacked(r, s, v);
         
         return signature;
+    }
+
+        ///@dev Generate a vaultId. keccak256 is cheaper than using a counter with a SSTORE, even accounting for eventual collision retries.
+    function generateVaultId(uint256 salt, address user) public view returns (bytes32) {
+        return bytes32(keccak256(abi.encode(user, block.timestamp, salt)));
     }
 }
 

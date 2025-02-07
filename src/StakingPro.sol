@@ -1151,4 +1151,32 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         return activeDistributions.length;
     }
 
+    function getVault(bytes32 vaultId) external view returns (DataTypes.Vault memory) { 
+        return vaults[vaultId];
+    }
+
+    function getUser(address user, bytes32 vaultId) external view returns (DataTypes.User memory) { 
+        return users[user][vaultId];
+    }
+/** 
+    // Function to get creation token IDs for a vault
+    function getVaultCreationTokenIds(bytes32 vaultId) external view returns (uint256[] memory) {
+        return vaults[vaultId].creationTokenIds;
+    }
+
+    // Function to get full array of staked token IDs for a user
+    function getUserTokenIds(address user, bytes32 vaultId) external view returns (uint256[] memory) {
+        return users[user][vaultId].tokenIds;
+    }
+
+    function getVaultCreationTokenIdAt(bytes32 vaultId, uint256 index) external view returns (uint256) {
+        require(index < vaults[vaultId].creationTokenIds.length, "Index out of bounds");
+        return vaults[vaultId].creationTokenIds[index];
+    }
+
+    // Get the length of the array
+    function getVaultCreationTokenIdsLength(bytes32 vaultId) external view returns (uint256) {
+        return vaults[vaultId].creationTokenIds.length;
+    }
+*/
 }
