@@ -109,10 +109,32 @@ contract StateStartedTest is StateStarted {
         // Verify vault was created correctly
         DataTypes.Vault memory vault = pool.getVault(expectedVaultId);
         
+        // Check creator and fee factors
         assertEq(vault.creator, user1, "Incorrect vault owner");
         assertEq(vault.nftFeeFactor, nftFeeFactor, "Incorrect NFT fee factor");
-        assertEq(vault.creatorFeeFactor, creatorFeeFactor, "Incorrect creator fee factor"); 
+        assertEq(vault.creatorFeeFactor, creatorFeeFactor, "Incorrect creator fee factor");
         assertEq(vault.realmPointsFeeFactor, realmPointsFeeFactor, "Incorrect realm points fee factor");
+
+        // Check creation NFTs array
+        assertEq(vault.creationTokenIds.length, user1NftsArray.length, "Incorrect number of creation NFTs");
+        for(uint i = 0; i < user1NftsArray.length; i++) {
+            assertEq(vault.creationTokenIds[i], user1NftsArray[i], "Incorrect creation NFT ID");
+        }
+
+        // Check timestamps and status
+        assertEq(vault.startTime, block.timestamp, "Incorrect start time");
+        assertEq(vault.endTime, 0, "End time should be 0");
+        assertEq(vault.removed, 0, "Vault should not be removed");
+
+        // Check staking balances
+        assertEq(vault.stakedNfts, 0, "Should have no staked NFTs");
+        assertEq(vault.stakedTokens, 0, "Should have no staked tokens");
+        assertEq(vault.stakedRealmPoints, 0, "Should have no staked realm points");
+
+        // Check boost factors
+        assertEq(vault.totalBoostFactor, 10_000, "Should have no boost factor");
+        assertEq(vault.boostedRealmPoints, 0, "Should have no boosted realm points");
+        assertEq(vault.boostedStakedTokens, 0, "Should have no boosted staked tokens");
 
         // Verify NFTs are registered to vault
         for(uint256 i = 0; i < user1NftsArray.length; i++) {
