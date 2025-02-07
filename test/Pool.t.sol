@@ -105,7 +105,7 @@ contract StateStartedTest is StateStarted {
         emit VaultCreated(expectedVaultId, user1, nftFeeFactor, creatorFeeFactor, realmPointsFeeFactor);
         
         pool.createVault(user1NftsArray, nftFeeFactor, creatorFeeFactor, realmPointsFeeFactor);
-
+        
         // Verify vault was created correctly
         DataTypes.Vault memory vault = pool.getVault(expectedVaultId);
         
@@ -143,4 +143,29 @@ contract StateStartedTest is StateStarted {
         }
     }
 
+}
+
+abstract contract StateCreateVault is StateStarted {
+
+    bytes32 vaultId = 0x8fbe8a20f950b11703e51f11dee9f00d9fa0ebd091cc4f695909e860e994944b;
+
+    function setUp() public virtual override {
+        super.setUp();
+        vm.prank(user1);
+
+        uint256 nftFeeFactor = 1000;
+        uint256 creatorFeeFactor = 1000; 
+        uint256 realmPointsFeeFactor = 1000;
+
+        pool.createVault(user1NftsArray, nftFeeFactor, creatorFeeFactor, realmPointsFeeFactor);
+    }
+}
+
+contract StateCreateVaultTest is StateCreateVault {
+
+    function testCannotCreateVaultWithLockedNfts() public {
+        vm.prank(user1);
+        vm.expectRevert();
+        pool.createVault(user1NftsArray, 1000, 1000, 1000);
+    }
 }
