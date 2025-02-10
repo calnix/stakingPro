@@ -1163,6 +1163,7 @@ library PoolLogic {
     }
 
     ///@dev will revert if arrToRemove contains elements not found within originalArr
+    ///@dev reversion due to resArr accessing an invalid index
     function _removeFromArray(uint256[] memory originalArr, uint256[] memory arrToRemove) internal pure returns (uint256[] memory) {
         uint256 originalLength = originalArr.length;
         uint256 toRemoveLength = arrToRemove.length;

@@ -4,7 +4,7 @@ pragma solidity 0.8.26;
 interface IRewardsVault {
 
     // distribution functions
-    function setUpDistribution(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress, uint256 totalRequired) external;
+    function setupDistribution(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress, uint256 totalRequired) external;
     function endDistributionImmediately(uint256 distributionId, uint256 totalEmitted) external;
     function updateDistribution(uint256 distributionId, uint256 newTotalRequired) external;
     

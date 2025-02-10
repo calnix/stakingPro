@@ -668,7 +668,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(distributionId > 0) {
 
             uint256 totalRequired = (distributionEndTime - distributionStartTime) * emissionPerSecond;
-            REWARDS_VAULT.setUpDistribution(distributionId, dstEid, tokenAddress, totalRequired);
+            REWARDS_VAULT.setupDistribution(distributionId, dstEid, tokenAddress, totalRequired);
         }
     }
 
