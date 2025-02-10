@@ -12,8 +12,14 @@ import "openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
 import { MockRegistry } from "../test/mocks/MockRegistry.sol";
 import { EndpointV2Mock } from "./mocks/EndpointV2Mock.sol";
 
+// interfaces
+import {IRealmPoints} from "./../src/interfaces/IRealmPoints.sol";
+
+// utils
 import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
+
+
 
 abstract contract TestingHarness is Test {
     using stdStorage for StdStorage;
@@ -144,14 +150,27 @@ abstract contract TestingHarness is Test {
         nftRegistry.setPool(address(pool));
     }
 
-    function generateSignature(address user, bytes32 vaultId, uint256 amount, uint256 expiry) public returns (bytes memory) {
+    function generateSignature(address user, bytes32 vaultId, uint256 amount, uint256 expiry, uint256 nonce) public returns (bytes memory) {
+        // Pack the struct data
+        bytes32 structHash = keccak256(
+            abi.encode(
+                pool.TYPEHASH(),
+                user,
+                vaultId,
+                amount,
+                expiry,
+                nonce
+            )
+        );
         
-        bytes32 digest = pool.hashTypedDataV4(keccak256(abi.encode(keccak256("StakeRp(address user,bytes32 vaultId,uint256 amount,uint256 expiry)"), user, vaultId, amount, expiry)));
-
+        // Get the digest using the contract's domain separator
+        bytes32 digest = pool.hashTypedDataV4(structHash);
+        
+        // Sign the digest
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(storedSignerPrivateKey, digest);
-        bytes memory signature = abi.encodePacked(r, s, v);
         
-        return signature;
+        // Return the signature in the correct format
+        return abi.encodePacked(r, s, v);
     }
 
         ///@dev Generate a vaultId. keccak256 is cheaper than using a counter with a SSTORE, even accounting for eventual collision retries.

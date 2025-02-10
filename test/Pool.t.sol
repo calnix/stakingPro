@@ -91,6 +91,25 @@ abstract contract StateStarted is StateDeploy {
 
 contract StateStartedTest is StateStarted {
 
+    function testCannotStakeNftsToNonexistentVault() public {
+        vm.prank(user2);
+        bytes32 nonexistentVaultId = bytes32(uint256(1));
+        uint256[] memory nftsToStake = new uint256[](1);
+        nftsToStake[0] = user2NftsArray[0];
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.NonExistentVault.selector, nonexistentVaultId));
+        pool.stakeNfts(nonexistentVaultId, nftsToStake);
+    }
+
+    function testCannotStakeTokensToNonexistentVault() public {
+        vm.prank(user2);
+        bytes32 nonexistentVaultId = bytes32(uint256(1));
+        uint256 amount = 100 ether;
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.NonExistentVault.selector, nonexistentVaultId));
+        pool.stakeTokens(nonexistentVaultId, amount);
+    }
+
     function testCreateVault() public {
         vm.prank(user1);
 
@@ -147,7 +166,7 @@ contract StateStartedTest is StateStarted {
 
 abstract contract StateCreateVault is StateStarted {
 
-    bytes32 vaultId = 0x8fbe8a20f950b11703e51f11dee9f00d9fa0ebd091cc4f695909e860e994944b;
+    bytes32 public vaultId = 0x8fbe8a20f950b11703e51f11dee9f00d9fa0ebd091cc4f695909e860e994944b;
 
     function setUp() public virtual override {
         super.setUp();
@@ -167,5 +186,114 @@ contract StateCreateVaultTest is StateCreateVault {
         vm.prank(user1);
         vm.expectRevert();
         pool.createVault(user1NftsArray, 1000, 1000, 1000);
+    }
+
+    function testCannotStakeZeroTokens() public {
+        vm.startPrank(user2);
+        mocaToken.approve(address(pool), type(uint256).max);
+
+        vm.expectRevert(Errors.InvalidAmount.selector);
+        pool.stakeTokens(vaultId, 0);
+        vm.stopPrank();
+    }
+
+    function testCanStakeTokens() public {
+        // Setup
+        vm.startPrank(user2);
+        uint256 stakeAmount = 100 ether;
+        mocaToken.approve(address(pool), stakeAmount);
+
+        // Get initial state
+        DataTypes.Vault memory vaultBefore = pool.getVault(vaultId);
+        uint256 initialStakedTokens = vaultBefore.stakedTokens;
+        uint256 userBalanceBefore = mocaToken.balanceOf(user2);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit StakedTokens(user2, vaultId, stakeAmount);
+
+        // Stake tokens
+        pool.stakeTokens(vaultId, stakeAmount);
+
+        // Verify state changes
+        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId);
+        assertEq(vaultAfter.stakedTokens, initialStakedTokens + stakeAmount);
+        assertEq(mocaToken.balanceOf(user2), userBalanceBefore - stakeAmount);
+        assertEq(mocaToken.balanceOf(address(pool)), stakeAmount);
+        vm.stopPrank();
+    }
+
+    function testCanStakeNfts() public {
+        // Setup
+        uint256[] memory nftsToStake = new uint256[](1);
+        nftsToStake[0] = user2NftsArray[0];  // This should be 5 based on setup
+
+        // Get initial state
+        DataTypes.Vault memory vaultBefore = pool.getVault(vaultId);
+        uint256 initialStakedNfts = vaultBefore.stakedNfts;
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit StakedNfts(user2, vaultId, nftsToStake);
+
+        // Stake NFTs
+        vm.prank(user2);
+        pool.stakeNfts(vaultId, nftsToStake);
+
+        // Verify state changes
+        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId);
+        assertEq(vaultAfter.stakedNfts, initialStakedNfts + nftsToStake.length);
+        
+        // Verify NFT ownership using nfts mapping
+        (, bytes32 registeredVaultId) = nftRegistry.nfts(nftsToStake[0]);
+        assertEq(registeredVaultId, vaultId, "NFT not registered to vault correctly");
+        vm.stopPrank();
+    }
+
+    function testCanStakeRealmPoints() public {
+        // Generate signature for realm points staking
+        uint256 realmPointsAmount = 1000 ether;
+        uint256 expiry = block.timestamp + 1 days;
+        uint256 nonce = 0;
+        bytes memory signature = generateSignature(user2, vaultId, realmPointsAmount, expiry, nonce);
+
+
+        // Get initial state
+        DataTypes.Vault memory vaultBefore = pool.getVault(vaultId);
+        uint256 initialStakedPoints = vaultBefore.stakedRealmPoints;
+
+        // Calculate boosted amount
+        uint256 boostedAmount = (realmPointsAmount * vaultBefore.totalBoostFactor) / 10000;
+
+        // Expect event with boosted amount
+        vm.expectEmit(true, true, true, true);
+        emit StakedRealmPoints(user2, vaultId, realmPointsAmount, boostedAmount);
+
+        // Stake realm points
+        vm.prank(user2);
+        pool.stakeRP(vaultId, realmPointsAmount, expiry, signature);
+
+        // Verify state changes
+        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId);
+        assertEq(vaultAfter.stakedRealmPoints, initialStakedPoints + realmPointsAmount);
+        assertEq(vaultAfter.boostedRealmPoints, boostedAmount);
+    }
+
+    function testGetVaultReturnsCorrectData() public {
+        DataTypes.Vault memory vault = pool.getVault(vaultId);
+        
+        assertEq(vault.creator, user1);
+        assertEq(vault.startTime, startTime);
+        assertEq(vault.endTime, 0);
+        assertEq(vault.removed, 0);
+        assertEq(vault.nftFeeFactor, 1000);
+        assertEq(vault.creatorFeeFactor, 1000);
+        assertEq(vault.realmPointsFeeFactor, 1000);
+        
+        // Verify creation NFTs
+        assertEq(vault.creationTokenIds.length, user1NftsArray.length);
+        for(uint i = 0; i < user1NftsArray.length; i++) {
+            assertEq(vault.creationTokenIds[i], user1NftsArray[i]);
+        }
     }
 }
