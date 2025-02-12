@@ -5,7 +5,7 @@ interface IRewardsVault {
 
     // distribution functions
     function setupDistribution(uint256 distributionId, uint32 dstEid, bytes32 tokenAddress, uint256 totalRequired) external;
-    function endDistributionImmediately(uint256 distributionId, uint256 totalEmitted) external;
+    function endDistribution(uint256 distributionId, uint256 totalEmitted) external;
     function updateDistribution(uint256 distributionId, uint256 newTotalRequired) external;
     
     // reward functions

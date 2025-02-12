@@ -121,7 +121,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @dev Only callable by pool
      * @param distributionId The ID of the distribution to end
      */
-    function endDistributionImmediately(uint256 distributionId, uint256 totalEmitted) external virtual whenNotPaused onlyRole(POOL_ROLE) {
+    function endDistribution(uint256 distributionId, uint256 totalEmitted) external virtual whenNotPaused onlyRole(POOL_ROLE) {
         Distribution storage distributionPointer = distributions[distributionId];
         distributionPointer.totalRequired = totalEmitted;
         emit DistributionEnded(distributionId, totalEmitted);
@@ -176,7 +176,8 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @param amount Amount of rewards to deposit (in wei)
      * @param from Address from which rewards will be pulled
      */
-    function deposit(uint256 distributionId, uint256 amount, address from) external whenNotPaused onlyRole(MONEY_MANAGER_ROLE) {
+    function deposit(uint256 distributionId, uint256 amount, address from) external payable whenNotPaused onlyRole(MONEY_MANAGER_ROLE) {
+        if(msg.value > 0) revert Errors.PayableBlocked();
         if(distributionId == 0) revert Errors.InvalidDistributionId();
         if(from == address(0)) revert Errors.InvalidAddress();
         if(amount == 0) revert Errors.InvalidAmount();

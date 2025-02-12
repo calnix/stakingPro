@@ -77,7 +77,7 @@ library Errors {
     
     // payRewards::V2
     error InsufficientGas();
+    error PayableBlocked();
     // deposit::V2
     error CallDepositOnRemote();
-
 }

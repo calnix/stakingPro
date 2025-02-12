@@ -699,11 +699,13 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @notice Immediately ends a distribution
      * @param distributionId ID of the distribution to end
      */
-    function endDistributionImmediately(uint256 distributionId) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
+    function endDistribution(uint256 distributionId) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
+        if(distributionId == 0) revert Errors.InvalidDistributionId();
         DataTypes.Distribution memory distribution = distributions[distributionId];
         
         if(distribution.startTime == 0) revert Errors.NonExistentDistribution();
         if(block.timestamp >= distribution.endTime) revert Errors.DistributionEnded();
+
         if(distribution.manuallyEnded == 1) revert Errors.DistributionManuallyEnded();
    
         // update distribution index
@@ -719,7 +721,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         emit DistributionEnded(distributionId, distribution.endTime, distribution.totalEmitted);
 
         // only for token distributions
-        if(distributionId > 0) REWARDS_VAULT.endDistributionImmediately(distributionId, distribution.totalEmitted);
+        if(distributionId > 0) REWARDS_VAULT.endDistribution(distributionId, distribution.totalEmitted);
     }
     
 

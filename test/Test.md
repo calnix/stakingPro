@@ -38,16 +38,15 @@
 ## misc fork [Pool Management]
 - StateUpdateCreationNfts
 - StateUpdateMinimumRealmPoints
-- StateSetRewardsVault 
-- 
+- StateSetRewardsVault
 
-## Risk testing 
+## Risk testing
 
 import fork into separate file
 
 - pause
 - unpause
-- freeze 
+- freeze
 - emergencyExit
 
 X-Chain
@@ -56,3 +55,31 @@ X-Chain
 ## Migration
 
 - v1 to v2: rewardsVault
+
+## User fns
+
+### user fns
+
+createVault
+stakeTokens
+stakeNfts
+stakeRP
+migrateRP
+unstake
+claimRewards
+updateVaultFees
+activateCooldown
+endVaults
+
+PRIV
+
+stakeOnBehalfOf
+setEndTime
+setRewardsVault
+updateMaximumFeeFactor
+updateMinimumRealmPoints
+updateCreationNfts
+updateVaultCooldown
+--------------------
+setupDistribution
+updateDistribution

@@ -622,18 +622,19 @@ library PoolLogic {
         // update distribution index
         distribution = _updateDistributionIndex(distribution, activeDistributions, totalBoostedRealmPoints, totalBoostedStakedTokens, isPaused);
 
-        // staking power start/end times cannot be updated  
-        if(distributionId > 0){
-            // startTime modification
-            if(newStartTime > 0) {
-                // Cannot update if distribution has already started
-                if(block.timestamp >= distribution.startTime) revert Errors.DistributionStarted();
-                
-                // newStartTime must be a future time
-                if(newStartTime <= block.timestamp) revert Errors.InvalidStartTime();
+        // startTime modification
+        if(newStartTime > 0) {
+            // Cannot update if distribution has already started
+            if(block.timestamp >= distribution.startTime) revert Errors.DistributionStarted();
+            
+            // newStartTime must be a future time
+            if(newStartTime <= block.timestamp) revert Errors.InvalidStartTime();
 
-                distribution.startTime = newStartTime;
-            }
+            distribution.startTime = newStartTime;
+        }
+
+        // staking power should not have an end time
+        if(distributionId > 0){
 
             // endTime modification
             if(newEndTime > 0) {
@@ -656,7 +657,8 @@ library PoolLogic {
         if(newEmissionPerSecond > 0) distribution.emissionPerSecond = newEmissionPerSecond;
             
         // recalc. new token requirements
-        uint256 newTotalRequired = distribution.emissionPerSecond  * (distribution.endTime - distribution.startTime);
+        uint256 newUnemittedRewards = distribution.emissionPerSecond  * (distribution.endTime - distribution.lastUpdateTimeStamp);
+        uint256 newTotalRequired = newUnemittedRewards + distribution.totalEmitted;
         
         // invariant: newTotalRequired must be greater than totalEmitted
         if(newTotalRequired < distribution.totalEmitted) revert Errors.InvalidEmissionPerSecond();
@@ -887,7 +889,7 @@ library PoolLogic {
             || distribution.emissionPerSecond == 0                         // 0 emissions. no rewards setup.
             || distribution.lastUpdateTimeStamp == block.timestamp         // distribution already updated
         ) {
-            return (distribution.index, distribution.lastUpdateTimeStamp, 0);                       
+            return (distribution.index, block.timestamp, 0);                       
         }
 
         uint256 currentTimestamp;
@@ -905,16 +907,9 @@ library PoolLogic {
         
         // emissionPerSecond expressed w/ full token precision 
         uint256 emittedRewards = distribution.emissionPerSecond * timeDelta;
-        
-        /* note: totalBalance is expressed 1e18. 
-                 emittedRewards is variable; as per distribution.TOKEN_PRECISION
-                 normalize totalBalance to reward token's native precision
-                 why: paying out rewards token, standardize to that 
-        */
-        uint256 totalBalanceRebased = (totalBalance * distribution.TOKEN_PRECISION) / 1E18;
-    
-        //note: indexes are denominated in the distribution's precision
-        uint256 nextDistributionIndex = ((emittedRewards * distribution.TOKEN_PRECISION) / totalBalanceRebased) + distribution.index; 
+
+        //note: indexes are denominated in 1E12; assuming TOKEN_PRECISION < 30
+        uint256 nextDistributionIndex = ((emittedRewards * 10 **(30 - distribution.TOKEN_PRECISION)) / totalBalance) + distribution.index;        
 
         return (nextDistributionIndex, currentTimestamp, emittedRewards);
     }
@@ -963,12 +958,13 @@ library PoolLogic {
 
         // STAKING POWER: staked realm points | TOKENS: staked moca tokens
         uint256 boostedBalance = distribution.distributionId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
-        uint256 totalBalanceRebased = (boostedBalance * distribution.TOKEN_PRECISION) / 1E18;  
-        // note: rewards calc. in reward token precision
-        totalAccRewards = _calculateRewards(totalBalanceRebased, distribution.index, vaultAccount.index, distribution.TOKEN_PRECISION);
-
+        
+        // note: totalAccRewards expressed in 1E12 precision
+        totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index, 1E18);
+        
         // calc. creator fees
         if(vault.creatorFeeFactor > 0) {
+            // fees/rewards expressed in 1E12 precision
             accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / params.PRECISION_BASE;
         }
 
@@ -976,31 +972,31 @@ library PoolLogic {
         if(vault.stakedNfts > 0) {
             if(vault.nftFeeFactor > 0) {
 
+                // fees/rewards + indexes expressed in 1E12 precision
                 accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / params.PRECISION_BASE;
-                vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);              // nftIndex: rewardsAccPerNFT
+                vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);   // nftIndex: rewardsAccPerNFT            
             }
         }
 
         // rp fees accrued only if there were staked RP 
         if(vault.stakedRealmPoints > 0) {
             if(vault.realmPointsFeeFactor > 0) {
-                accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / params.PRECISION_BASE;
 
-                // accRealmPointsFee is in reward token precision
-                uint256 stakedRealmPointsRebased = (vault.stakedRealmPoints * distribution.TOKEN_PRECISION) / 1E18;  
-                vaultAccount.rpIndex += (accRealmPointsFee / stakedRealmPointsRebased);              // rpIndex: rewardsAccPerRP
+                // fees/rewards + indexes expressed in 1E12 precision | stakedRealmPoints is in 1E18
+                accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / params.PRECISION_BASE;
+                vaultAccount.rpIndex += (accRealmPointsFee * 1E18) / vault.stakedRealmPoints;              // rpIndex: rewardsAccPerRP
             }
         } 
         
-        // book rewards: total, Creator, NFT, RealmPoints | expressed in distri token precision
+        // book rewards: total, creator, nft, rp | expressed in 1E30 precision
         vaultAccount.totalAccRewards += totalAccRewards;
         vaultAccount.accCreatorRewards += accCreatorFee;
         vaultAccount.accNftStakingRewards += accTotalNftFee;
         vaultAccount.accRealmPointsRewards += accRealmPointsFee;
 
-        // reference for moca stakers to calc. rewards net of fees
-        uint256 totalStakedRebased = (vault.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
-        vaultAccount.rewardsAccPerUnitStaked += (totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) / totalStakedRebased;  
+        // reference for moca stakers to calc. rewards net of fees | rewardsAccPerUnitStaked expressed in 1E12 precision
+        uint256 totalRewardsLessOfFees = totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee;
+        vaultAccount.rewardsAccPerUnitStaked += (totalRewardsLessOfFees * 1E18) / vault.stakedTokens;  
 
         // update vaultIndex
         vaultAccount.index = distribution.index;
@@ -1023,6 +1019,7 @@ library PoolLogic {
         // get updated vaultAccount and distribution
         (DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateVaultAccount(vault, vaultAccount_, distribution_, activeDistributions, params);
         
+        // 1E12 precision
         uint256 newUserIndex = vaultAccount.rewardsAccPerUnitStaked;
 
         uint256 accruedStakingRewards;
@@ -1033,31 +1030,29 @@ library PoolLogic {
         if(userAccount.index != newUserIndex) { 
             
             if(user.stakedTokens > 0) {
-                // users whom staked tokens are eligible for rewards less of fees
-                uint256 balanceRebased = (user.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
-                accruedStakingRewards = _calculateRewards(balanceRebased, newUserIndex, userAccount.index, distribution.TOKEN_PRECISION);
+                
+                // users whom staked tokens are eligible for rewards less of fees | accruedStakingRewards expressed in 1E12 precision
+                accruedStakingRewards = _calculateRewards(user.stakedTokens, newUserIndex, userAccount.index, 1E18);
                 userAccount.accStakingRewards += accruedStakingRewards;
             }
 
             uint256 userStakedNfts = user.tokenIds.length;
             if(userStakedNfts > 0) {
 
-                // total accrued rewards from staking NFTs
+                // total accrued rewards from staking NFTs | accNftStakingRewards expressed in 1E12 precision
                 accNftStakingRewards = (vaultAccount.nftIndex - userAccount.nftIndex) * userStakedNfts;
                 userAccount.accNftStakingRewards += accNftStakingRewards;
             }
 
             if(user.stakedRealmPoints > 0){
                 
-                // users whom staked RP are eligible for a portion of RP fees
-                uint256 totalStakedRpRebased = (vault.stakedRealmPoints * distribution.TOKEN_PRECISION) / 1E18;
-
-                accRealmPointsRewards = (vaultAccount.rpIndex - userAccount.rpIndex) * totalStakedRpRebased;
+                // users whom staked RP are eligible for a portion of RP fees | accRealmPointsRewards expressed in 1E12 precision
+                accRealmPointsRewards = _calculateRewards(vault.stakedRealmPoints, vaultAccount.rpIndex, userAccount.rpIndex, 1E18);
                 userAccount.accRealmPointsRewards += accRealmPointsRewards;
             }
         }
 
-        // update user indexes
+        // update user indexes | all in 1E12 precision
         userAccount.index = vaultAccount.rewardsAccPerUnitStaked;   // less of fees
         userAccount.nftIndex = vaultAccount.nftIndex;
         userAccount.rpIndex = vaultAccount.rpIndex;
@@ -1118,9 +1113,9 @@ library PoolLogic {
         }
     }
 
-    // for calc. rewards from index deltas. assumes tt indexes are expressed in the distribution's precision. therefore balance must be rebased to the same precision
-    function _calculateRewards(uint256 balanceRebased, uint256 currentIndex, uint256 priorIndex, uint256 PRECISION) internal pure returns (uint256) {
-        return (balanceRebased * (currentIndex - priorIndex)) / PRECISION;
+    // for calc. rewards from index deltas. assumes tt indexes are expressed in the same precision.
+    function _calculateRewards(uint256 balance, uint256 currentIndex, uint256 priorIndex, uint256 PRECISION) internal pure returns (uint256) {
+        return (balance * (currentIndex - priorIndex)) / PRECISION;
     }
 
 
