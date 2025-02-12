@@ -31,6 +31,9 @@ library Errors {
     error StakingPowerDistribution();
     error DistributionDoesNotExist();
 
+    // updateActiveDistributions
+    error InvalidMaxActiveAllowed();
+
     // updateMaximumFeeFactor   
     error InvalidMaxFeeFactor();
 
@@ -41,6 +44,7 @@ library Errors {
     error IncorrectFeeComposition();
 
     // setupDistribution
+    error MaxActiveDistributions();
     error ZeroTokenPrecision();
     error ZeroEmissionRate();
     error InvalidDistributionStartTime();

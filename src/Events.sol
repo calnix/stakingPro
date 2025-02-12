@@ -50,6 +50,9 @@ event StakingEndTimeSet(uint256 endTime);
 // setRewardsVault
 event RewardsVaultSet(address indexed oldVault, address indexed newVault);
 
+// updateActiveDistributions
+event MaximumActiveDistributionsUpdated(uint256 newMaxActiveAllowed);
+
 // updateMaximumFeeFactor
 event MaximumFeeFactorUpdated(uint256 oldFactor, uint256 newFactor);
 

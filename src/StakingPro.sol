@@ -66,6 +66,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
     // distributions
     uint256[] public activeDistributions;    // array stores key values for distributions mapping; includes not yet started distributions  
+    uint256 public maxActiveAllowed;
 
 //-------------------------------mappings--------------------------------------------
 
@@ -114,6 +115,8 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         CREATION_NFTS_REQUIRED = creationNftsRequired;
         VAULT_COOLDOWN_DURATION = vaultCoolDownDuration;
         STORED_SIGNER = storedSigner;
+        
+        maxActiveAllowed = 15;
 
         // access control
         _grantRole(DEFAULT_ADMIN_ROLE, owner);  // default admin role for all roles
@@ -562,6 +565,20 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     /**
+     * @notice Updates the maximum number of active distributions allowed
+     * @dev Cannot reduce below current number of active distributions
+     * @param newMaxActiveAllowed The new maximum number of active distributions to allow
+     */
+    function updateActiveDistributions(uint256 newMaxActiveAllowed) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
+        if(newMaxActiveAllowed == 0) revert Errors.InvalidMaxActiveAllowed();
+        if(newMaxActiveAllowed < activeDistributions.length) revert Errors.MaxActiveDistributions();
+
+        maxActiveAllowed = newMaxActiveAllowed;
+
+        emit MaximumActiveDistributionsUpdated(newMaxActiveAllowed);
+    }
+
+    /**
      * @notice Updates the maximum fee factor for the staking pool
      * @dev Fee factor must be non-zero
      * @param newFactor The new maximum fee factor to set
@@ -611,7 +628,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     /**
-     * @notice Sets up a new token distribution schedule
+     * @notice Sets up a new token distribution schedule. Cannot exceed max.
      * @dev Distribution must not already exist.
      * @dev Distribution ID 0 is reserved for staking power and is the only ID allowed to have indefinite endTime
      * @param distributionId Unique identifier for this distribution (0 reserved for staking power)
@@ -623,6 +640,8 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     function setupDistribution(uint256 distributionId, uint256 distributionStartTime, uint256 distributionEndTime, uint256 emissionPerSecond, uint256 tokenPrecision,
         uint32 dstEid, bytes32 tokenAddress
     ) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
+        // cannot exceed max
+        if(activeDistributions.length >= maxActiveAllowed) revert Errors.MaxActiveDistributions();
             
         if(tokenPrecision == 0) revert Errors.ZeroTokenPrecision();
         if(emissionPerSecond == 0) revert Errors.ZeroEmissionRate();
