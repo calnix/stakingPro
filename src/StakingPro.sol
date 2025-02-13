@@ -315,7 +315,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @param newVaultId The ID of the vault to move realm points to
      * @param amount The amount of realm points to move
      */
-    function migrateRP(bytes32 oldVaultId, bytes32 newVaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
+    function migrateRealmPoints(bytes32 oldVaultId, bytes32 newVaultId, uint256 amount) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
         if(amount == 0) revert Errors.InvalidAmount();
         if(oldVaultId == newVaultId) revert Errors.InvalidVaultId();
 
@@ -330,7 +330,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             uint256 totalBoostedDelta,
             uint256 flag
         ) 
-            = PoolLogic.executeMigrateRP(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
+            = PoolLogic.executeMigrateRealmPoints(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
                 newVaultId, amount);
         
         if(flag == 1) {
@@ -416,12 +416,12 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
-        uint256 totalUnclaimedRewards
+        uint256 totalUnclaimedRewardsInNative
          = PoolLogic.executeClaimRewards(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
             distributionId);
 
         // transfer rewards to user, from rewardsVault
-        if(totalUnclaimedRewards > 0) REWARDS_VAULT.payRewards(distributionId, totalUnclaimedRewards, msg.sender);
+        if(totalUnclaimedRewardsInNative > 0) REWARDS_VAULT.payRewards(distributionId, totalUnclaimedRewardsInNative, msg.sender);
     }
 
     /**

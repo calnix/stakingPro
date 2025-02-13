@@ -21,7 +21,7 @@ event VaultBoostFactorUpdated(bytes32 indexed vaultId, uint256 oldBoostFactor, u
 event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 amount, uint256 boostedAmount);
 
 // migrateRP
-event RPMigrated(address indexed user, bytes32 indexed vaultId, bytes32 indexed newVaultId, uint256 amount);
+event RealmPointsMigrated(address indexed user, bytes32 indexed vaultId, bytes32 indexed newVaultId, uint256 amount);
 
 // unstakeAll
 event UnstakedTokens(address indexed user, bytes32 indexed vaultId, uint256 amount);
