@@ -49,6 +49,11 @@ import fork into separate file
 - freeze
 - emergencyExit
 
+## integration testing
+
+- lz: refund
+- https://docs.layerzero.network/v2/developers/evm/technical-reference/api#send
+
 X-Chain
 - will involve EVMVault.sol
 

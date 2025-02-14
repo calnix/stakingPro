@@ -88,86 +88,12 @@ Handling varying decimal precision for reward tokens, and ensuring that the inde
 
 ## 1. Decimal Precision for indexes and rewards
 
-Indexes are denominated in the distribution's precision.
-Rewards calculated and stored in the distribution's precision.
+All indexes, rewards, fees are recorded in 1E18 precision.
+Rewards are rebased to the reward token's precision before being being transferred to the user, as per claimRewards().
 
-At the end of the day, we are paying out different rewards - so adhere to their respective precision.
+While this has no impact on tokens of 1e18 precision, it is much more sympathetic towards tokens of lesser precision and does not subject them to intermediate rebasing actions which will result in compounded rounding down effect.
 
-However, when calculating rewards, in both `_updateUserAccount` and `_updateVaultAccount`, we must convert the decimal precision of `stakedBase` to the distribution's precision.
-`stakedBase` is denominated in `1E18`, we must convert it to the distribution's precision.
-
-If the distribution's precision is lower than `1E18`, we are rounding down `stakedBase`, and therefore calculated rewards will be lower than they should be.
-If the distribution's precision is higher than `1E18`, we are simply adding zeros to `stakedBase`; this does not impact the rewards calculation.
-
-```solidity
-    uint256 balanceRebased = (user.stakedTokens * distribution.TOKEN_PRECISION) / 1E18;
-    uint256 accruedRewards = _calculateRewards(balanceRebased, newUserIndex, userAccount.index, distribution.TOKEN_PRECISION);
-                
-    // for calc. rewards from index deltas. assumes tt indexes are expressed in the distribution's precision. therefore balance must be rebased to the same precision
-    function _calculateRewards(uint256 balanceRebased, uint256 currentIndex, uint256 priorIndex, uint256 PRECISION) internal pure returns (uint256) {
-        return (balanceRebased * (currentIndex - priorIndex)) / PRECISION;
-    }
-
-```
-
-### 1.1 If the distribution's precision is lower than `1E18`
-
-- Moca Tokens: 1E18 precision
-- Reward Tokens: 1E6 precision
-
-When going from 18 dp to 6 dp, we lose 12 dp of precision.
-
-**Example: 1.2345678 MOCA staked**
-
-- 1.23456 MOCA rebased to `1E6` precision: `1_234_567_800_000_000_000` -> `1_234_567`
-- Precision is reduced by 12 dp; so `800_000_000_000` is lost.
-
-User's rewards are calculated based on the rebased value: `1_234_567`
-This is a rounding down of the original value and therefore rewards are slightly lower than they should be.
-
-**This would not pose issues for us as we do not need to worry about paying out more rewards than we have.**
-
-```solidity
-    function sec1() public view returns(uint256) {
-        
-        uint256 inputTokens = 1.2345678 ether;
-        uint256 TOKEN_PRECISION = 1e6;
-
-        uint256 stakedMocaRebased = (inputTokens * TOKEN_PRECISION) / 1E18;
-        
-        return stakedMocaRebased;   // 1_234_567
-    }
-```
-
-### 1.2 If the distribution's precision is higher than `1E18`
-
-- Moca Tokens: 1E18 precision
-- Reward Tokens: 1E21 precision
-
-When going from 18 dp to 21 dp, we add 3 dp to precision.
-
-**Example: 1.2345678 MOCA staked**
-
-1.2345678 MOCA rebased to 1e21 precision: `1_234_567_800_000_000_000` -> `1_234_567_800_000_000_000_000`
-
-- User's rewards are calculated based on the rebased value: `1_234_567_800_000_000_000_000`
-- The added zeros do not impact the rewards calculation.
-
-**This would not pose issues for us.**
-
-**CONCLUSION: There are no issues with rebasing the staked MOCA to the distribution's precision, as there is no negative impact on the rewards calculation.**
-
-```solidity
-    function sec2() public view returns(uint256) {
-        
-        uint256 inputTokens = 1.2345678 ether;
-        uint256 TOKEN_PRECISION = 1e21;
-
-        uint256 stakedMocaRebased = (inputTokens * TOKEN_PRECISION) / 1E18;
-        
-        return stakedMocaRebased;   // 1_234_567_800_000_000_000_000
-    }
-```
+Downside, tokens > 1E18 precision suffer; but there aren't many of those, so its acceptable.
 
 ### 1.3 What is the lowest precision we can rebase to?
 

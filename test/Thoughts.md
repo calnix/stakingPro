@@ -14,7 +14,3 @@ therefore, nftRegistry cannot take in pool address as constructor.
 ## 3. can i expressed rp in integer values?
 
 - will it round to 0, if so where?
-
-## 4. test LZ refund mechanism
-
-- https://docs.layerzero.network/v2/developers/evm/technical-reference/api#send
