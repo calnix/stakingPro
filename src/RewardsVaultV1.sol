@@ -138,7 +138,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @param amount Reward amount (expressed in the token's precision)
      */
     function payRewards(uint256 distributionId, uint256 amount, address to) external payable virtual whenNotPaused onlyRole(POOL_ROLE) {
-        // no need for input checks, as this is called by pool
+        if(msg.value > 0) revert Errors.PayableBlocked();
 
         // get distribution + user
         Distribution memory distribution = distributions[distributionId];
