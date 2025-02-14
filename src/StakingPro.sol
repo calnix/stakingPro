@@ -406,7 +406,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      *      4. Creator rewards (if caller is vault creator)
      * @dev Not applicable to distributionId:0 which is the staking power distribution
      */
-    function claimRewards(bytes32 vaultId, uint256 distributionId) external whenStarted whenNotPaused whenNotUnderMaintenance {   
+    function claimRewards(bytes32 vaultId, uint256 distributionId) external payable whenStarted whenNotPaused whenNotUnderMaintenance {   
         if(distributionId == 0) revert Errors.StakingPowerDistribution();
 
         DataTypes.UpdateAccountsIndexesParams memory params;
