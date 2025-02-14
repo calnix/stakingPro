@@ -660,10 +660,10 @@ library PoolLogic {
         if(newEmissionPerSecond > 0) distribution.emissionPerSecond = newEmissionPerSecond;
             
         // recalc. new token requirements
-        uint256 newTotalRequired = distribution.emissionPerSecond  * (distribution.endTime - distribution.startTime);
+        uint256 newTotalRequired = distribution.emissionPerSecond  * (distribution.endTime - distribution.lastUpdateTimeStamp);
         
-        // invariant: newTotalRequired must be greater than totalEmitted
-        if(newTotalRequired < distribution.totalEmitted) revert Errors.InvalidEmissionPerSecond();
+        // invariant: newTotalRequired must non-zero
+        if(newTotalRequired < 0) revert Errors.InvalidEmissionPerSecond();
         
         // update storage
         distributions[distributionId] = distribution;
@@ -966,9 +966,8 @@ library PoolLogic {
         // STAKING POWER: staked realm points | TOKENS: staked moca tokens
         uint256 boostedBalance = distribution.distributionId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
         
-        // note: totalAccRewards expressed in 1E18 precision | totalAccRewardsRebased rebased to TOKEN_PRECISION
+        // note: totalAccRewards expressed in 1E18 precision 
         uint256 totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index, 1E18);
-        uint256 totalAccRewardsRebased = (totalAccRewards * distribution.TOKEN_PRECISION) / 1E18;
 
         // update vault rewards + fees
         uint256 accCreatorFee; 
@@ -978,7 +977,7 @@ library PoolLogic {
         // calc. creator fees
         if(vault.creatorFeeFactor > 0) {
             // fees are kept in 1E18 during intermediate calculations
-            accCreatorFee = (totalAccRewardsRebased * vault.creatorFeeFactor) / params.PRECISION_BASE;
+            accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / params.PRECISION_BASE;
         }
 
         // nft fees accrued only if there were staked NFTs
