@@ -24,8 +24,8 @@ contract StateDeployTest is StateDeploy {
         // check roles
         assertEq(rewardsVault.hasRole(rewardsVault.DEFAULT_ADMIN_ROLE(), owner), true);
         assertEq(rewardsVault.hasRole(rewardsVault.POOL_ROLE(), address(pool)), true);
-        assertEq(rewardsVault.hasRole(rewardsVault.MONITOR_ROLE(), owner), true);
-        assertEq(rewardsVault.hasRole(rewardsVault.MONEY_MANAGER_ROLE(), owner), true);
+        assertEq(rewardsVault.hasRole(rewardsVault.MONITOR_ROLE(), monitor), true);
+        assertEq(rewardsVault.hasRole(rewardsVault.MONEY_MANAGER_ROLE(), depositor), true);
     }
 
     function testCannotSetupDistributionAsUser() public {
@@ -210,7 +210,6 @@ abstract contract StatePaused is StateDeploy {
     }
 }
 
-/*
 contract StatePausedTest is StatePaused {
 
     function testCannotUnpauseAsUser() public {
@@ -228,56 +227,62 @@ contract StatePausedTest is StatePaused {
 
     function testCannotSetReceiverWhenPaused() public {
         vm.startPrank(user1);
-        vm.expectRevert("Pausable: paused");
+        vm.expectRevert("EnforcedPause()");
         rewardsVault.setReceiver(address(0x1234567890123456789012345678901234567890), bytes32(uint256(1)));
         vm.stopPrank();
     }
 
     function testCannotUpdateDistributionWhenPaused() public {
-        vm.startPrank(pool);
-        vm.expectRevert("Pausable: paused");
+        vm.startPrank(address(pool));
+        vm.expectRevert("EnforcedPause()");
         rewardsVault.updateDistribution(1, 100 ether);
         vm.stopPrank();
     }   
 
     function testCannotEndDistributionWhenPaused() public {
-        vm.startPrank(pool);
-        vm.expectRevert("Pausable: paused");
+        vm.startPrank(address(pool));
+        vm.expectRevert("EnforcedPause()");
         rewardsVault.endDistribution(1, 100 ether);
         vm.stopPrank();
     }
 
     function testCannotPayRewardsWhenPaused() public {
-        vm.startPrank(pool);
-        vm.expectRevert("Pausable: paused");
+        vm.startPrank(address(pool));
+        vm.expectRevert("EnforcedPause()");
         rewardsVault.payRewards(1, 100 ether, user2);
         vm.stopPrank();
     }           
 
     function testCannotDepositWhenPaused() public {
         vm.startPrank(depositor);
-        vm.expectRevert("Pausable: paused");
+        vm.expectRevert("EnforcedPause()");
         rewardsVault.deposit(1, 100 ether, user2);
         vm.stopPrank(); 
     }
 
     function testCannotWithdrawWhenPaused() public {
         vm.startPrank(depositor);
-        vm.expectRevert("Pausable: paused");
+        vm.expectRevert("EnforcedPause()");
         rewardsVault.withdraw(1, 100 ether, user2); 
         vm.stopPrank();
     }
 
     function testCannotPauseWhenPaused() public {
         vm.startPrank(monitor);
-        vm.expectRevert("Pausable: paused");
+        vm.expectRevert("EnforcedPause()");
         rewardsVault.pause();
         vm.stopPrank();
     }
 
     function testCannotUnpauseWhenPaused() public {
-        vm.startPrank(monitor); 
-        vm.expectRevert("Pausable: paused");
+        vm.startPrank(monitor);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                monitor,
+                rewardsVault.DEFAULT_ADMIN_ROLE()
+            )
+        );
         rewardsVault.unpause();
         vm.stopPrank();
     }
@@ -297,13 +302,13 @@ contract StatePausedTest is StatePaused {
 
 }
 
-
-abstract contract StateUnpaused is StateDeploy {
+abstract contract StateUnpaused is StatePaused {
 
     function setUp() public virtual override {
         super.setUp();
 
-        vm.prank(monitor);
+        // Change from monitor to owner since only admin can unpause
+        vm.prank(owner);  
         rewardsVault.unpause();
     }
 }   
@@ -316,4 +321,3 @@ contract StateUnpausedTest is StateUnpaused {
         vm.stopPrank();
     }
 }
-*/
