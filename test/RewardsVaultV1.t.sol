@@ -227,49 +227,49 @@ contract StatePausedTest is StatePaused {
 
     function testCannotSetReceiverWhenPaused() public {
         vm.startPrank(user1);
-        vm.expectRevert("EnforcedPause()");
+        vm.expectRevert(abi.encodeWithSelector(Pausable.EnforcedPause.selector));
         rewardsVault.setReceiver(address(0x1234567890123456789012345678901234567890), bytes32(uint256(1)));
         vm.stopPrank();
     }
 
     function testCannotUpdateDistributionWhenPaused() public {
         vm.startPrank(address(pool));
-        vm.expectRevert("EnforcedPause()");
+        vm.expectRevert(abi.encodeWithSelector(Pausable.EnforcedPause.selector));
         rewardsVault.updateDistribution(1, 100 ether);
         vm.stopPrank();
     }   
 
     function testCannotEndDistributionWhenPaused() public {
         vm.startPrank(address(pool));
-        vm.expectRevert("EnforcedPause()");
+        vm.expectRevert(abi.encodeWithSelector(Pausable.EnforcedPause.selector));
         rewardsVault.endDistribution(1, 100 ether);
         vm.stopPrank();
     }
 
     function testCannotPayRewardsWhenPaused() public {
         vm.startPrank(address(pool));
-        vm.expectRevert("EnforcedPause()");
+        vm.expectRevert(abi.encodeWithSelector(Pausable.EnforcedPause.selector));
         rewardsVault.payRewards(1, 100 ether, user2);
         vm.stopPrank();
     }           
 
     function testCannotDepositWhenPaused() public {
         vm.startPrank(depositor);
-        vm.expectRevert("EnforcedPause()");
+        vm.expectRevert(abi.encodeWithSelector(Pausable.EnforcedPause.selector));
         rewardsVault.deposit(1, 100 ether, user2);
         vm.stopPrank(); 
     }
 
     function testCannotWithdrawWhenPaused() public {
         vm.startPrank(depositor);
-        vm.expectRevert("EnforcedPause()");
+        vm.expectRevert(abi.encodeWithSelector(Pausable.EnforcedPause.selector));
         rewardsVault.withdraw(1, 100 ether, user2); 
         vm.stopPrank();
     }
 
     function testCannotPauseWhenPaused() public {
         vm.startPrank(monitor);
-        vm.expectRevert("EnforcedPause()");
+        vm.expectRevert(abi.encodeWithSelector(Pausable.EnforcedPause.selector));
         rewardsVault.pause();
         vm.stopPrank();
     }
