@@ -95,62 +95,6 @@ While this has no impact on tokens of 1e18 precision, it is much more sympatheti
 
 Downside, tokens > 1E18 precision suffer; but there aren't many of those, so its acceptable.
 
-### 1.3 What is the lowest precision we can rebase to?
-
-- Reward Tokens: 1E1 precision
-
-```solidity
-    function sec3() public view returns(uint256) {
-        
-        uint256 inputTokens = 1.2345678 ether;
-        uint256 TOKEN_PRECISION = 1e1;
-
-        uint256 stakedMocaRebased = (inputTokens * TOKEN_PRECISION) / 1E18;
-        
-        return stakedMocaRebased;   // 12
-    }
-```
-
-1.2345678 MOCA rebased to 1E1 precision: `1_234_567_800_000_000_000_000` -> `12`
-
-**CONCLUSION: we can rebase to 1E1 precision without issues.**
-
-- Reward Tokens: 1E0 precision
-
-```solidity
-    function sec4() public view returns(uint256) {
-        
-        uint256 inputTokens = 1.2345678 ether;
-        uint256 TOKEN_PRECISION = 1e0;
-
-        uint256 stakedMocaRebased = (inputTokens * TOKEN_PRECISION) / 1E18;
-        
-        return stakedMocaRebased;   // 1
-    }
-```
-
-1.2345678 MOCA rebased to 1E0 precision: `1_234_567_800_000_000_000_000` -> `1`
-
-**CONCLUSION: we can rebase to 1E0 precision without issues.**
-
-- Reward Tokens: 0 precision
-
-```solidity
-    function sec5() public view returns(uint256) {
-        
-        uint256 inputTokens = 1.2345678 ether;
-        uint256 TOKEN_PRECISION = 0;
-
-        uint256 stakedMocaRebased = (inputTokens * TOKEN_PRECISION) / 1E18;
-        
-        return stakedMocaRebased;   // 0
-    }
-```
-
-**CANNOT HAVE 0 PRECISION.**
-
-### 1.4 Precision loss for Indexes; in _calculateDistributionIndex
-
 check and test if precision loss is a problem, given varying token precisions:
 
 Scenario 1: reward tokens are denominated in 1e1 precision
