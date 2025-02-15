@@ -79,7 +79,7 @@ abstract contract StateStarted is StateDeploy {
             uint256 distributionEndTime;
             uint256 emissionPerSecond = 1 ether;
             uint256 tokenPrecision = 1E18;
-            uint32 dstEid = 0;
+            uint32 dstEid = 3141;
             bytes32 tokenAddress = 0x00;
         pool.setupDistribution(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision, dstEid, tokenAddress);        
 
@@ -166,7 +166,7 @@ contract StateStartedTest is StateStarted {
 
 abstract contract StateCreateVault is StateStarted {
 
-    bytes32 public vaultId = 0x8fbe8a20f950b11703e51f11dee9f00d9fa0ebd091cc4f695909e860e994944b;
+    bytes32 public vaultId1 = 0x8fbe8a20f950b11703e51f11dee9f00d9fa0ebd091cc4f695909e860e994944b;
 
     function setUp() public virtual override {
         super.setUp();
@@ -182,7 +182,7 @@ abstract contract StateCreateVault is StateStarted {
 
 contract StateCreateVaultTest is StateCreateVault {
 
-    function testCannotCreateVaultWithLockedNfts() public {
+    function testCannotCreateAnotherVaultWithLockedNfts() public {
         vm.prank(user1);
         vm.expectRevert();
         pool.createVault(user1NftsArray, 1000, 1000, 1000);
@@ -193,7 +193,7 @@ contract StateCreateVaultTest is StateCreateVault {
         mocaToken.approve(address(pool), type(uint256).max);
 
         vm.expectRevert(Errors.InvalidAmount.selector);
-        pool.stakeTokens(vaultId, 0);
+        pool.stakeTokens(vaultId1, 0);
         vm.stopPrank();
     }
 
@@ -204,19 +204,19 @@ contract StateCreateVaultTest is StateCreateVault {
         mocaToken.approve(address(pool), stakeAmount);
 
         // Get initial state
-        DataTypes.Vault memory vaultBefore = pool.getVault(vaultId);
+        DataTypes.Vault memory vaultBefore = pool.getVault(vaultId1);
         uint256 initialStakedTokens = vaultBefore.stakedTokens;
         uint256 userBalanceBefore = mocaToken.balanceOf(user2);
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit StakedTokens(user2, vaultId, stakeAmount);
+        emit StakedTokens(user2, vaultId1, stakeAmount);
 
         // Stake tokens
-        pool.stakeTokens(vaultId, stakeAmount);
+        pool.stakeTokens(vaultId1, stakeAmount);
 
         // Verify state changes
-        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId);
+        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId1);
         assertEq(vaultAfter.stakedTokens, initialStakedTokens + stakeAmount);
         assertEq(mocaToken.balanceOf(user2), userBalanceBefore - stakeAmount);
         assertEq(mocaToken.balanceOf(address(pool)), stakeAmount);
@@ -229,24 +229,24 @@ contract StateCreateVaultTest is StateCreateVault {
         nftsToStake[0] = user2NftsArray[0];  // This should be 5 based on setup
 
         // Get initial state
-        DataTypes.Vault memory vaultBefore = pool.getVault(vaultId);
+        DataTypes.Vault memory vaultBefore = pool.getVault(vaultId1);
         uint256 initialStakedNfts = vaultBefore.stakedNfts;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit StakedNfts(user2, vaultId, nftsToStake);
+        emit StakedNfts(user2, vaultId1, nftsToStake);
 
         // Stake NFTs
         vm.prank(user2);
-        pool.stakeNfts(vaultId, nftsToStake);
+        pool.stakeNfts(vaultId1, nftsToStake);
 
         // Verify state changes
-        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId);
+        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId1);
         assertEq(vaultAfter.stakedNfts, initialStakedNfts + nftsToStake.length);
         
         // Verify NFT ownership using nfts mapping
         (, bytes32 registeredVaultId) = nftRegistry.nfts(nftsToStake[0]);
-        assertEq(registeredVaultId, vaultId, "NFT not registered to vault correctly");
+        assertEq(registeredVaultId, vaultId1, "NFT not registered to vault correctly");
         vm.stopPrank();
     }
 
@@ -255,11 +255,11 @@ contract StateCreateVaultTest is StateCreateVault {
         uint256 realmPointsAmount = 1000 ether;
         uint256 expiry = block.timestamp + 1 days;
         uint256 nonce = 0;
-        bytes memory signature = generateSignature(user2, vaultId, realmPointsAmount, expiry, nonce);
+        bytes memory signature = generateSignature(user2, vaultId1, realmPointsAmount, expiry, nonce);
 
 
         // Get initial state
-        DataTypes.Vault memory vaultBefore = pool.getVault(vaultId);
+        DataTypes.Vault memory vaultBefore = pool.getVault(vaultId1);
         uint256 initialStakedPoints = vaultBefore.stakedRealmPoints;
 
         // Calculate boosted amount
@@ -267,14 +267,14 @@ contract StateCreateVaultTest is StateCreateVault {
 
         // Expect event with boosted amount
         vm.expectEmit(true, true, true, true);
-        emit StakedRealmPoints(user2, vaultId, realmPointsAmount, boostedAmount);
+        emit StakedRealmPoints(user2, vaultId1, realmPointsAmount, boostedAmount);
 
         // Stake realm points
         vm.prank(user2);
-        pool.stakeRP(vaultId, realmPointsAmount, expiry, signature);
+        pool.stakeRP(vaultId1, realmPointsAmount, expiry, signature);
 
         // Verify state changes
-        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId);
+        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId1);
         assertEq(vaultAfter.stakedRealmPoints, initialStakedPoints + realmPointsAmount);
         assertEq(vaultAfter.boostedRealmPoints, boostedAmount);
     }
@@ -289,13 +289,13 @@ abstract contract StateStakeAssets is StateCreateVault {
         
         // User2 stakes half their tokens
         mocaToken.approve(address(pool), user2Moca/2);
-        pool.stakeTokens(vaultId, user2Moca/2);
+        pool.stakeTokens(vaultId1, user2Moca/2);
 
         // User2 stakes 2 nfts
         uint256[] memory nftsToStake = new uint256[](2); 
         nftsToStake[0] = user2NftsArray[0];
         nftsToStake[1] = user2NftsArray[1];
-        pool.stakeNfts(vaultId, nftsToStake);
+        pool.stakeNfts(vaultId1, nftsToStake);
         
         vm.stopPrank();
     }
@@ -304,7 +304,7 @@ abstract contract StateStakeAssets is StateCreateVault {
 contract StateStakeAssetsTest is StateStakeAssets {
 
     function testGetVaultReturnsCorrectData() public {
-        DataTypes.Vault memory vault = pool.getVault(vaultId);
+        DataTypes.Vault memory vault = pool.getVault(vaultId1);
         
         // Base vault data
         assertEq(vault.creator, user1);

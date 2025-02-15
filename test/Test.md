@@ -10,7 +10,7 @@
 **Deploy**
 - StateSetUpDistribution: staking power
 **StartTime**
-- StateCreateVault
+- StateCreateVault - *user 1 creates vault1*
 - StateStakeTokens
 - StateStakeNfts
 - StateStakeRP
@@ -88,3 +88,14 @@ updateVaultCooldown
 --------------------
 setupDistribution
 updateDistribution
+
+StateDeployTest
++ testOperatorCanSetupDistribution
+
+StateStartedTest
+ distr 0 setup + warp to startTime
++ testCreateVault
+
+StateCreateVault
+ vaultId1 created by user1
++ testCanStakeTokens

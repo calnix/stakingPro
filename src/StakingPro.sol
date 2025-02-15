@@ -151,7 +151,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         
         // must commit unstaked NFTs to create vaults: these do not count towards stakedNFTs
         uint256 incomingNfts = tokenIds.length;
-        if(incomingNfts != CREATION_NFTS_REQUIRED) revert Errors.IncorrectCreationNfts();
+        if(incomingNfts != CREATION_NFTS_REQUIRED) revert Errors.InvalidCreationNfts();
         
         // revert if any NFTs are not unassigned OR not owned by msg.sender
         NFT_REGISTRY.checkIfUnassignedAndOwned(msg.sender, tokenIds);

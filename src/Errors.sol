@@ -17,7 +17,7 @@ library Errors {
     error NonExistentVault(bytes32 vaultId);
 
     // createVault
-    error IncorrectCreationNfts();
+    error InvalidCreationNfts();
     error InvalidNfts();
     error MaximumFeeFactorExceeded();
 
