@@ -19,8 +19,6 @@ import {IRealmPoints} from "./../src/interfaces/IRealmPoints.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 
-
-
 abstract contract TestingHarness is Test {
     using stdStorage for StdStorage;
 
@@ -112,7 +110,7 @@ abstract contract TestingHarness is Test {
             "1");
 
         // address moneyManager, address monitor, address owner, address pool
-        rewardsVault = new RewardsVaultV1(owner, owner, owner, address(pool));
+        rewardsVault = new RewardsVaultV1(depositor, monitor, owner, address(pool));
 
         // rewards
         rewardsToken1 = new ERC20Mock();
