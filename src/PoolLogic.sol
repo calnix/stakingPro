@@ -1317,7 +1317,7 @@ library PoolLogic {
         vaultAccount.accRealmPointsRewards += accRealmPointsFee;
 
         // reference for moca stakers to calc. rewards less of fees | rewardsAccPerUnitStaked expressed in 1E18 precision
-        vaultAccount.rewardsAccPerUnitStaked += totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee;
+        vaultAccount.rewardsAccPerUnitStaked += ((totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) * 1E18) / boostedBalance;
 
         // update vaultIndex
         vaultAccount.index = distribution.index;
