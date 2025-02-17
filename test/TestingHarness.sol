@@ -207,11 +207,8 @@ abstract contract TestingHarness is Test {
     // binding for vaultAccounts
     function getVaultAccount(bytes32 vaultId, uint256 distributionID) public view returns (DataTypes.VaultAccount memory) {
         (
-            //uint256 chainId,
-            //bytes32 tokenAddr,
-
             uint256 index,
-            uint256 nftIndex, 
+            uint256 nftIndex,
             uint256 rpIndex,
             uint256 totalAccRewards,
             uint256 accCreatorRewards,
@@ -222,8 +219,6 @@ abstract contract TestingHarness is Test {
         ) = pool.vaultAccounts(vaultId, distributionID);
 
         return DataTypes.VaultAccount({
-            //chainId: chainId,
-            //tokenAddr: tokenAddr,
             index: index,
             nftIndex: nftIndex,
             rpIndex: rpIndex,
@@ -233,6 +228,33 @@ abstract contract TestingHarness is Test {
             accRealmPointsRewards: accRealmPointsRewards,
             rewardsAccPerUnitStaked: rewardsAccPerUnitStaked,
             totalClaimedRewards: totalClaimedRewards
+        });
+    }
+
+    // binding for distributions
+    function getDistribution(uint256 distributionID) public view returns (DataTypes.Distribution memory) {
+        (
+            uint256 distributionId,
+            uint256 tokenPrecision,
+            uint256 endTime,
+            uint256 startTime_,
+            uint256 emissionPerSecond,
+            uint256 index,
+            uint256 totalEmitted,
+            uint256 lastUpdateTimeStamp,
+            uint256 manuallyEnded
+        ) = pool.distributions(distributionID);
+
+        return DataTypes.Distribution({
+            distributionId: distributionId,
+            TOKEN_PRECISION: tokenPrecision,
+            endTime: endTime,
+            startTime: startTime_,
+            emissionPerSecond: emissionPerSecond,
+            index: index,
+            totalEmitted: totalEmitted,
+            lastUpdateTimeStamp: lastUpdateTimeStamp,
+            manuallyEnded: manuallyEnded
         });
     }
 }

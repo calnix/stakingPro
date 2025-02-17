@@ -106,7 +106,7 @@ t = 1 [start]
  user1 stakes half of their tokens+rp into it [no more nfts]
 
 t = 6 [delta: 5]
- user2 stakes half of assets into it
+ user2 stakes half of their tokens+rp+2nfts into it
 
 t = 11 [delta: 5]
  distribution 1 created
