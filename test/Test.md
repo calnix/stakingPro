@@ -103,7 +103,7 @@ create 2 vaults
 
 t = 1 [start]
  user1 create vault1
- user1 stakes half of assets into it
+ user1 stakes half of their tokens+rp into it [no more nfts]
 
 t = 6 [delta: 5]
  user2 stakes half of assets into it

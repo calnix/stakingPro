@@ -63,9 +63,9 @@ abstract contract TestingHarness is Test {
     uint256[] public user3NftsArray = new uint256[](user1Nfts);
 
     // user rp
-    uint256 public user1Rp = 250;
-    uint256 public user2Rp = 500;
-    uint256 public user3Rp = 750;
+    uint256 public user1Rp = 500 ether;
+    uint256 public user2Rp = 1000 ether;
+    uint256 public user3Rp = 1500 ether;
 
     // ------ stakingPool constructor data ------
     uint256 public startTime = 1;
