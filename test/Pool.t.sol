@@ -582,6 +582,8 @@ contract StateT6_User2StakeAssetsToVault1Test is StateT6_User2StakeAssetsToVault
 
         DataTypes.UserAccount memory userAccount = getUserAccount(user1, vaultId1, 0);
 
+        // user 1 not updated. since he took no action at t6
+
         // Check indices
         assertEq(userAccount.index, 0);
         assertEq(userAccount.nftIndex, 0);
@@ -597,6 +599,11 @@ contract StateT6_User2StakeAssetsToVault1Test is StateT6_User2StakeAssetsToVault
         assertEq(userAccount.claimedNftRewards, 0);
         assertEq(userAccount.claimedRealmPointsRewards, 0);
         assertEq(userAccount.claimedCreatorRewards, 0);
+
+        // view fn: returns 5 ether of SP
+        uint256 rewards = pool.getRewards(user1, vaultId1, 0);
+        assertEq(rewards, 5 ether);
+
     }
 
     

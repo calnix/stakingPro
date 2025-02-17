@@ -1272,17 +1272,15 @@ library PoolLogic {
         // vault has been removed from circulation: final update done by endVaults()
         if(vault.removed == 1) return (vaultAccount, distribution);
         
+        // STAKING POWER: staked realm points | TOKENS: staked moca tokens
+        uint256 boostedBalance = distribution.distributionId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
+        // note: totalAccRewards expressed in 1E18 precision
+        uint256 totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index, 1E18);
+
         // update vault rewards + fees
-        uint256 totalAccRewards; 
         uint256 accCreatorFee; 
         uint256 accTotalNftFee;
         uint256 accRealmPointsFee;
-
-        // STAKING POWER: staked realm points | TOKENS: staked moca tokens
-        uint256 boostedBalance = distribution.distributionId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
-
-        // note: totalAccRewards expressed in 1E12 precision
-        totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index, 1E18);
 
         // calc. creator fees
         if(vault.creatorFeeFactor > 0) {
