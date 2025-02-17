@@ -35,8 +35,8 @@ contract DataTypes {
 
     //Note: Each vault has an account for each distribution
     struct VaultAccount {
-        uint256 chainId;    
-        bytes32 tokenAddr;  
+//        uint256 chainId;    
+//        bytes32 tokenAddr;  
 
         // index: reward token
         uint256 index;             //rewardsAccPerAllocPoint
@@ -58,9 +58,6 @@ contract DataTypes {
     //////////////////////////////////////////////////////////////*/
 
     struct User {
-        // onboarded RP
-        uint256 realmPoints;
-
         // staked assets
         uint256[] tokenIds;     
         uint256 stakedTokens;   

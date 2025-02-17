@@ -171,9 +171,69 @@ abstract contract TestingHarness is Test {
         return abi.encodePacked(r, s, v);
     }
 
-        ///@dev Generate a vaultId. keccak256 is cheaper than using a counter with a SSTORE, even accounting for eventual collision retries.
     function generateVaultId(uint256 salt, address user) public view returns (bytes32) {
         return bytes32(keccak256(abi.encode(user, block.timestamp, salt)));
+    }
+
+    // binding for userAccounts
+    function getUserAccount(address user, bytes32 vaultId, uint256 distributionID) public view returns (DataTypes.UserAccount memory) {
+        (
+            uint256 index, 
+            uint256 nftIndex, 
+            uint256 rpIndex, 
+            uint256 accStakingRewards, 
+            uint256 claimedStakingRewards, 
+            uint256 accNftStakingRewards, 
+            uint256 claimedNftRewards, 
+            uint256 accRealmPointsRewards, 
+            uint256 claimedRealmPointsRewards, 
+            uint256 claimedCreatorRewards
+        ) = pool.userAccounts(user, vaultId, distributionID);
+
+        return DataTypes.UserAccount({
+            index: index,
+            nftIndex: nftIndex,
+            rpIndex: rpIndex,
+            accStakingRewards: accStakingRewards,
+            claimedStakingRewards: claimedStakingRewards,
+            accNftStakingRewards: accNftStakingRewards,
+            claimedNftRewards: claimedNftRewards,
+            accRealmPointsRewards: accRealmPointsRewards,
+            claimedRealmPointsRewards: claimedRealmPointsRewards,
+            claimedCreatorRewards: claimedCreatorRewards
+        });
+    }
+
+    // binding for vaultAccounts
+    function getVaultAccount(bytes32 vaultId, uint256 distributionID) public view returns (DataTypes.VaultAccount memory) {
+        (
+            //uint256 chainId,
+            //bytes32 tokenAddr,
+
+            uint256 index,
+            uint256 nftIndex, 
+            uint256 rpIndex,
+            uint256 totalAccRewards,
+            uint256 accCreatorRewards,
+            uint256 accNftStakingRewards,
+            uint256 accRealmPointsRewards,
+            uint256 rewardsAccPerUnitStaked,
+            uint256 totalClaimedRewards
+        ) = pool.vaultAccounts(vaultId, distributionID);
+
+        return DataTypes.VaultAccount({
+            //chainId: chainId,
+            //tokenAddr: tokenAddr,
+            index: index,
+            nftIndex: nftIndex,
+            rpIndex: rpIndex,
+            totalAccRewards: totalAccRewards,
+            accCreatorRewards: accCreatorRewards,
+            accNftStakingRewards: accNftStakingRewards,
+            accRealmPointsRewards: accRealmPointsRewards,
+            rewardsAccPerUnitStaked: rewardsAccPerUnitStaked,
+            totalClaimedRewards: totalClaimedRewards
+        });
     }
 }
 

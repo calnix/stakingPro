@@ -5,14 +5,14 @@ import "forge-std/Test.sol";
 
 import "./TestingHarness.sol";
 
-abstract contract StateDeploy is TestingHarness {    
+abstract contract StateT0_Deploy is TestingHarness {    
 
     function setUp() public virtual override {
         super.setUp();
     }
 }
 
-contract StateDeployTest is StateDeploy {
+contract StateT0_DeployTest is StateT0_Deploy {
 
     function testConstructor() public {
         assertEq(address(pool.NFT_REGISTRY()), address(nftRegistry));
@@ -66,7 +66,7 @@ contract StateDeployTest is StateDeploy {
      */   
 }
 
-abstract contract StateStarted is StateDeploy {
+abstract contract StateT0_DeployAndSetupStakingPower is StateT0_Deploy {
 
     function setUp() public virtual override {
         super.setUp();
@@ -82,14 +82,30 @@ abstract contract StateStarted is StateDeploy {
             uint32 dstEid = 3141;
             bytes32 tokenAddress = 0x00;
         pool.setupDistribution(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision, dstEid, tokenAddress);        
-
-        // starting point: T1
-        vm.warp(pool.startTime()); 
-        console.log("Current timestamp:", block.timestamp);
     }
 }
 
-contract StateStartedTest is StateStarted {
+// TODO
+contract StateT0_DeployAndSetupStakingPowerTest is StateT0_DeployAndSetupStakingPower {
+    /**
+        - test setupDistribution
+        - test updateDistribution
+        stuff you can can w/ distribvution, but before setup
+    */
+}
+
+
+abstract contract StateT1_Started is StateT0_DeployAndSetupStakingPower {
+
+    function setUp() public virtual override {
+        super.setUp();
+
+        //T1
+        vm.warp(pool.startTime());
+    }
+}
+
+contract StateT1_StartedTest is StateT1_Started {
 
     function testCannotStakeNftsToNonexistentVault() public {
         vm.prank(user2);
@@ -161,15 +177,16 @@ contract StateStartedTest is StateStarted {
             assertEq(registeredVaultId, expectedVaultId, "NFT not registered to vault correctly");
         }
     }
-
 }
 
-abstract contract StateCreateVault is StateStarted {
+// TODO
+abstract contract StateT1_CreateVault1 is StateT1_Started {
 
     bytes32 public vaultId1 = 0x8fbe8a20f950b11703e51f11dee9f00d9fa0ebd091cc4f695909e860e994944b;
 
     function setUp() public virtual override {
         super.setUp();
+        
         vm.prank(user1);
 
         uint256 nftFeeFactor = 1000;
@@ -177,10 +194,12 @@ abstract contract StateCreateVault is StateStarted {
         uint256 realmPointsFeeFactor = 1000;
 
         pool.createVault(user1NftsArray, nftFeeFactor, creatorFeeFactor, realmPointsFeeFactor);
+
+        // TODO: user1 stakes half their tokens
     }
 }
 
-contract StateCreateVaultTest is StateCreateVault {
+contract StateT1_CreateVault1Test is StateT1_CreateVault1 {
 
     function testCannotCreateAnotherVaultWithLockedNfts() public {
         vm.prank(user1);
@@ -195,6 +214,35 @@ contract StateCreateVaultTest is StateCreateVault {
         vm.expectRevert(Errors.InvalidAmount.selector);
         pool.stakeTokens(vaultId1, 0);
         vm.stopPrank();
+    }
+
+    function testVault1CreatedCorrectly() public {
+        DataTypes.Vault memory vault = pool.getVault(vaultId1);
+        
+        // Base vault data
+        assertEq(vault.creator, user1);
+        assertEq(vault.startTime, startTime);
+        assertEq(vault.endTime, 0);
+        assertEq(vault.removed, 0);
+        assertEq(vault.nftFeeFactor, 1000);
+        assertEq(vault.creatorFeeFactor, 1000);
+        assertEq(vault.realmPointsFeeFactor, 1000);
+        
+        // Verify creation NFTs
+        assertEq(vault.creationTokenIds.length, user1NftsArray.length);
+        for(uint i = 0; i < user1NftsArray.length; i++) {
+            assertEq(vault.creationTokenIds[i], user1NftsArray[i]);
+        }
+
+        // Verify staked assets
+        assertEq(vault.stakedTokens, 0);
+        assertEq(vault.stakedNfts, 0);
+        assertEq(vault.stakedRealmPoints, 0);
+
+        // Verify boosted balances
+        assertEq(vault.totalBoostFactor, 10_000);
+        assertEq(vault.boostedRealmPoints, 0);
+        assertEq(vault.boostedStakedTokens, 0);
     }
 
     function testCanStakeTokens() public {
@@ -281,29 +329,31 @@ contract StateCreateVaultTest is StateCreateVault {
 }
 
 
-abstract contract StateStakeAssets is StateCreateVault {
+abstract contract StateT1_User1StakeAssetsToVault1 is StateT1_CreateVault1 {
+
     function setUp() public virtual override {
         super.setUp();
 
-        vm.startPrank(user2);
-        
-        // User2 stakes half their tokens
-        mocaToken.approve(address(pool), user2Moca/2);
-        pool.stakeTokens(vaultId1, user2Moca/2);
+        vm.startPrank(user1);
 
-        // User2 stakes 2 nfts
-        uint256[] memory nftsToStake = new uint256[](2); 
-        nftsToStake[0] = user2NftsArray[0];
-        nftsToStake[1] = user2NftsArray[1];
-        pool.stakeNfts(vaultId1, nftsToStake);
-        
+        // User1 stakes half their tokens
+        mocaToken.approve(address(pool), user1Moca/2);
+        pool.stakeTokens(vaultId1, user1Moca/2);
+
+        // User1 stakes half their RP
+        uint256 expiry = block.timestamp + 1 days;
+        uint256 nonce = 0;
+        bytes memory signature = generateSignature(user1, vaultId1, user1Rp/2, expiry, nonce);
+        pool.stakeRP(vaultId1, user1Rp/2, expiry, signature);
+
         vm.stopPrank();
     }
 }
 
-contract StateStakeAssetsTest is StateStakeAssets {
+// accounts only exist for distribution 0
+contract StateT1_User1StakeAssetsToVault1Test is StateT1_User1StakeAssetsToVault1 {
 
-    function testGetVaultReturnsCorrectData() public {
+    function testGetVault1UpdatedCorrectly_T1() public {
         DataTypes.Vault memory vault = pool.getVault(vaultId1);
         
         // Base vault data
@@ -321,9 +371,87 @@ contract StateStakeAssetsTest is StateStakeAssets {
             assertEq(vault.creationTokenIds[i], user1NftsArray[i]);
         }
 
-        // Verify staked assets from setUp()
-        assertEq(vault.stakedTokens, user2Moca/2);
-        assertEq(vault.stakedNfts, 2);
-        assertEq(vault.stakedRealmPoints, 0);
+        // Verify staked assets
+        assertEq(vault.stakedTokens, user1Moca/2);
+        assertEq(vault.stakedNfts, 0);
+        assertEq(vault.stakedRealmPoints, user1Rp/2);
+
+        // Verify boosted balances
+        assertEq(vault.totalBoostFactor, 10_000);
+        assertEq(vault.boostedRealmPoints, (vault.stakedRealmPoints * vault.totalBoostFactor) / 10_000);
+        assertEq(vault.boostedStakedTokens, (vault.stakedTokens * vault.totalBoostFactor) / 10_000);
+    }
+
+    function testVault1AccountUpdatedCorrectly_T1() public {
+        DataTypes.VaultAccount memory vaultAccount = getVaultAccount(vaultId1, 0);
+
+        // Check indices
+        assertEq(vaultAccount.index, 0);
+        assertEq(vaultAccount.nftIndex, 0);
+        assertEq(vaultAccount.rpIndex, 0);
+
+        // Check accumulated rewards
+        assertEq(vaultAccount.totalAccRewards, 0);
+        assertEq(vaultAccount.accCreatorRewards, 0);
+        assertEq(vaultAccount.accNftStakingRewards, 0);
+        assertEq(vaultAccount.accRealmPointsRewards, 0);
+        assertEq(vaultAccount.rewardsAccPerUnitStaked, 0);
+        assertEq(vaultAccount.totalClaimedRewards, 0);
+    }
+
+    function testGetUser1UpdatedCorrectly_T1() public {
+        DataTypes.User memory user = pool.getUser(user1, vaultId1);
+
+        // nfts        
+        assertEq(user.tokenIds.length, 0);
+
+        // tokens
+        assertEq(user.stakedTokens, user1Moca/2);
+
+        // realm points
+        assertEq(user.stakedRealmPoints, user1Rp/2);
+    }
+
+    function testUser1AccountForVault1UpdatedCorrectly_T1() public {
+
+        DataTypes.UserAccount memory userAccount = getUserAccount(user1, vaultId1, 0);
+
+        // Check indices
+        assertEq(userAccount.index, 0);
+        assertEq(userAccount.nftIndex, 0);
+        assertEq(userAccount.rpIndex, 0);
+
+        // Check accumulated rewards
+        assertEq(userAccount.accStakingRewards, 0);
+        assertEq(userAccount.accNftStakingRewards, 0);
+        assertEq(userAccount.accRealmPointsRewards, 0);
+
+        // Check claimed rewards
+        assertEq(userAccount.claimedStakingRewards, 0);
+        assertEq(userAccount.claimedNftRewards, 0);
+        assertEq(userAccount.claimedRealmPointsRewards, 0);
+        assertEq(userAccount.claimedCreatorRewards, 0);
+    }
+
+}
+
+abstract contract StateT6_User2StakeAssetsToVault1 is StateT1_User1StakeAssetsToVault1 {
+
+    function setUp() public virtual override {
+        super.setUp();
+
+        vm.startPrank(user2);
+        
+        // User2 stakes half their tokens
+        mocaToken.approve(address(pool), user2Moca/2);
+        pool.stakeTokens(vaultId1, user2Moca/2);
+
+        // User2 stakes 2 nfts
+        uint256[] memory nftsToStake = new uint256[](2); 
+        nftsToStake[0] = user2NftsArray[0];
+        nftsToStake[1] = user2NftsArray[1];
+        pool.stakeNfts(vaultId1, nftsToStake);
+        
+        vm.stopPrank();
     }
 }
