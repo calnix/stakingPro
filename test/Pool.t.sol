@@ -621,7 +621,36 @@ contract StateT6_User2StakeAssetsToVault1Test is StateT6_User2StakeAssetsToVault
         // realm points
         assertEq(user.stakedRealmPoints, user2Rp/2);
     }
-    
+
+    function testUser2AccountForVault1_T6() public {
+
+        DataTypes.UserAccount memory userAccount = getUserAccount(user2, vaultId1, 0);
+        DataTypes.VaultAccount memory vaultAccount = getVaultAccount(vaultId1, 0);
+
+        //--- user 2 has no rewards since just staked at t6
+
+        // Check indices match vault 
+        assertEq(userAccount.index, vaultAccount.rewardsAccPerUnitStaked);
+        assertEq(userAccount.nftIndex, vaultAccount.nftIndex);
+        assertEq(userAccount.rpIndex, vaultAccount.rpIndex);
+
+        // Check accumulated rewards
+        assertEq(userAccount.accStakingRewards, 0);
+        assertEq(userAccount.accNftStakingRewards, 0);
+        assertEq(userAccount.accRealmPointsRewards, 0);
+
+        // Check claimed rewards
+        assertEq(userAccount.claimedStakingRewards, 0);
+        assertEq(userAccount.claimedNftRewards, 0);
+        assertEq(userAccount.claimedRealmPointsRewards, 0);
+        assertEq(userAccount.claimedCreatorRewards, 0);
+        
+        //--------------------------------
+        
+        // view fn: user2 gets all emitted rewards so far
+        uint256 rewards = pool.getClaimableRewards(user2, vaultId1, 0);
+        assertEq(rewards, 0);
+    }
     
 }
 
