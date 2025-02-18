@@ -542,10 +542,9 @@ contract StateT6_User2StakeAssetsToVault1Test is StateT6_User2StakeAssetsToVault
         uint256 expectedNftIndex = 0;      // 0 nfts staked frm t1-6
         uint256 expectedRpIndex = expectedAccRealmPointsFee * 1E18 / (user1Rp/2);     // 250 RP staked
 
-        // rewardsAccPerUnitStaked
-        uint256 totalRewardsLessOfFees = totalAccRewards - expectedAccCreatorFee - expectedAccTotalNftFee - expectedAccRealmPointsFee;
-        uint256 boostedBalance = user1Rp/2; // 0 nfts staked frm t1-6
-        uint256 expectedRewardsAccPerUnitStaked = totalRewardsLessOfFees * 1E18 / boostedBalance;
+        // rewardsAccPerUnitStaked: for moca stakers
+        uint256 totalRewardsLessOfFees = totalAccRewards - (expectedAccCreatorFee + expectedAccTotalNftFee + expectedAccRealmPointsFee);
+        uint256 expectedRewardsAccPerUnitStaked = totalRewardsLessOfFees * 1E18 / (user1Moca/2);
 
         // Check indices
         assertEq(vaultAccount.index, expectedIndex); // must match distribution index
@@ -557,7 +556,7 @@ contract StateT6_User2StakeAssetsToVault1Test is StateT6_User2StakeAssetsToVault
         assertEq(vaultAccount.accCreatorRewards, expectedAccCreatorFee); 
         assertEq(vaultAccount.accNftStakingRewards, expectedAccTotalNftFee); 
         assertEq(vaultAccount.accRealmPointsRewards, expectedAccRealmPointsFee); 
-        
+
         // rewardsAccPerUnitStaked
         assertEq(vaultAccount.rewardsAccPerUnitStaked, expectedRewardsAccPerUnitStaked); 
 
@@ -578,11 +577,12 @@ contract StateT6_User2StakeAssetsToVault1Test is StateT6_User2StakeAssetsToVault
         assertEq(user.stakedRealmPoints, user1Rp/2);
     }
 
-    function testUser1AccountForVault1_T1() public {
+    function testUser1AccountForVault1_T6() public {
 
         DataTypes.UserAccount memory userAccount = getUserAccount(user1, vaultId1, 0);
+        DataTypes.VaultAccount memory vaultAccount = getVaultAccount(vaultId1, 0);
 
-        // user 1 not updated. since he took no action at t6
+        //--- user 1 not updated. since he took no action at t6
 
         // Check indices
         assertEq(userAccount.index, 0);
@@ -599,13 +599,29 @@ contract StateT6_User2StakeAssetsToVault1Test is StateT6_User2StakeAssetsToVault
         assertEq(userAccount.claimedNftRewards, 0);
         assertEq(userAccount.claimedRealmPointsRewards, 0);
         assertEq(userAccount.claimedCreatorRewards, 0);
-
-        // view fn: returns 5 ether of SP
-        uint256 rewards = pool.getRewards(user1, vaultId1, 0);
-        assertEq(rewards, 5 ether);
-
+        
+        //--------------------------------
+        
+        // view fn: user1 gets all emitted rewards so far
+        uint256 rewards = pool.getClaimableRewards(user1, vaultId1, 0);
+        assertEq(rewards, vaultAccount.totalAccRewards);
     }
 
+    function testUser2_T6() public {
+        DataTypes.User memory user = pool.getUser(user2, vaultId1);
+
+        // tokens
+        assertEq(user.stakedTokens, user2Moca/2);
+
+        // nfts
+        assertEq(user.tokenIds.length, 2);
+        assertEq(user.tokenIds[0], user2NftsArray[0]);
+        assertEq(user.tokenIds[1], user2NftsArray[1]);
+        
+        // realm points
+        assertEq(user.stakedRealmPoints, user2Rp/2);
+    }
+    
     
 }
 

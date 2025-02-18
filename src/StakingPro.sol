@@ -1140,30 +1140,6 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         return _domainSeparatorV4();
     }
 
-    // note: update
-    function getRewards(address user, bytes32 vaultId, uint256 distributionId) external view returns(uint256) {
-
-        // staking not started: return early
-        if (block.timestamp <= startTime) {
-            return 0;
-        }
-
-        DataTypes.UpdateAccountsIndexesParams memory params;
-            params.user = user;   
-            params.vaultId = vaultId;
-            params.PRECISION_BASE = PRECISION_BASE;
-            params.totalBoostedRealmPoints = totalBoostedRealmPoints;
-            params.totalBoostedStakedTokens = totalBoostedStakedTokens;
-
-        // calc. unbooked
-        uint256 totalUnclaimedRewards
-         = PoolLogic.viewClaimRewards(vaults, distributions, users, vaultAccounts, userAccounts, params, 
-            distributionId);
-
-        // latest value, nothing unbooked 
-        return totalUnclaimedRewards;
-    }
-
     /**
      * @notice Returns the number of active distributions
      * @return The length of the activeDistributions array
@@ -1179,6 +1155,61 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     function getUser(address user, bytes32 vaultId) external view returns (DataTypes.User memory) { 
         return users[user][vaultId];
     }
+
+    function getClaimableRewards(address user, bytes32 vaultId, uint256 distributionId) external view returns(uint256) {
+
+        // staking not started: return early
+        if (block.timestamp <= startTime) return 0;
+
+        DataTypes.UpdateAccountsIndexesParams memory params;
+            params.user = user;   
+            params.vaultId = vaultId;
+            params.PRECISION_BASE = PRECISION_BASE;
+            params.totalBoostedRealmPoints = totalBoostedRealmPoints;
+            params.totalBoostedStakedTokens = totalBoostedStakedTokens;
+
+        // calc. unbooked
+        uint256 totalUnclaimedRewards
+         = PoolLogic.viewClaimRewards(vaults, distributions, users, vaultAccounts, userAccounts, params, 
+            distributionId);
+
+        // latest value, storage not updated
+        return totalUnclaimedRewards;
+    }
+
+    //note: remove after testing
+    function getViewVaultAccount(bytes32 vaultId, uint256 distributionId) external view returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory)  {
+        DataTypes.UpdateAccountsIndexesParams memory params;
+            //params.user = msg.sender;   
+            params.vaultId = vaultId;
+            params.PRECISION_BASE = PRECISION_BASE;
+            params.totalBoostedRealmPoints = totalBoostedRealmPoints;
+            params.totalBoostedStakedTokens = totalBoostedStakedTokens;
+
+        DataTypes.Vault memory vault = vaults[vaultId];
+        DataTypes.VaultAccount memory vaultAccount = vaultAccounts[vaultId][distributionId];
+        DataTypes.Distribution memory distribution = distributions[distributionId];
+        return PoolLogic.viewVaultAccount(vault, vaultAccount, distribution, params);
+    }
+
+    //note: remove after testing
+    function getViewUserAccount(address user, bytes32 vaultId, uint256 distributionId) external view returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
+        DataTypes.UpdateAccountsIndexesParams memory params;
+            params.user = user;   
+            params.vaultId = vaultId;
+            params.PRECISION_BASE = PRECISION_BASE;
+            params.totalBoostedRealmPoints = totalBoostedRealmPoints;
+            params.totalBoostedStakedTokens = totalBoostedStakedTokens;
+
+        DataTypes.User memory user_ = users[user][vaultId];
+        DataTypes.UserAccount memory userAccount = userAccounts[user][vaultId][distributionId];
+        DataTypes.Vault memory vault = vaults[vaultId];
+        DataTypes.VaultAccount memory vaultAccount = vaultAccounts[vaultId][distributionId];
+        DataTypes.Distribution memory distribution = distributions[distributionId];
+
+        return PoolLogic.viewUserAccount(user_, userAccount, vault, vaultAccount, distribution, params);
+    }
+
 /** 
     // Function to get creation token IDs for a vault
     function getVaultCreationTokenIds(bytes32 vaultId) external view returns (uint256[] memory) {
