@@ -78,7 +78,7 @@ abstract contract TestingHarness is Test {
     uint256 public storedSignerPrivateKey;
     
     // LZ
-    uint32 public dstEid = 1;
+    uint32 public dstEid = 30184; //base mainnet 
 
     function setUp() public virtual {
         // starting point: T0

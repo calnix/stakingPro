@@ -39,6 +39,7 @@
 - StateUpdateCreationNfts
 - StateUpdateMinimumRealmPoints
 - StateSetRewardsVault
+- partial deposits for distributions
 
 ## Risk testing
 
@@ -109,14 +110,14 @@ t = 6 [delta: 5]
  user2 stakes half of their tokens+rp+2nfts into it
 
 t = 11 [delta: 5]
- distribution 1 created
+ distribution 1 created [starts @ t=21]
 
 t = 16 [delta: 5]
- user1 stakes half of assets into it
- user2 stakes half of assets into it
+ user1 stakes remaining assets into vault1 [half of tokens+rp]
+ user2 stakes remaining assets into vault1 [half of their tokens+rp +2nfts]
 
 t = 21 [delta: 5]
- distribution 1 created & started
+ distribution 1 started
  updateCreationNfts
 
 t = 26 [delta: 5]
