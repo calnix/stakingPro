@@ -257,5 +257,9 @@ abstract contract TestingHarness is Test {
             manuallyEnded: manuallyEnded
         });
     }
+
+    function calculateRewards(uint256 balance, uint256 currentIndex, uint256 priorIndex, uint256 PRECISION) public pure returns (uint256) {
+        return (balance * (currentIndex - priorIndex)) / PRECISION;
+    }
 }
 

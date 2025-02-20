@@ -11,7 +11,6 @@ import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 library PoolLogic {
     using SafeERC20 for IERC20;
 
-
     function executeStakeTokens(
         uint256[] storage activeDistributions,
         mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
@@ -1289,7 +1288,7 @@ library PoolLogic {
 
                 // indexes are denominated in 1E18 | fees are kept in 1E18 during intermediate calculations
                 accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / params.PRECISION_BASE;
-                vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);   // nftIndex: rewardsAccPerNFT          
+                vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);   // nftIndex: rewardsAccPerNFT    
             }
         }
 
