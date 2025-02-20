@@ -454,6 +454,7 @@ abstract contract StateT6_User2StakeAssetsToVault1 is StateT1_User1StakeAssetsTo
     // for reference
     DataTypes.Distribution distribution0_T6;
     DataTypes.VaultAccount vault1Account0_T6;
+    DataTypes.UserAccount user1Account0_T6;
 
     function setUp() public virtual override {
         super.setUp();
@@ -484,6 +485,7 @@ abstract contract StateT6_User2StakeAssetsToVault1 is StateT1_User1StakeAssetsTo
         // save state
         distribution0_T6 = getDistribution(0);
         vault1Account0_T6 = getVaultAccount(vaultId1, 0);
+        user1Account0_T6 = getUserAccount(user1, vaultId1, 0);
     }
 }
 
@@ -783,6 +785,8 @@ abstract contract StateT16_BothUsersStakeAgain is StateT11_Distribution1Created 
     DataTypes.Distribution distribution1_T16;
     DataTypes.VaultAccount vault1Account0_T16;
     DataTypes.VaultAccount vault1Account1_T16;
+    DataTypes.UserAccount user1Account0_T16;
+    DataTypes.UserAccount user2Account0_T16;
 
     function setUp() public virtual override {
         super.setUp();
@@ -831,6 +835,8 @@ abstract contract StateT16_BothUsersStakeAgain is StateT11_Distribution1Created 
         distribution1_T16 = getDistribution(1);
         vault1Account0_T16 = getVaultAccount(vaultId1, 0);
         vault1Account1_T16 = getVaultAccount(vaultId1, 1);
+        user1Account0_T16 = getUserAccount(user1, vaultId1, 0);
+        user2Account0_T16 = getUserAccount(user2, vaultId1, 0);
     }
 }
 
@@ -1012,6 +1018,47 @@ contract StateT16_BothUsersStakeAgainTest is StateT16_BothUsersStakeAgain {
 
         // totalClaimedRewards
         assertEq(vaultAccount.totalClaimedRewards, 0);
+    }
+
+    function testUser1_ForVault1Account0_T16() public {
+
+        DataTypes.UserAccount memory userAccount = getUserAccount(user1, vaultId1, 0);
+        DataTypes.VaultAccount memory vaultAccount = getVaultAccount(vaultId1, 0);
+
+        //--- user 1 last updated at t1
+
+        // Check indices match vault
+        assertEq(userAccount.index, vaultAccount.rewardsAccPerUnitStaked);
+        assertEq(userAccount.nftIndex, vaultAccount.nftIndex);
+        assertEq(userAccount.rpIndex, vaultAccount.rpIndex);
+
+        // Calculate expected rewards for user1's staked tokens
+        uint256 latestAccStakingRewards = calculateRewards(user1Moca/2, vaultAccount.rewardsAccPerUnitStaked, user1Account0_T6.index, 1E18) + user1Account0_T6.accStakingRewards;      
+        // Calculate expected rewards for nft staking
+        uint256 latestAccNftStakingRewards = 0; // 0 nfts staked
+        // Calculate expected rewards for rp staking
+        uint256 latestAccRealmPointsRewards = calculateRewards(user1Rp/2, vaultAccount.rpIndex, user1Account0_T6.rpIndex, 1E18) + user1Account0_T6.accRealmPointsRewards;
+
+        // Check accumulated rewards
+        assertEq(userAccount.accStakingRewards, latestAccStakingRewards); 
+        assertEq(userAccount.accNftStakingRewards, latestAccNftStakingRewards);
+        assertEq(userAccount.accRealmPointsRewards, latestAccRealmPointsRewards);
+
+        // Check claimed rewards
+        assertEq(userAccount.claimedStakingRewards, 0);
+        assertEq(userAccount.claimedNftRewards, 0);
+        assertEq(userAccount.claimedRealmPointsRewards, 0);
+        assertEq(userAccount.claimedCreatorRewards, 0);
+        
+        //--------------------------------
+        
+        // view fn: user1 gets their share of total rewards
+        uint256 claimableRewards = pool.getClaimableRewards(user1, vaultId1, 0);
+        
+        uint256 expectedClaimableRewards = latestAccStakingRewards + latestAccNftStakingRewards + latestAccRealmPointsRewards;
+        if (user1 == pool.getVault(vaultId1).creator) expectedClaimableRewards += vaultAccount.accCreatorRewards;
+        
+        assertEq(claimableRewards, expectedClaimableRewards); 
     }
 
     // ---------------- distribution 1 ----------------
