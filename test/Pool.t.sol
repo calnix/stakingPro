@@ -1540,10 +1540,8 @@ contract StateT26_User2MigrateRpToVault2Test is StateT26_User2MigrateRpToVault2 
         assertEq(vaultAfter.boostedRealmPoints, expectedVaultBoostedRp, "Vault boosted RP not updated correctly");
         
         // pool
-        uint256 expectedTotalBoostedTokens = (pool.totalBoostedStakedTokens() * expectedVaultBoostFactor) / pool.PRECISION_BASE(); 
-        uint256 expectedTotalBoostedRp = (pool.totalBoostedRealmPoints() * expectedVaultBoostFactor) / pool.PRECISION_BASE();
-        assertEq(pool.totalBoostedStakedTokens(), expectedTotalBoostedTokens, "Pool boosted tokens not updated correctly"); // 1.2e20
-        assertEq(pool.totalBoostedRealmPoints(), expectedTotalBoostedRp, "Pool boosted RP not updated correctly"); // 
+        assertEq(pool.totalBoostedStakedTokens(), poolBoostedTokensBefore - tokenAmountBoosted - deltaVaultBoostedStakedTokens, "Pool boosted tokens not updated correctly");
+        assertEq(pool.totalBoostedRealmPoints(), poolBoostedRpBefore - deltaVaultBoostedRealmPoints, "Pool boosted RP not updated correctly");
     }
 }
 
