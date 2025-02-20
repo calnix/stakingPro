@@ -145,29 +145,26 @@ library PoolLogic {
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
         DataTypes.UpdateAccountsIndexesParams calldata params,
-        uint256 nftMultiplier,
+        uint256 NFT_MULTIPLIER,
         uint256 amount,
         uint256[] calldata tokenIds
-    ) external returns (uint256, uint256, uint256, uint256, uint256[] memory) {
-
+    ) external returns (uint256, uint256, uint256) {
+        
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
 
-        // get user staked assets: old values for events
-        uint256 stakedTokens = userVaultAssets.stakedTokens;  
-        uint256 numOfNfts = userVaultAssets.tokenIds.length;
-
-        // to unstake
+        // input check: does the user have sufficient assets for unstaking?
+        if(userVaultAssets.stakedTokens < amount) revert Errors.InvalidAmount();
         uint256 numOfNftsToUnstake = tokenIds.length;
-
-        // check if sufficient assets to unstake
-        if(stakedTokens < amount) revert Errors.InvalidAmount();
-        if(numOfNfts < numOfNftsToUnstake) revert Errors.InvalidAmount();
+        if(userVaultAssets.tokenIds.length < numOfNftsToUnstake) revert Errors.InvalidAmount();
 
         // storage update: vault and user accounting across all active reward distributions
         _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, vault, userVaultAssets, params);
 
-        uint256[] memory userTokenIds;
+        // reverts if tokenIds are not found in userVaultAssets.tokenIds
+        // also serves to check that the user owns the inputted nfts
+        userVaultAssets.tokenIds = _removeFromArray(userVaultAssets.tokenIds, tokenIds);
+
         uint256 amountBoosted; 
         uint256 deltaVaultBoostedRealmPoints;
         uint256 deltaVaultBoostedStakedTokens;
@@ -185,16 +182,16 @@ library PoolLogic {
             // update user
             userVaultAssets.stakedTokens -= amount;
         
-            emit UnstakedTokens(params.user, params.vaultId, amount);             
+            emit UnstakedTokens(params.user, params.vaultId, amount, amountBoosted);             
         }
 
         // update nfts
         if(numOfNftsToUnstake > 0){
             
             // calc. deltas for vault
-            uint256 deltaBoostFactor = numOfNftsToUnstake * nftMultiplier;
-            deltaVaultBoostedStakedTokens = (deltaBoostFactor * vault.stakedTokens) / params.PRECISION_BASE;
+            uint256 deltaBoostFactor = numOfNftsToUnstake * NFT_MULTIPLIER;
             deltaVaultBoostedRealmPoints = (deltaBoostFactor * vault.stakedRealmPoints) / params.PRECISION_BASE;
+            deltaVaultBoostedStakedTokens += (deltaBoostFactor * vault.stakedTokens) / params.PRECISION_BASE;
             
             // update vault
             vault.stakedNfts -= numOfNftsToUnstake;            
@@ -204,17 +201,14 @@ library PoolLogic {
             if (vault.stakedTokens > 0) vault.boostedStakedTokens -= deltaVaultBoostedStakedTokens;            
             if (vault.stakedRealmPoints > 0) vault.boostedRealmPoints -= deltaVaultBoostedRealmPoints;
 
-            // update user: will revert if tokenIds are not found in userVaultAssets.tokenIds
-            userVaultAssets.tokenIds = _removeFromArray(userVaultAssets.tokenIds, tokenIds);
-
-            emit UnstakedNfts(params.user, params.vaultId, tokenIds);   
+            emit UnstakedNfts(params.user, params.vaultId, tokenIds, deltaVaultBoostedStakedTokens, deltaVaultBoostedRealmPoints);             
         }
 
         // update storage: mappings 
         vaults[params.vaultId] = vault;
         users[params.user][params.vaultId] = userVaultAssets;
 
-        return (amountBoosted, deltaVaultBoostedRealmPoints, deltaVaultBoostedStakedTokens, numOfNftsToUnstake, userTokenIds);
+        return (amountBoosted, deltaVaultBoostedRealmPoints, deltaVaultBoostedStakedTokens);
     } 
 
     function executeMigrateRealmPoints(

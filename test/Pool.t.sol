@@ -1435,7 +1435,7 @@ contract StateT26_User2CreatesVault2Test is StateT26_User2CreatesVault2 {
 }
 
 
-abstract contract StateT26_AssetsStakedToVault2 is StateT26_User2CreatesVault2 {
+abstract contract StateT26_User2MigrateRpToVault2 is StateT26_User2CreatesVault2 {
 
     // for reference
     DataTypes.Distribution distribution0_T26;
@@ -1456,10 +1456,9 @@ abstract contract StateT26_AssetsStakedToVault2 is StateT26_User2CreatesVault2 {
     function setUp() public virtual override {
         super.setUp();
 
-        // user2 migrates half of assets to vault2 [migrateRp,unstake]
+        // user2 migrates half of assets to vault2 [migrateRp]
         vm.startPrank(user2);
             pool.migrateRealmPoints(vaultId1, vaultId2, user2Rp/2);
-            //pool.unstake(vaultId1, user2Moca/2, user2NftsArray);
         vm.stopPrank();
 
         // save state
@@ -1476,29 +1475,47 @@ abstract contract StateT26_AssetsStakedToVault2 is StateT26_User2CreatesVault2 {
     }   
 }
 
-contract StateT26_AssetsStakedToVault2Test is StateT26_AssetsStakedToVault2 {
+contract StateT26_User2MigrateRpToVault2Test is StateT26_User2MigrateRpToVault2 {
+    /**
+        note: test stuff related to migrating rp
+     */
+
+    // connector fns
+    // 1. user2 cannot unstake nfts not present within vault1
+    // 2. user2 can unstake the correct nfts from vault1
 
     // user2 unstakes half their tokens and 2 nfts
-    function testUser2CanUnstakeAssets() public {
+    function testUser2CanUnstakeAssets_T26() public {
         // Get initial balances
         DataTypes.Vault memory vaultBefore = pool.getVault(vaultId1);
+        DataTypes.User memory user2VaultBefore = pool.getUser(user2, vaultId1);
+
         uint256 poolNftsBefore = pool.totalStakedNfts();
         uint256 poolTokensBefore = pool.totalStakedTokens();
-        uint256 poolBoostedTokensBefore = pool.totalBoostedStakedTokens();
-        uint256 poolBoostedRpBefore = pool.totalBoostedRealmPoints();
+        uint256 poolBoostedTokensBefore = pool.totalBoostedStakedTokens(); // 2.1e20
+        uint256 poolBoostedRpBefore = pool.totalBoostedRealmPoints(); // 1.9e21
 
         // user2 unstakes first 2 NFTs and half tokens from vault1
         uint256 tokenAmount = user2Moca/2;
+        uint256 tokenAmountBoosted = (tokenAmount * vaultBefore.totalBoostFactor) / pool.PRECISION_BASE();
+        console2.log("tokenAmountBoosted", tokenAmountBoosted);
+        console2.log("vaultBefore.totalBoostFactor", vaultBefore.totalBoostFactor);
+
         uint256[] memory nftsToUnstake = new uint256[](2);
             nftsToUnstake[0] = user2NftsArray[0];
             nftsToUnstake[1] = user2NftsArray[1];
+        
+        // need to negate the tokens being unstaked
+        uint256 deltaBoostFactor = 2 * pool.NFT_MULTIPLIER();
+        uint256 deltaVaultBoostedStakedTokens = ((vaultBefore.stakedTokens - tokenAmount) * deltaBoostFactor) / pool.PRECISION_BASE();
+        uint256 deltaVaultBoostedRealmPoints = (vaultBefore.stakedRealmPoints * deltaBoostFactor) / pool.PRECISION_BASE();
 
         vm.startPrank(user2);
             vm.expectEmit(true, true, true, true);
-            emit UnstakedTokens(user2, vaultId1, tokenAmount);
+            emit UnstakedTokens(user2, vaultId1, tokenAmount, tokenAmountBoosted);
 
             vm.expectEmit(true, true, true, true);
-            emit UnstakedNfts(user2, vaultId1, nftsToUnstake);
+            emit UnstakedNfts(user2, vaultId1, nftsToUnstake, deltaVaultBoostedStakedTokens, deltaVaultBoostedRealmPoints);
 
             pool.unstake(vaultId1, tokenAmount, nftsToUnstake);
         vm.stopPrank();
@@ -1516,14 +1533,49 @@ contract StateT26_AssetsStakedToVault2Test is StateT26_AssetsStakedToVault2 {
         uint256 expectedVaultBoostFactor = pool.PRECISION_BASE() + ((vaultAfter.stakedNfts) * pool.NFT_MULTIPLIER());
         uint256 expectedVaultBoostedTokens = (vaultAfter.stakedTokens * expectedVaultBoostFactor) / pool.PRECISION_BASE();
         uint256 expectedVaultBoostedRp = (vaultAfter.stakedRealmPoints * expectedVaultBoostFactor) / pool.PRECISION_BASE();
-        
+
+        // vault
         assertEq(vaultAfter.totalBoostFactor, expectedVaultBoostFactor, "Vault boost factor not updated correctly");
         assertEq(vaultAfter.boostedStakedTokens, expectedVaultBoostedTokens, "Vault boosted tokens not updated correctly");
         assertEq(vaultAfter.boostedRealmPoints, expectedVaultBoostedRp, "Vault boosted RP not updated correctly");
-        assertEq(pool.totalBoostedStakedTokens(), expectedVaultBoostedTokens, "Pool boosted tokens not updated correctly");
-        assertEq(pool.totalBoostedRealmPoints(), expectedVaultBoostedRp, "Pool boosted RP not updated correctly");
+        
+        // pool
+        uint256 expectedTotalBoostedTokens = (pool.totalBoostedStakedTokens() * expectedVaultBoostFactor) / pool.PRECISION_BASE(); 
+        uint256 expectedTotalBoostedRp = (pool.totalBoostedRealmPoints() * expectedVaultBoostFactor) / pool.PRECISION_BASE();
+        assertEq(pool.totalBoostedStakedTokens(), expectedTotalBoostedTokens, "Pool boosted tokens not updated correctly"); // 1.2e20
+        assertEq(pool.totalBoostedRealmPoints(), expectedTotalBoostedRp, "Pool boosted RP not updated correctly"); // 
     }
+}
+
+
+abstract contract StateT26_User2UnstakesFromVault1 is StateT26_User2MigrateRpToVault2 {
+
+    function setUp() public virtual override {
+        super.setUp();
+
+        // user2 unstakes first 2 nfts from vault1 [unstake]
+        uint256[] memory nftsToUnstake = new uint256[](2);
+        nftsToUnstake[0] = user2NftsArray[0];
+        nftsToUnstake[1] = user2NftsArray[1];
+        vm.startPrank(user2);
+            pool.unstake(vaultId1, 0, nftsToUnstake);
+        vm.stopPrank();
+
+        // save state
+        distribution0_T26 = getDistribution(0);
+        distribution1_T26 = getDistribution(1);
+        vault1Account0_T26 = getVaultAccount(vaultId1, 0);
+        vault1Account1_T26 = getVaultAccount(vaultId1, 1);  
+        vault2Account0_T26 = getVaultAccount(vaultId2, 0);
+        vault2Account1_T26 = getVaultAccount(vaultId2, 1);
+        user1Account0_T26 = getUserAccount(user1, vaultId1, 0);
+        user1Account1_T26 = getUserAccount(user1, vaultId1, 1);
+        user2Account0_T26 = getUserAccount(user2, vaultId1, 0);
+        user2Account1_T26 = getUserAccount(user2, vaultId1, 1);
+    }   
+}   
+
+contract StateT26_User2UnstakesFromVault1Test is StateT26_User2UnstakesFromVault1 {
 
 
 }
-

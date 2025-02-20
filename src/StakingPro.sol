@@ -363,9 +363,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         (
             uint256 amountBoosted, 
             uint256 deltaVaultBoostedRealmPoints,
-            uint256 deltaVaultBoostedStakedTokens,
-            uint256 numOfNftsToUnstake,
-            uint256[] memory userTokenIds
+            uint256 deltaVaultBoostedStakedTokens
         ) 
             = PoolLogic.executeUnstake(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
                 NFT_MULTIPLIER, amount, tokenIds);
@@ -382,6 +380,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         }
 
         // update nfts
+        uint256 numOfNftsToUnstake = tokenIds.length;
         if(numOfNftsToUnstake > 0){    
             
             // update global
@@ -390,7 +389,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             totalBoostedStakedTokens -= deltaVaultBoostedStakedTokens;
 
             // record unstake with registry
-            NFT_REGISTRY.recordUnstake(msg.sender, userTokenIds, vaultId);
+            NFT_REGISTRY.recordUnstake(msg.sender, tokenIds, vaultId);
         }
     }
 
@@ -982,7 +981,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
             // record unstake with registry, else users nfts will be locked in locker
             NFT_REGISTRY.recordUnstake(onBehalfOf, userTotalTokenIds, vaultId);
-            emit UnstakedNfts(onBehalfOf, vaultId, userTotalTokenIds);        
+            emit NftsExited(onBehalfOf, vaultId, userTotalTokenIds);        
         }
 
         // update global
@@ -992,7 +991,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
         // return total principal staked
         if(userTotalStakedTokens > 0) STAKED_TOKEN.safeTransfer(onBehalfOf, userTotalStakedTokens); 
-        emit UnstakedTokens(onBehalfOf, vaultIds, userTotalStakedTokens);      
+        emit TokensExited(onBehalfOf, vaultIds, userTotalStakedTokens);      
 
         /** Note:
             

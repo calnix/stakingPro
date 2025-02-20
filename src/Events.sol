@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
+// note: remove
+event test(uint256[] tokenIds);
+event test(uint256 amount);
+
 // createVault
 event VaultCreated(
     bytes32 indexed vaultId,
@@ -24,8 +28,8 @@ event StakedRealmPoints(address indexed user, bytes32 indexed vaultId, uint256 a
 event RealmPointsMigrated(address indexed user, bytes32 indexed vaultId, bytes32 indexed newVaultId, uint256 amount);
 
 // unstakeAll
-event UnstakedTokens(address indexed user, bytes32 indexed vaultId, uint256 amount);
-event UnstakedNfts(address indexed user, bytes32 indexed vaultId, uint256[] tokenIds);
+event UnstakedTokens(address indexed user, bytes32 indexed vaultId, uint256 amount, uint256 boostedAmount);
+event UnstakedNfts(address indexed user, bytes32 indexed vaultId, uint256[] tokenIds, uint256 deltaVaultBoostedStakedTokens, uint256 deltaVaultBoostedRealmPoints);
 
 // claimRewards
 event RewardsClaimed(bytes32 indexed vaultId, address indexed user, uint256 amount);
@@ -89,8 +93,8 @@ event BoostedBalancesUpdated(bytes32[] vaultIds);
 event PoolFrozen(uint256 timestamp);
 
 // emergencyExit
-event UnstakedTokens(address indexed user, bytes32[] indexed vaultIds, uint256 amount);
-event UnstakedNfts(address indexed user, bytes32[] indexed vaultIds, uint256[] tokenIds);
+event TokensExited(address indexed user, bytes32[] indexed vaultIds, uint256 stakedTokens);
+event NftsExited(address indexed user, bytes32 indexed vaultIds, uint256[] tokenIds);
 
 //  --------------------------------------  PoolLogic --------------------------------------------------------------------
 
