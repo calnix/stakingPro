@@ -842,7 +842,7 @@ abstract contract StateT16_BothUsersStakeAgain is StateT11_Distribution1Created 
     }
 }
 
-//note: 2 distributions active.
+//note: 2 distributions created
 contract StateT16_BothUsersStakeAgainTest is StateT16_BothUsersStakeAgain {
 
     function testPool_T16() public {
@@ -1191,6 +1191,7 @@ contract StateT16_BothUsersStakeAgainTest is StateT16_BothUsersStakeAgain {
     }    
 
     // ---------------- others ----------------
+
     function testUpdateCreationNfts(uint256 newAmount) public {
         // operator updates CREATION_NFTS_REQUIRED
         vm.startPrank(operator);
@@ -1204,8 +1205,8 @@ contract StateT16_BothUsersStakeAgainTest is StateT16_BothUsersStakeAgain {
 
 }
 
-abstract contract StateT21_Distribution1Started is StateT16_BothUsersStakeAgain {
-    bytes32 vaultId2;
+//note: creation nfts updated at t21 | distribution_1 starts at t21
+abstract contract StateT21_CreationNftsUpdated is StateT16_BothUsersStakeAgain {
 
     // for reference
     DataTypes.Distribution distribution0_T21;
@@ -1229,19 +1230,20 @@ abstract contract StateT21_Distribution1Started is StateT16_BothUsersStakeAgain 
         vm.stopPrank();
 
         // save state
-        distribution0_T16 = getDistribution(0);
-        distribution1_T16 = getDistribution(1);
-        vault1Account0_T16 = getVaultAccount(vaultId1, 0);
-        vault1Account1_T16 = getVaultAccount(vaultId1, 1);
-        user1Account0_T16 = getUserAccount(user1, vaultId1, 0);
-        user2Account0_T16 = getUserAccount(user2, vaultId1, 0);
-
-        vaultId2 = generateVaultId(block.number - 1, user2);
+        distribution0_T21 = getDistribution(0);
+        distribution1_T21 = getDistribution(1);
+        vault1Account0_T21 = getVaultAccount(vaultId1, 0);
+        vault1Account1_T21 = getVaultAccount(vaultId1, 1);
+        user1Account0_T21 = getUserAccount(user1, vaultId1, 0);
+        user2Account0_T21 = getUserAccount(user2, vaultId1, 0);
     }
 }
 
-contract StateT21_Distribution1StartedTest is StateT21_Distribution1Started {
-
+contract StateT21_CreationNftsUpdatedTest is StateT21_CreationNftsUpdated {
+    /**
+     NOTE: distribution 1 started
+     */
+    
     function testUser2CannotReuseCreationNfts() public {
         vm.startPrank(user2);
             uint256[] memory tokenIds = new uint256[](1);
@@ -1252,7 +1254,10 @@ contract StateT21_Distribution1StartedTest is StateT21_Distribution1Started {
         vm.stopPrank();
     }
 
+    // can create vault w/ update limit
     function testUser2CreatesVault() public {
+        bytes32 vaultId2 = generateVaultId(block.number - 1, user2);
+
         // user2 creates vault
         vm.startPrank(user2);
             uint256[] memory tokenIds = new uint256[](1);
@@ -1295,19 +1300,12 @@ contract StateT21_Distribution1StartedTest is StateT21_Distribution1Started {
         assertEq(vault.boostedRealmPoints, 0);
         assertEq(vault.boostedStakedTokens, 0);
     }
-    
-    function testUser2MigratesHalfOfAssetsFromVault1ToVault2() public {
-        // user2 migrates half of assets from vault1 to vault2
-        vm.startPrank(user2);
-            uint256[] memory tokenIds = new uint256[](1);
-            tokenIds[0] = user2NftsArray[0];    //1st nft
-            uint256 nftFeeFactor = 1000;    
-    }
-    
 }
 
-abstract contract StateT26_User2CreatesVault2 is StateT21_Distribution1Started {
-    bytes32 vaultId3;
+//note: creation nfts updated at t21 | distribution_1 starts at t21
+abstract contract StateT26_User2CreatesVault2 is StateT21_CreationNftsUpdated {
+
+    bytes32 vaultId2;
 
     function setUp() public virtual override {
         super.setUp();
@@ -1323,10 +1321,209 @@ abstract contract StateT26_User2CreatesVault2 is StateT21_Distribution1Started {
             uint256 realmPointsFeeFactor = 500;
 
             pool.createVault(tokenIds, nftFeeFactor, creatorFeeFactor, realmPointsFeeFactor);
-        vm.stopPrank();
+        vm.stopPrank();       
 
-
-        
-
+        vaultId2 = generateVaultId(block.number - 1, user2);
     }
 }
+
+contract StateT26_User2CreatesVault2Test is StateT26_User2CreatesVault2 {
+
+    function testVault2_T26() public {
+        DataTypes.Vault memory vault = pool.getVault(vaultId2);
+        
+        // Base vault data
+        assertEq(vault.creator, user2);
+        // Verify creation NFTs
+        assertEq(vault.creationTokenIds.length, 1);
+        assertEq(vault.creationTokenIds[0], user2NftsArray[4]);
+
+        assertEq(vault.startTime, 26);
+        assertEq(vault.endTime, 0);
+        assertEq(vault.removed, 0);
+        
+        // Verify fees
+        assertEq(vault.nftFeeFactor, 1000);
+        assertEq(vault.creatorFeeFactor, 500);
+        assertEq(vault.realmPointsFeeFactor, 500);
+        
+        // Verify staked assets
+        assertEq(vault.stakedTokens, 0);
+        assertEq(vault.stakedNfts, 0);
+        assertEq(vault.stakedRealmPoints, 0);
+
+        // Verify boosted balances
+        assertEq(vault.totalBoostFactor, pool.PRECISION_BASE());
+        assertEq(vault.boostedRealmPoints, 0);
+        assertEq(vault.boostedStakedTokens, 0);
+    }
+
+    function testUser2MigrateRp() public {
+        
+        // get initial values
+        uint256 poolBoostedRpBefore = pool.totalBoostedRealmPoints();
+        uint256 poolTotalRpBefore = pool.totalStakedRealmPoints();
+        DataTypes.Vault memory vault1Before = pool.getVault(vaultId1);
+        DataTypes.Vault memory vault2Before = pool.getVault(vaultId2);
+        DataTypes.User memory user2VaultOneBefore = pool.getUser(user2, vaultId1);
+        DataTypes.User memory user2VaultTwoBefore = pool.getUser(user2, vaultId2);
+
+        // user2 migrates half their RP from vault1 to vault2
+        vm.startPrank(user2);
+            uint256 amount = user2Rp/2;
+            // check event
+            vm.expectEmit(true, true, true, true);
+            emit RealmPointsMigrated(user2, vaultId1, vaultId2, amount);
+            pool.migrateRealmPoints(vaultId1, vaultId2, amount);
+        vm.stopPrank();
+        
+        // --------- VAULT1 CHECKS: before & after migration ---------
+
+        // check vault1 (old vault) balances
+        DataTypes.Vault memory vault1After = pool.getVault(vaultId1);
+        
+        // Base RP checks for vault1
+        assertEq(vault1After.stakedRealmPoints, vault1Before.stakedRealmPoints - amount, "Vault1 base RP not reduced correctly");
+        // Boosted RP checks for vault1
+        uint256 expectedVault1BoostFactor = pool.PRECISION_BASE() + (vault1After.stakedNfts * pool.NFT_MULTIPLIER());
+        uint256 expectedVault1BoostedRp = (vault1After.stakedRealmPoints * expectedVault1BoostFactor) / pool.PRECISION_BASE();
+        assertEq(vault1After.boostedRealmPoints, expectedVault1BoostedRp, "Vault1 boosted RP not reduced correctly");
+
+        // --------- VAULT2 CHECKS: before & after migration ---------
+
+        // check vault2 (new vault) balances
+        DataTypes.Vault memory vault2After = pool.getVault(vaultId2);
+        
+        // Base RP checks for vault2
+        assertEq(vault2After.stakedRealmPoints, vault2Before.stakedRealmPoints + amount, "Vault2 base RP not increased correctly");
+        // Boosted RP checks for vault2
+        uint256 expectedVault2BoostFactor = pool.PRECISION_BASE() + (vault2After.stakedNfts * pool.NFT_MULTIPLIER());
+        uint256 expectedVault2BoostedRp = (vault2After.stakedRealmPoints * expectedVault2BoostFactor) / pool.PRECISION_BASE();
+        assertEq(vault2After.boostedRealmPoints, expectedVault2BoostedRp, "Vault2 boosted RP not increased correctly");
+
+        // --------- POOL CHECKS: before & after migration ---------
+
+        // check pool totals
+        assertEq(pool.totalStakedRealmPoints(), poolTotalRpBefore, "Pool total RP should not change");
+        assertEq(pool.totalBoostedRealmPoints(), expectedVault1BoostedRp + expectedVault2BoostedRp, "Pool total boosted RP incorrect");
+
+        // --------- USER-VAULT BALANCES CHECKS: before & after migration ---------
+
+        // check user balances for vault1
+        DataTypes.User memory user2VaultOneAfter = pool.getUser(user2, vaultId1);
+        assertEq(user2VaultOneAfter.stakedRealmPoints, user2VaultOneBefore.stakedRealmPoints - amount, "User2 vault1 RP not reduced correctly");
+
+        // check user balances for vault2
+        DataTypes.User memory user2VaultTwoAfter = pool.getUser(user2, vaultId2);
+        assertEq(user2VaultTwoAfter.stakedRealmPoints, user2VaultTwoBefore.stakedRealmPoints + amount, "User2 vault2 RP not increased correctly");
+
+
+        // ----- MISC: OTHER CHECKS -----
+        
+        // Other vault1 checks
+        assertEq(vault1After.stakedNfts, vault1Before.stakedNfts, "Vault1 NFTs should not change");
+        assertEq(vault1After.stakedTokens, vault1Before.stakedTokens, "Vault1 tokens should not change");
+        assertEq(vault1After.totalBoostFactor, expectedVault1BoostFactor, "Vault1 boost factor incorrect");
+        assertEq(vault1After.boostedStakedTokens, (vault1After.stakedTokens * expectedVault1BoostFactor) / pool.PRECISION_BASE(), "Vault1 boosted tokens incorrect");
+
+        // Other vault2 checks
+        assertEq(vault2After.stakedNfts, vault2Before.stakedNfts, "Vault2 NFTs should not change");
+        assertEq(vault2After.stakedTokens, vault2Before.stakedTokens, "Vault2 tokens should not change");
+        assertEq(vault2After.totalBoostFactor, expectedVault2BoostFactor, "Vault2 boost factor incorrect");
+        assertEq(vault2After.boostedStakedTokens, (vault2After.stakedTokens * expectedVault2BoostFactor) / pool.PRECISION_BASE(), "Vault2 boosted tokens incorrect");
+    }
+}
+
+
+abstract contract StateT26_AssetsStakedToVault2 is StateT26_User2CreatesVault2 {
+
+    // for reference
+    DataTypes.Distribution distribution0_T26;
+    DataTypes.Distribution distribution1_T26;
+    //vault1
+    DataTypes.VaultAccount vault1Account0_T26;
+    DataTypes.VaultAccount vault1Account1_T26;
+    //vault2
+    DataTypes.VaultAccount vault2Account0_T26;
+    DataTypes.VaultAccount vault2Account1_T26;
+    //user1
+    DataTypes.UserAccount user1Account0_T26;
+    DataTypes.UserAccount user1Account1_T26;
+    //user2
+    DataTypes.UserAccount user2Account0_T26;
+    DataTypes.UserAccount user2Account1_T26;
+
+    function setUp() public virtual override {
+        super.setUp();
+
+        // user2 migrates half of assets to vault2 [migrateRp,unstake]
+        vm.startPrank(user2);
+            pool.migrateRealmPoints(vaultId1, vaultId2, user2Rp/2);
+            //pool.unstake(vaultId1, user2Moca/2, user2NftsArray);
+        vm.stopPrank();
+
+        // save state
+        distribution0_T26 = getDistribution(0);
+        distribution1_T26 = getDistribution(1);
+        vault1Account0_T26 = getVaultAccount(vaultId1, 0);
+        vault1Account1_T26 = getVaultAccount(vaultId1, 1);  
+        vault2Account0_T26 = getVaultAccount(vaultId2, 0);
+        vault2Account1_T26 = getVaultAccount(vaultId2, 1);
+        user1Account0_T26 = getUserAccount(user1, vaultId1, 0);
+        user1Account1_T26 = getUserAccount(user1, vaultId1, 1);
+        user2Account0_T26 = getUserAccount(user2, vaultId1, 0);
+        user2Account1_T26 = getUserAccount(user2, vaultId1, 1);
+    }   
+}
+
+contract StateT26_AssetsStakedToVault2Test is StateT26_AssetsStakedToVault2 {
+
+    // user2 unstakes half their tokens and 2 nfts
+    function testUser2CanUnstakeAssets() public {
+        // Get initial balances
+        DataTypes.Vault memory vaultBefore = pool.getVault(vaultId1);
+        uint256 poolNftsBefore = pool.totalStakedNfts();
+        uint256 poolTokensBefore = pool.totalStakedTokens();
+        uint256 poolBoostedTokensBefore = pool.totalBoostedStakedTokens();
+        uint256 poolBoostedRpBefore = pool.totalBoostedRealmPoints();
+
+        // user2 unstakes first 2 NFTs and half tokens from vault1
+        uint256 tokenAmount = user2Moca/2;
+        uint256[] memory nftsToUnstake = new uint256[](2);
+            nftsToUnstake[0] = user2NftsArray[0];
+            nftsToUnstake[1] = user2NftsArray[1];
+
+        vm.startPrank(user2);
+            vm.expectEmit(true, true, true, true);
+            emit UnstakedTokens(user2, vaultId1, tokenAmount);
+
+            vm.expectEmit(true, true, true, true);
+            emit UnstakedNfts(user2, vaultId1, nftsToUnstake);
+
+            pool.unstake(vaultId1, tokenAmount, nftsToUnstake);
+        vm.stopPrank();
+
+        // Check vault balances updated
+        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId1);
+        assertEq(vaultAfter.stakedTokens, vaultBefore.stakedTokens - tokenAmount, "Vault tokens not reduced correctly");
+        assertEq(vaultAfter.stakedNfts, vaultBefore.stakedNfts - 2, "Vault NFTs not reduced correctly");
+
+        // Check pool balances updated
+        assertEq(pool.totalStakedNfts(), poolNftsBefore - 2, "Pool NFTs not reduced correctly");
+        assertEq(pool.totalStakedTokens(), poolTokensBefore - tokenAmount, "Pool tokens not reduced correctly");
+
+        // Check boosted balances updated
+        uint256 expectedVaultBoostFactor = pool.PRECISION_BASE() + ((vaultAfter.stakedNfts) * pool.NFT_MULTIPLIER());
+        uint256 expectedVaultBoostedTokens = (vaultAfter.stakedTokens * expectedVaultBoostFactor) / pool.PRECISION_BASE();
+        uint256 expectedVaultBoostedRp = (vaultAfter.stakedRealmPoints * expectedVaultBoostFactor) / pool.PRECISION_BASE();
+        
+        assertEq(vaultAfter.totalBoostFactor, expectedVaultBoostFactor, "Vault boost factor not updated correctly");
+        assertEq(vaultAfter.boostedStakedTokens, expectedVaultBoostedTokens, "Vault boosted tokens not updated correctly");
+        assertEq(vaultAfter.boostedRealmPoints, expectedVaultBoostedRp, "Vault boosted RP not updated correctly");
+        assertEq(pool.totalBoostedStakedTokens(), expectedVaultBoostedTokens, "Pool boosted tokens not updated correctly");
+        assertEq(pool.totalBoostedRealmPoints(), expectedVaultBoostedRp, "Pool boosted RP not updated correctly");
+    }
+
+
+}
+

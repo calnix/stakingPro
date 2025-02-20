@@ -364,7 +364,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             uint256 amountBoosted, 
             uint256 deltaVaultBoostedRealmPoints,
             uint256 deltaVaultBoostedStakedTokens,
-            uint256 numOfNfts,
+            uint256 numOfNftsToUnstake,
             uint256[] memory userTokenIds
         ) 
             = PoolLogic.executeUnstake(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
@@ -382,10 +382,10 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         }
 
         // update nfts
-        if(numOfNfts > 0){    
+        if(numOfNftsToUnstake > 0){    
             
             // update global
-            totalStakedNfts -= numOfNfts;
+            totalStakedNfts -= numOfNftsToUnstake;
             totalBoostedRealmPoints -= deltaVaultBoostedRealmPoints;
             totalBoostedStakedTokens -= deltaVaultBoostedStakedTokens;
 

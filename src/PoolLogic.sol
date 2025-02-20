@@ -214,7 +214,7 @@ library PoolLogic {
         vaults[params.vaultId] = vault;
         users[params.user][params.vaultId] = userVaultAssets;
 
-        return (amountBoosted, deltaVaultBoostedRealmPoints, deltaVaultBoostedStakedTokens, numOfNfts, userTokenIds);
+        return (amountBoosted, deltaVaultBoostedRealmPoints, deltaVaultBoostedStakedTokens, numOfNftsToUnstake, userTokenIds);
     } 
 
     function executeMigrateRealmPoints(
@@ -231,19 +231,19 @@ library PoolLogic {
     ) external returns (uint256, uint256) {
 
         // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory oldUserVaultAssets, DataTypes.Vault memory oldVault) = _cache(params.vaultId, params.user, vaults, users);
-        (DataTypes.User memory newUserVaultAssets, DataTypes.Vault memory newVault) = _cache(newVaultId, params.user, vaults, users);
+        (DataTypes.User memory userOldVaultAssets, DataTypes.Vault memory oldVault) = _cache(params.vaultId, params.user, vaults, users);
+        (DataTypes.User memory userNewVaultAssets, DataTypes.Vault memory newVault) = _cache(newVaultId, params.user, vaults, users);
 
         // vault cooldown activated: cannot migrate
         if(newVault.endTime > 0) revert Errors.VaultEndTimeSet(newVaultId);
 
         // sanity check: user must have sufficient RP in old vault
-        if(oldUserVaultAssets.stakedRealmPoints < amount) revert Errors.UserHasNothingStaked(params.vaultId, params.user);
+        if(userOldVaultAssets.stakedRealmPoints < amount) revert Errors.UserHasNothingStaked(params.vaultId, params.user);
 
         // storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, oldVault, oldUserVaultAssets, params);
+        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, oldVault, userOldVaultAssets, params);
         // storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, newVault, newUserVaultAssets, params);
+        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, newVault, userNewVaultAssets, params);
 
         // ---------------------------- update vaults ----------------------------------------------
 
@@ -251,11 +251,15 @@ library PoolLogic {
         uint256 oldBoostedRealmPoints = (amount * oldVault.totalBoostFactor) / params.PRECISION_BASE; 
         oldVault.stakedRealmPoints -= amount;
         oldVault.boostedRealmPoints -= oldBoostedRealmPoints;
+        // decrement oldUserVaultAssets
+        userOldVaultAssets.stakedRealmPoints -= amount;
         
         // increment new vault
         uint256 newBoostedRealmPoints = (amount * newVault.totalBoostFactor) / params.PRECISION_BASE; 
         newVault.stakedRealmPoints += amount;
         newVault.boostedRealmPoints += newBoostedRealmPoints;
+        // increment newUserVaultAssets
+        userNewVaultAssets.stakedRealmPoints += amount;
 
         // EMIT 
         emit RealmPointsMigrated(params.user, params.vaultId, newVaultId, amount);
@@ -264,9 +268,9 @@ library PoolLogic {
         vaults[params.vaultId] = oldVault;
         vaults[newVaultId] = newVault;
 
-        // storage
-        users[params.user][params.vaultId] = oldUserVaultAssets;
-        users[params.user][newVaultId] = newUserVaultAssets;
+        // Update storage for both user-vault assets
+        users[params.user][params.vaultId] = userOldVaultAssets;
+        users[params.user][newVaultId] = userNewVaultAssets;
 
         // global delta
         uint256 totalBoostedDelta;
