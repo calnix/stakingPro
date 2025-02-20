@@ -614,7 +614,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         uint256 oldAmount = CREATION_NFTS_REQUIRED;
         CREATION_NFTS_REQUIRED = newAmount; 
 
-        emit CreationNftRequirementUpdated(oldAmount, newAmount);
+        emit CreationNftRequiredUpdated(oldAmount, newAmount);
     }
 
     /**

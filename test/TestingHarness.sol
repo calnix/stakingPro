@@ -9,7 +9,7 @@ import "../src/RewardsVaultV1.sol";
 // mocks
 import "../test/mocks/MocaToken.sol";
 import "openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
-import { MockRegistry } from "../test/mocks/MockRegistry.sol";
+import "../test/mocks/MockRegistry.sol";
 import { EndpointV2Mock } from "./mocks/EndpointV2Mock.sol";
 
 // interfaces

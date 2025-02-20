@@ -60,7 +60,7 @@ event MaximumFeeFactorUpdated(uint256 oldFactor, uint256 newFactor);
 event MinimumRealmPointsUpdated(uint256 oldAmount, uint256 newAmount);
 
 // updateCreationNfts
-event CreationNftRequirementUpdated(uint256 oldAmount, uint256 newAmount);
+event CreationNftRequiredUpdated(uint256 oldAmount, uint256 newAmount);
 
 // updateVaultCooldown
 event VaultCooldownDurationUpdated(uint256 oldDuration, uint256 newDuration);
