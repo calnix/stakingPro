@@ -319,19 +319,26 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(amount == 0) revert Errors.InvalidAmount();
         if(oldVaultId == newVaultId) revert Errors.InvalidVaultId();
 
-        DataTypes.UpdateAccountsIndexesParams memory params;
-            params.user = msg.sender;
-            params.vaultId = oldVaultId;
-            params.PRECISION_BASE = PRECISION_BASE;
-            params.totalBoostedRealmPoints = totalBoostedRealmPoints;
-            params.totalBoostedStakedTokens = totalBoostedStakedTokens;
+        DataTypes.UpdateAccountsIndexesParams memory oldVaultParams;
+            oldVaultParams.user = msg.sender;
+            oldVaultParams.vaultId = oldVaultId;
+            oldVaultParams.PRECISION_BASE = PRECISION_BASE;
+            oldVaultParams.totalBoostedRealmPoints = totalBoostedRealmPoints;
+            oldVaultParams.totalBoostedStakedTokens = totalBoostedStakedTokens;
+
+        DataTypes.UpdateAccountsIndexesParams memory newVaultParams;
+            newVaultParams.user = msg.sender;
+            newVaultParams.vaultId = newVaultId;
+            newVaultParams.PRECISION_BASE = oldVaultParams.PRECISION_BASE;
+            newVaultParams.totalBoostedRealmPoints = oldVaultParams.totalBoostedRealmPoints;
+            newVaultParams.totalBoostedStakedTokens = oldVaultParams.totalBoostedStakedTokens;
 
         (
             uint256 totalBoostedDelta,
             uint256 flag
         ) 
-            = PoolLogic.executeMigrateRealmPoints(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, params, 
-                newVaultId, amount);
+            = PoolLogic.executeMigrateRealmPoints(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, oldVaultParams, 
+                newVaultParams, amount);
         
         if(flag == 1) {
             // newBoostedRealmPoints > oldBoostedRealmPoints

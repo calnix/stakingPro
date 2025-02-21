@@ -2,7 +2,6 @@
 pragma solidity 0.8.26;
 
 // note: remove
-event test(uint256[] tokenIds);
 event test(uint256 amount);
 
 // createVault

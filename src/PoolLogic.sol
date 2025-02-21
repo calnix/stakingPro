@@ -8,6 +8,8 @@ import {INftRegistry} from "./interfaces/INftRegistry.sol";
 
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import {console} from "forge-std/console.sol";
+
 library PoolLogic {
     using SafeERC20 for IERC20;
 
@@ -219,52 +221,52 @@ library PoolLogic {
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
-        DataTypes.UpdateAccountsIndexesParams memory params,
-        bytes32 newVaultId,
+        DataTypes.UpdateAccountsIndexesParams memory oldVaultParams,
+        DataTypes.UpdateAccountsIndexesParams memory newVaultParams,
         uint256 amount
     ) external returns (uint256, uint256) {
 
         // cache vault and user data, reverts if vault does not exist
-        (DataTypes.User memory userOldVaultAssets, DataTypes.Vault memory oldVault) = _cache(params.vaultId, params.user, vaults, users);
-        (DataTypes.User memory userNewVaultAssets, DataTypes.Vault memory newVault) = _cache(newVaultId, params.user, vaults, users);
+        (DataTypes.User memory userOldVaultAssets, DataTypes.Vault memory oldVault) = _cache(oldVaultParams.vaultId, oldVaultParams.user, vaults, users);
+        (DataTypes.User memory userNewVaultAssets, DataTypes.Vault memory newVault) = _cache(newVaultParams.vaultId, newVaultParams.user, vaults, users);
 
         // vault cooldown activated: cannot migrate
-        if(newVault.endTime > 0) revert Errors.VaultEndTimeSet(newVaultId);
+        if(newVault.endTime > 0) revert Errors.VaultEndTimeSet(newVaultParams.vaultId);
 
         // sanity check: user must have sufficient RP in old vault
-        if(userOldVaultAssets.stakedRealmPoints < amount) revert Errors.UserHasNothingStaked(params.vaultId, params.user);
+        if(userOldVaultAssets.stakedRealmPoints < amount) revert Errors.UserHasNothingStaked(oldVaultParams.vaultId, oldVaultParams.user);
 
         // storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, oldVault, userOldVaultAssets, params);
+        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, oldVault, userOldVaultAssets, oldVaultParams);
         // storage update: vault and user accounting across all active reward distributions
-        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, newVault, userNewVaultAssets, params);
+        _updateUserAccounts(activeDistributions, distributions, vaultAccounts, userAccounts, newVault, userNewVaultAssets, newVaultParams);
 
         // ---------------------------- update vaults ----------------------------------------------
 
         // decrement oldVault
-        uint256 oldBoostedRealmPoints = (amount * oldVault.totalBoostFactor) / params.PRECISION_BASE; 
+        uint256 oldBoostedRealmPoints = (amount * oldVault.totalBoostFactor) / oldVaultParams.PRECISION_BASE; 
         oldVault.stakedRealmPoints -= amount;
         oldVault.boostedRealmPoints -= oldBoostedRealmPoints;
         // decrement oldUserVaultAssets
         userOldVaultAssets.stakedRealmPoints -= amount;
         
         // increment new vault
-        uint256 newBoostedRealmPoints = (amount * newVault.totalBoostFactor) / params.PRECISION_BASE; 
+        uint256 newBoostedRealmPoints = (amount * newVault.totalBoostFactor) / newVaultParams.PRECISION_BASE; 
         newVault.stakedRealmPoints += amount;
         newVault.boostedRealmPoints += newBoostedRealmPoints;
         // increment newUserVaultAssets
         userNewVaultAssets.stakedRealmPoints += amount;
 
         // EMIT 
-        emit RealmPointsMigrated(params.user, params.vaultId, newVaultId, amount);
+        emit RealmPointsMigrated(oldVaultParams.user, oldVaultParams.vaultId, newVaultParams.vaultId, amount);
 
         // Update storage for both vaults
-        vaults[params.vaultId] = oldVault;
-        vaults[newVaultId] = newVault;
+        vaults[oldVaultParams.vaultId] = oldVault;
+        vaults[newVaultParams.vaultId] = newVault;
 
         // Update storage for both user-vault assets
-        users[params.user][params.vaultId] = userOldVaultAssets;
-        users[params.user][newVaultId] = userNewVaultAssets;
+        users[oldVaultParams.user][oldVaultParams.vaultId] = userOldVaultAssets;
+        users[newVaultParams.user][newVaultParams.vaultId] = userNewVaultAssets;
 
         // global delta
         uint256 totalBoostedDelta;
@@ -920,7 +922,7 @@ library PoolLogic {
             params.totalBoostedStakedTokens,
             params.isPaused
         );
-        
+
         // vault already been updated by a prior txn; skip updating vaultAccount
         if(distribution.index == vaultAccount.index) return (vaultAccount, distribution);
 
@@ -940,6 +942,13 @@ library PoolLogic {
 
         // STAKING POWER: staked realm points | TOKENS: staked moca tokens
         uint256 boostedBalance = distribution.distributionId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
+        
+        // nothing staked, skip update
+        if(boostedBalance == 0) {
+            vaultAccount.index = distribution.index;
+            return (vaultAccount, distribution);  
+        }
+
         // note: totalAccRewards expressed in 1E18 precision 
         uint256 totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index, 1E18);
 
@@ -1085,7 +1094,7 @@ library PoolLogic {
             DataTypes.Distribution memory distribution = distributions[distributionId];
             DataTypes.VaultAccount memory vaultAccount = vaultAccounts[params.vaultId][distributionId];
             DataTypes.UserAccount memory userAccount = userAccounts[params.user][params.vaultId][distributionId];
-            
+
             (
                 userAccount, 
                 vaultAccount, 

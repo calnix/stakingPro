@@ -117,41 +117,42 @@ t = 16 [delta: 5]
  user2 stakes remaining assets into vault1 [half of their tokens+rp +2nfts]
 
 t = 21 [delta: 5]
- distribution 1 started: check view fns for pending rewards
+ distribution 1 started
  updateCreationNfts
+ *add: check view fns for pending rewards*
 
 t = 26 [delta: 5]
  user2 creates vault2 [5 seconds into distribution 1]
  check pool.CreationNfts
  *stale checks: maybe move to 21, together w/ check view.*
 
-t = 30 [delta: 5]
+t = 31 [delta: 5]
  user2 migrates half his RP to vault2 [migrateRp]
  *both vaults updated due to migration: check both vaults and vaultAccounts for both distributions*
  
-t = 35 [delta: 5]
+t = 36 [delta: 5]
  user2 unstakes half of his tokens+2nfts [unstake]
  *vault2 updated due to unstake: can check vault2 and vaultAccounts for both distributions - maybe can drop due to t30 checks*
 
-t = 40 [delta: 5]
+t = 41 [delta: 5]
  user3 stakes half of assets to vault2
 
-t = 45 [delta: 5]
+t = 46 [delta: 5]
  vault2: updateMaximumFeeFactor
 
-t = 36 [delta: 5]
+t = 51 [delta: 5]
  vault1: activateCooldown
 
-t = 41 [delta: 5]
+t = 56 [delta: 5]
  vault1: endVaults
 
-t = 46 [delta: 5]
+t = 61 [delta: 5]
  updateVaultCooldown
 
-t = 51 [delta: 5]
+t = 66 [delta: 5]
  vault2: activateCooldown
 
-t = 56 [delta: 5]
+t = 71 [delta: 5]
 
 ---
 split timeline fork
