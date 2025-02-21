@@ -117,15 +117,26 @@ t = 16 [delta: 5]
  user2 stakes remaining assets into vault1 [half of their tokens+rp +2nfts]
 
 t = 21 [delta: 5]
- distribution 1 started
+ distribution 1 started: check view fns for pending rewards
  updateCreationNfts
 
 t = 26 [delta: 5]
  user2 creates vault2 [5 seconds into distribution 1]
- user2 migrates half of assets to vault2 [migrateRp,unstake]
+ check pool.CreationNfts
+ *stale checks: maybe move to 21, together w/ check view.*
+
+t = 30 [delta: 5]
+ user2 migrates half his RP to vault2 [migrateRp]
+ *both vaults updated due to migration: check both vaults and vaultAccounts for both distributions*
+ 
+t = 35 [delta: 5]
+ user2 unstakes half of his tokens+2nfts [unstake]
+ *vault2 updated due to unstake: can check vault2 and vaultAccounts for both distributions - maybe can drop due to t30 checks*
+
+t = 40 [delta: 5]
  user3 stakes half of assets to vault2
 
-t = 31 [delta: 5]
+t = 45 [delta: 5]
  vault2: updateMaximumFeeFactor
 
 t = 36 [delta: 5]
