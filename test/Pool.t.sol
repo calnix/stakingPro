@@ -1817,12 +1817,18 @@ abstract contract StateT31_User2MigrateRpToVault2 is StateT26_User2CreatesVault2
     //vault2
     DataTypes.VaultAccount vault2Account0_T31;
     DataTypes.VaultAccount vault2Account1_T31;
-    //user1
+    //user1+vault1
     DataTypes.UserAccount user1Account0_T31;
     DataTypes.UserAccount user1Account1_T31;
-    //user2
+    //user2+vault1
     DataTypes.UserAccount user2Account0_T31;
     DataTypes.UserAccount user2Account1_T31;
+    //user1+vault2
+    DataTypes.UserAccount user1Vault2Account0_T31;
+    DataTypes.UserAccount user1Vault2Account1_T31;
+    //user2+vault2
+    DataTypes.UserAccount user2Vault2Account0_T31;
+    DataTypes.UserAccount user2Vault2Account1_T31;
 
     function setUp() public virtual override {
         super.setUp();
@@ -1848,6 +1854,10 @@ abstract contract StateT31_User2MigrateRpToVault2 is StateT26_User2CreatesVault2
         user1Account1_T31 = getUserAccount(user1, vaultId1, 1);
         user2Account0_T31 = getUserAccount(user2, vaultId1, 0);
         user2Account1_T31 = getUserAccount(user2, vaultId1, 1);
+        user1Vault2Account0_T31 = getUserAccount(user1, vaultId2, 0);
+        user1Vault2Account1_T31 = getUserAccount(user1, vaultId2, 1);
+        user2Vault2Account0_T31 = getUserAccount(user2, vaultId2, 0);
+        user2Vault2Account1_T31 = getUserAccount(user2, vaultId2, 1);
     }   
 }
 
@@ -2626,18 +2636,6 @@ contract StateT36_User2UnstakesFromVault1Test is StateT36_User2UnstakesFromVault
 
     /**
         note: test stuff related to unstaking tokens+nfts
-            
-        unstake by user2 frm vault1
-         distr_0 + distr_1 updated.
-         vault1 accounts updated.
-         user2 accounts updated. [check: T31-T36]
-         vault2 account NOT updated - stale. [lastupdate: T31]
-         user1 NOT updated - stale. [lastupdate: t16]
-         > test vault1, user2 accounts
-
-        vault2 created at T26, has accounts with both active distributions.
-         but accrues no rewards of any kind to date, since nothing staked. 
-         its vaultAccounts and related userAccounts should primarily be 0.
      */
 
     // ---------------- base assets ----------------
@@ -2707,6 +2705,21 @@ contract StateT36_User2UnstakesFromVault1Test is StateT36_User2UnstakesFromVault
         assertEq(vault2.boostedRealmPoints, expectedBoostedRp);
         assertEq(vault2.boostedStakedTokens, expectedBoostedTokens);
     }
+
+    /**
+        T31 - T36: user2 migrates half his RP to vault2
+         distr_0 + distr_1 updated.
+         vault1 accounts updated.
+         vault2 accounts NOT updated at T36 [stale T31 indexes]
+         user2 accounts updated. [check: T31-T36]
+         user1 NOT updated - stale. [lastupdate: t16]
+         > test vault1, vault2, user2 accounts
+
+        vault2 created at T26:
+         accrues SP from T31-T36, due to migrated rp.
+         does not accrue rewards from d1, no tokens staked.
+         not updated at T36. stale as per T31
+    */
 
     // ---------------- distribution 0 ----------------
 
@@ -2820,48 +2833,198 @@ contract StateT36_User2UnstakesFromVault1Test is StateT36_User2UnstakesFromVault
         assertEq(vaultAccount.totalClaimedRewards, 0);
     }
 
-    // vault2: stale as per T31
-    /**function testVault2Account0_T31() public {}*/
+    // accrues SP from T31-T36, but NOT updated at T36; stale as per T31
+    function testVault2Account0_T36() public {
+        DataTypes.Distribution memory distribution = getDistribution(0);
+        DataTypes.Vault memory vault = pool.getVault(vaultId2);
+
+        DataTypes.VaultAccount memory vaultAccount = getVaultAccount(vaultId2, 0);
+
+        // Check indices match distribution at t31
+        assertEq(vaultAccount.index, distribution0_T31.index);
+        assertEq(vaultAccount.nftIndex, 0);
+        assertEq(vaultAccount.rpIndex, 0);
+
+        // Check accumulated rewards
+        assertEq(vaultAccount.totalAccRewards, 0);
+        assertEq(vaultAccount.accCreatorRewards, 0);
+        assertEq(vaultAccount.accNftStakingRewards, 0);
+        assertEq(vaultAccount.accRealmPointsRewards, 0);
+
+        // Check rewards per unit staked
+        assertEq(vaultAccount.rewardsAccPerUnitStaked, 0);  
+
+        // Check claimed rewards
+        assertEq(vaultAccount.totalClaimedRewards, 0);
+    }
 
         // --------------- d0:vault1:users ---------------
 
         // stale: user1's account was last updated at t16. no action taken by user since.
         /*function testUser1_ForVault1Account0_T36() public {}*/
 
-        // updated as part of unstake()
-        function testUser2_ForVault1Account0_T36() public {}
+        // updated at T36, via unstake()
+        function testUser2_ForVault1Account0_T36() public {
+            DataTypes.UserAccount memory userAccount = getUserAccount(user2, vaultId1, 0);
+            DataTypes.VaultAccount memory vaultAccount = getVaultAccount(vaultId1, 0);
+
+            //--- user2 last updated at t31: consider the emissions from t31-t36
+            uint256 stakedRP = user2Rp/2;
+            uint256 stakedTokens = user2Moca;
+            uint256 numOfNfts = 4;
+
+            // Check indices match vault@t36
+            assertEq(userAccount.index, vaultAccount.rewardsAccPerUnitStaked, "userIndex mismatch");
+            assertEq(userAccount.nftIndex, vaultAccount.nftIndex, "nftIndex mismatch");
+            assertEq(userAccount.rpIndex, vaultAccount.rpIndex, "rpIndex mismatch");
+
+            // Check accumulated rewards
+
+                // Calculate expected rewards for user1's staked tokens
+                uint256 prevUserIndex = user2Account0_T31.index;
+                uint256 prevAccStakingRewards = user2Account0_T31.accStakingRewards;
+                uint256 latestAccStakingRewards = calculateRewards(stakedTokens, vaultAccount.rewardsAccPerUnitStaked, prevUserIndex, 1E18) + prevAccStakingRewards;      
+                // Calculate expected rewards for nft staking
+                uint256 prevAccNftStakingRewards = user2Account0_T31.accNftStakingRewards;
+                uint256 latestAccNftStakingRewards = ((vaultAccount.nftIndex - user2Account0_T31.nftIndex) * numOfNfts) + prevAccNftStakingRewards; 
+                // Calculate expected rewards for rp staking
+                uint256 prevRpIndex = user2Account0_T31.rpIndex;
+                uint256 prevAccRealmPointsRewards = user2Account0_T31.accRealmPointsRewards;
+                uint256 latestAccRealmPointsRewards = calculateRewards(stakedRP, vaultAccount.rpIndex, prevRpIndex, 1E18) + prevAccRealmPointsRewards;
+
+            assertEq(userAccount.accStakingRewards, latestAccStakingRewards, "accStakingRewards mismatch"); 
+            assertEq(userAccount.accNftStakingRewards, latestAccNftStakingRewards, "accNftStakingRewards mismatch");
+            assertEq(userAccount.accRealmPointsRewards, latestAccRealmPointsRewards, "accRealmPointsRewards mismatch");
+
+            // Check claimed rewards
+            assertEq(userAccount.claimedStakingRewards, 0, "claimedStakingRewards mismatch");
+            assertEq(userAccount.claimedNftRewards, 0, "claimedNftRewards mismatch");
+            assertEq(userAccount.claimedRealmPointsRewards, 0, "claimedRealmPointsRewards mismatch");
+            assertEq(userAccount.claimedCreatorRewards, 0, "claimedCreatorRewards mismatch");
+            
+            //--------------------------------
+            
+            // view fn: user2 gets their share of total rewards
+            uint256 claimableRewards = pool.getClaimableRewards(user2, vaultId1, 0);
+            
+            uint256 expectedClaimableRewards = latestAccStakingRewards + latestAccNftStakingRewards + latestAccRealmPointsRewards;
+            if (user2 == pool.getVault(vaultId1).creator) expectedClaimableRewards += vaultAccount.accCreatorRewards;
+
+            assertEq(claimableRewards, expectedClaimableRewards, "claimableRewards mismatch"); 
+
+            // view fn should match account state
+            assertEq(claimableRewards, userAccount.accStakingRewards + userAccount.accNftStakingRewards + userAccount.accRealmPointsRewards, "viewFn accountState mismatch");
+        }
 
 
         // --------------- d0:vault2:users ---------------
 
-        // skipped: since stale as per T31
-        
+        // stale: user1's account was last updated at t16. no action taken by user since.
         /*function testUser1_ForVault2Account0_T36() public {}*/
-        /*function testUser2_ForVault2Account0_T36() public {}*/
+        
+        // stale: updated at T31, via migrateRp()
+        function testUser2_ForVault2Account0_T36() public {
+            DataTypes.UserAccount memory userAccount = getUserAccount(user2, vaultId2, 0);
+            DataTypes.VaultAccount memory vaultAccount = getVaultAccount(vaultId2, 0);
+
+            //--- user2 last updated at t31: consider the emissions from t31-t36
+            uint256 stakedRP = user2Rp/2;
+            uint256 stakedTokens = 0; // no tokens staked in vault2
+            uint256 numOfNfts = 0; // no NFTs staked in vault2
+
+            // Check indices match vault@t36
+            assertEq(userAccount.index, vaultAccount.rewardsAccPerUnitStaked, "userIndex mismatch");
+            assertEq(userAccount.nftIndex, vaultAccount.nftIndex, "nftIndex mismatch");
+            assertEq(userAccount.rpIndex, vaultAccount.rpIndex, "rpIndex mismatch");
+
+            // Check accumulated rewards
+
+                // Calculate expected rewards for user2's staked tokens 
+                //uint256 prevUserIndex = user2Account0_T31.index;
+                //uint256 prevAccStakingRewards = user2Account0_T31.accStakingRewards;
+                //uint256 latestAccStakingRewards = calculateRewards(stakedTokens, vaultAccount.rewardsAccPerUnitStaked, prevUserIndex, 1E18) + prevAccStakingRewards;      
+                uint256 latestAccStakingRewards = 0;
+                // Calculate expected rewards for nft staking
+                //uint256 prevAccNftStakingRewards = user2Account0_T31.accNftStakingRewards;
+                //uint256 latestAccNftStakingRewards = ((vaultAccount.nftIndex - user2Account0_T31.nftIndex) * numOfNfts) + prevAccNftStakingRewards; 
+                uint256 latestAccNftStakingRewards = 0;
+                // Calculate expected rewards for rp staking
+                //uint256 prevRpIndex = user2Vault2Account0_T31.rpIndex;
+                //uint256 prevAccRealmPointsRewards = user2Vault2Account0_T31.accRealmPointsRewards;
+                //uint256 latestAccRealmPointsRewards = calculateRewards(stakedRP, vaultAccount.rpIndex, prevRpIndex, 1E18) + prevAccRealmPointsRewards;
+                uint256 latestAccRealmPointsRewards = 0;
+
+            assertEq(userAccount.accStakingRewards, 0, "accStakingRewards mismatch"); 
+            assertEq(userAccount.accNftStakingRewards, 0, "accNftStakingRewards mismatch");
+            assertEq(userAccount.accRealmPointsRewards, latestAccRealmPointsRewards, "accRealmPointsRewards mismatch");
+
+            // Check claimed rewards
+            assertEq(userAccount.claimedStakingRewards, 0, "claimedStakingRewards mismatch");
+            assertEq(userAccount.claimedNftRewards, 0, "claimedNftRewards mismatch");
+            assertEq(userAccount.claimedRealmPointsRewards, 0, "claimedRealmPointsRewards mismatch");
+            assertEq(userAccount.claimedCreatorRewards, 0, "claimedCreatorRewards mismatch");
+            
+            //--------------------------------
+            
+            // view fn: user2 gets their share of total rewards
+            uint256 claimableRewards = pool.getClaimableRewards(user2, vaultId2, 0);
+            
+            uint256 expectedClaimableRewards = latestAccStakingRewards + latestAccNftStakingRewards + latestAccRealmPointsRewards;
+            if (user2 == pool.getVault(vaultId2).creator) expectedClaimableRewards += vaultAccount.accCreatorRewards;
+
+            assertEq(claimableRewards, expectedClaimableRewards, "claimableRewards mismatch"); 
+
+            // view fn should match account state
+            assertEq(claimableRewards, userAccount.accStakingRewards + userAccount.accNftStakingRewards + userAccount.accRealmPointsRewards, "viewFn accountState mismatch");
+        }
 
 
     // ---------------- distribution 1 ----------------
     
     // STARTED AT T21
-    function testDistribution1_T36() public {}
+    function testDistribution1_T36() public {
+        DataTypes.Distribution memory distribution = getDistribution(1);
+        
+        // static
+        assertEq(distribution.distributionId, 1);
+        assertEq(distribution.TOKEN_PRECISION, 1e18); 
+        assertEq(distribution.endTime, 100 + 21);
+        assertEq(distribution.startTime, 21);
+        assertEq(distribution.emissionPerSecond, 1 ether);
+        assertEq(distribution.manuallyEnded, 0);        
+        
+            // emissions for T31-T36; no change in pool.totalBoostedStakedTokens()
+            uint256 expectedTotalEmitted = 1 ether * (36 - 31);
+            uint256 indexDelta = expectedTotalEmitted * 1E18 / pool.totalBoostedStakedTokens();
+            uint256 expectedIndex = distribution1_T31.index + indexDelta;
+
+        // dynamic
+        assertEq(distribution.index, expectedIndex, "distribution index mismatch");
+        assertEq(distribution.totalEmitted, expectedTotalEmitted, "total emitted rewards mismatch");
+        assertEq(distribution.lastUpdateTimeStamp, 36, "last update timestamp mismatch");
+    }
+
     function testVault1Account1_T36() public {}
     
-    // vault2: stale as per T31
-    /**function testVault2Account1_T36() public {}*/
+    // vault2: acrrues no token rewards
+    function testVault2Account1_T36() public {}
 
         // --------------- d1:vault1:users ---------------
 
         // stale: user1's account was last updated at t16. no action taken by user since.
         /*function testUser1_ForVault1Account1_T36() public {}*/
 
-        // updated as part of unstake()
+        // updated as part of migrate()
         function testUser2_ForVault1Account1_T36() public {}
 
         // --------------- d1:vault2:users ---------------
 
         // stale: user1's account was last updated at t16. no action taken by user since.
         /*function testUser1_ForVault2Account1_T36() public {}*/
-    
+
+        // updated as part of migrate()
+        function testUser2_ForVault2Account1_T36() public {}
+
 
 }
 

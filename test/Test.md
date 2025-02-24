@@ -131,8 +131,8 @@ t = 31 [delta: 5]
  *both vaults updated due to migration: check both vaults and vaultAccounts for both distributions*
  
 t = 36 [delta: 5]
- user2 unstakes half of his tokens+2nfts [unstake]
- *vault2 updated due to unstake: can check vault2 and vaultAccounts for both distributions - maybe can drop due to t30 checks*
+ user2 unstakes half of his tokens+2nfts from vault1 [unstake]
+ *vault1 updated due to unstake: can check vault1 and vaultAccounts for both distributions - maybe can drop due to t30 checks*
 
 t = 41 [delta: 5]
  user3 stakes half of assets to vault2

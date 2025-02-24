@@ -757,14 +757,13 @@ library PoolLogic {
         // only update specified distribution, and its accounts
         (userAccount, vaultAccount, distribution) 
             = _viewUserAccount(userVaultAssets, userAccount, vault, vaultAccount, distribution, params);
-      
+
         //----------------------- calc. and update vault and user accounts ------------------------
 
         uint256 totalUnclaimedRewards;
         
         // staking MOCA rewards
         if (userAccount.accStakingRewards > userAccount.claimedStakingRewards) {
-
             uint256 unclaimedRewards = userAccount.accStakingRewards - userAccount.claimedStakingRewards;
             totalUnclaimedRewards += unclaimedRewards;
         }
@@ -777,20 +776,21 @@ library PoolLogic {
 
         // staking NFT rewards
         if (userAccount.accNftStakingRewards > userAccount.claimedNftRewards) {
-
             uint256 unclaimedNftRewards = userAccount.accNftStakingRewards - userAccount.claimedNftRewards;
             totalUnclaimedRewards += unclaimedNftRewards;
         }
 
         // creator rewards
         if (vault.creator == params.user) {
-
             uint256 unclaimedCreatorRewards = vaultAccount.accCreatorRewards - userAccount.claimedCreatorRewards;
             if(unclaimedCreatorRewards > 0) totalUnclaimedRewards += unclaimedCreatorRewards;
         }
         
         // rebase totalUnclaimedRewards to native precision
-        uint256 totalUnclaimedRewardsInNative = totalUnclaimedRewards * distribution.TOKEN_PRECISION / 1E18;
+        uint256 totalUnclaimedRewardsInNative;
+        if(totalUnclaimedRewards > 0) {
+            totalUnclaimedRewardsInNative = totalUnclaimedRewards * distribution.TOKEN_PRECISION / 1E18;
+        }
 
         return totalUnclaimedRewardsInNative;
     }
@@ -1207,12 +1207,12 @@ library PoolLogic {
         
         // get updated vaultAccount and distribution
         (DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _viewVaultAccount(vault, vaultAccount_, distribution_, params);
-        
+
         // 1E18 precision
         uint256 newUserIndex = vaultAccount.rewardsAccPerUnitStaked;
 
         // if this index has not been updated, the subsequent ones would not have. check once here, no need repeat
-        if(userAccount.index != newUserIndex) { 
+        if(newUserIndex > userAccount.index) { 
         
         // all rewards in 1E18 precision
             if(user.stakedTokens > 0) {
@@ -1266,7 +1266,7 @@ library PoolLogic {
             params.totalBoostedRealmPoints, 
             params.totalBoostedStakedTokens
         );
-        
+
         // vault already been updated by a prior txn; skip updating vaultAccount
         if(distribution.index == vaultAccount.index) return (vaultAccount, distribution);
 
@@ -1275,6 +1275,9 @@ library PoolLogic {
         
         // STAKING POWER: staked realm points | TOKENS: staked moca tokens
         uint256 boostedBalance = distribution.distributionId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
+        // nothing staked -> no rewards accrued, skip
+        if(boostedBalance == 0) return (vaultAccount, distribution);
+
         // Calculate rewards using the balance at the time they were accrued
         uint256 totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index, 1E18);
 
@@ -1292,7 +1295,6 @@ library PoolLogic {
         // nft fees accrued only if there were staked NFTs
         if(vault.stakedNfts > 0) {
             if(vault.nftFeeFactor > 0) {
-
                 // indexes are denominated in 1E18 | fees are kept in 1E18 during intermediate calculations
                 accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / params.PRECISION_BASE;
                 vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);   // nftIndex: rewardsAccPerNFT    
@@ -1302,7 +1304,6 @@ library PoolLogic {
         // rp fees accrued only if there were staked RP 
         if(vault.stakedRealmPoints > 0) {
             if(vault.realmPointsFeeFactor > 0) {
-
                 // indexes are denominated in 1E18 | fees are kept in 1E18 during intermediate calculations | realmPoints are denominated in 1E18
                 accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / params.PRECISION_BASE;
                 vaultAccount.rpIndex += (accRealmPointsFee * 1E18) / vault.stakedRealmPoints;              // rpIndex: rewardsAccPerRP
@@ -1316,7 +1317,9 @@ library PoolLogic {
         vaultAccount.accRealmPointsRewards += accRealmPointsFee;
 
         // reference for moca stakers to calc. rewards less of fees | rewardsAccPerUnitStaked expressed in 1E18 precision
-        vaultAccount.rewardsAccPerUnitStaked += ((totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) * 1E18) / vault.stakedTokens;
+        if(vault.stakedTokens > 0){
+            vaultAccount.rewardsAccPerUnitStaked += ((totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) * 1E18) / vault.stakedTokens;
+        }
 
         // update vaultIndex
         vaultAccount.index = distribution.index;
@@ -1339,7 +1342,7 @@ library PoolLogic {
         // index expressed in 1E18
         uint256 totalBoostedBalance = distribution.distributionId == 0 ? totalBoostedRealmPoints : totalBoostedStakedTokens;
         (uint256 nextIndex, uint256 currentTimestamp, uint256 emittedRewards) = _calculateDistributionIndex(distribution, totalBoostedBalance);
-        
+
         if (nextIndex > distribution.index) {
 
             distribution.index = nextIndex;

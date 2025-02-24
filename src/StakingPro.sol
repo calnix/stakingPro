@@ -1162,7 +1162,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         return users[user][vaultId];
     }
 
-    function getClaimableRewards(address user, bytes32 vaultId, uint256 distributionId) external view returns(uint256) {
+    function getClaimableRewards(address user, bytes32 vaultId, uint256 distributionId) external /*view*/ returns(uint256) {
 
         // staking not started: return early
         if (block.timestamp <= startTime) return 0;
@@ -1184,7 +1184,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     //note: remove after testing
-    function getViewVaultAccount(bytes32 vaultId, uint256 distributionId) external view returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory)  {
+    function getViewVaultAccount(bytes32 vaultId, uint256 distributionId) external /*view*/ returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory)  {
         DataTypes.UpdateAccountsIndexesParams memory params;
             //params.user = msg.sender;   
             params.vaultId = vaultId;
@@ -1199,7 +1199,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     //note: remove after testing
-    function getViewUserAccount(address user, bytes32 vaultId, uint256 distributionId) external view returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
+    function getViewUserAccount(address user, bytes32 vaultId, uint256 distributionId) external /*view*/ returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.user = user;   
             params.vaultId = vaultId;
