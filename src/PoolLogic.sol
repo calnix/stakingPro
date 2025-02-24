@@ -1023,32 +1023,34 @@ library PoolLogic {
         uint256 accNftStakingRewards;
         uint256 accRealmPointsRewards;
 
-        // if this index has not been updated, the subsequent ones would not have. check once here, no need repeat
-        if(userAccount.index != newUserIndex) { 
-            
-            if(user.stakedTokens > 0) {
-                
-                // users whom staked tokens are eligible for rewards less of fees
+        // users whom staked tokens are eligible for rewards less of fees
+        if(user.stakedTokens > 0) {
+            if(newUserIndex > userAccount.index) { 
                 accruedStakingRewards = _calculateRewards(user.stakedTokens, newUserIndex, userAccount.index, 1E18);
                 userAccount.accStakingRewards += accruedStakingRewards;
             }
+        }
 
-            uint256 userStakedNfts = user.tokenIds.length;
-            if(userStakedNfts > 0) {
-
-                // total accrued rewards from staking NFTs 
+        // user's accrued rewards for staked NFTs 
+        uint256 userStakedNfts = user.tokenIds.length;
+        if(userStakedNfts > 0) {
+            if(vaultAccount.nftIndex > userAccount.nftIndex){
                 accNftStakingRewards = (vaultAccount.nftIndex - userAccount.nftIndex) * userStakedNfts;
                 userAccount.accNftStakingRewards += accNftStakingRewards;
             }
+        }
 
-            if(user.stakedRealmPoints > 0){
-                
+        // user's accrued rewards from staked RP
+        if(user.stakedRealmPoints > 0){
+            // vaultAccount.rewardsAccPerUnitStaked could be incremented, w/out incrementing vaultAccount.rpIndex; 0 feeFactor.
+            if(vaultAccount.rpIndex > userAccount.rpIndex) {    
+            
                 // users whom staked RP are eligible for a portion of RP fees 
                 accRealmPointsRewards = _calculateRewards(user.stakedRealmPoints, vaultAccount.rpIndex, userAccount.rpIndex, 1E18);
                 userAccount.accRealmPointsRewards += accRealmPointsRewards;
             }
         }
-
+        
         // update user indexes | all in 1E18 precision
         userAccount.index = vaultAccount.rewardsAccPerUnitStaked;   // less of fees
         userAccount.nftIndex = vaultAccount.nftIndex;
@@ -1212,32 +1214,35 @@ library PoolLogic {
 
         // 1E18 precision
         uint256 newUserIndex = vaultAccount.rewardsAccPerUnitStaked;
-
-        // if this index has not been updated, the subsequent ones would not have. check once here, no need repeat
-        if(newUserIndex > userAccount.index) { 
         
-        // all rewards in 1E18 precision
+        // users whom staked tokens are eligible for rewards less of fees 
+        if(newUserIndex > userAccount.index) { 
             if(user.stakedTokens > 0) {
-                // users whom staked tokens are eligible for rewards less of fees 
                 uint256 accruedStakingRewards = _calculateRewards(user.stakedTokens, newUserIndex, userAccount.index, 1E18);
                 userAccount.accStakingRewards += accruedStakingRewards;
             }
-
-            uint256 userStakedNfts = user.tokenIds.length;
-            if(userStakedNfts > 0) {
-
-                // total accrued rewards from staking NFTs 
+        }
+        
+        // user's accrued rewards for staked NFTs 
+        uint256 userStakedNfts = user.tokenIds.length;
+        if(userStakedNfts > 0) {
+            if(vaultAccount.nftIndex > userAccount.nftIndex){
                 uint256 accNftStakingRewards = (vaultAccount.nftIndex - userAccount.nftIndex) * userStakedNfts;
                 userAccount.accNftStakingRewards += accNftStakingRewards;
             }
+        }
 
-            if(user.stakedRealmPoints > 0){
+        // user's accrued rewards from staked RP
+        if(user.stakedRealmPoints > 0){
+            // vaultAccount.rewardsAccPerUnitStaked could be incremented, w/out incrementing vaultAccount.rpIndex; 0 feeFactor.
+            if(vaultAccount.rpIndex > userAccount.rpIndex) {    
+
                 // users whom staked RP are eligible for a portion of RP fees 
                 uint256 accRealmPointsRewards = _calculateRewards(user.stakedRealmPoints, vaultAccount.rpIndex, userAccount.rpIndex, 1E18);
                 userAccount.accRealmPointsRewards += accRealmPointsRewards;
             }
         }
-
+        
         // update user indexes | all in 1E18 precision
         userAccount.index = vaultAccount.rewardsAccPerUnitStaked;   // less of fees
         userAccount.nftIndex = vaultAccount.nftIndex;
