@@ -990,7 +990,9 @@ library PoolLogic {
         vaultAccount.accRealmPointsRewards += accRealmPointsFee;
 
         // reference for moca stakers to calc. rewards less of fees | rewardsAccPerUnitStaked expressed in 1E18 precision
-        vaultAccount.rewardsAccPerUnitStaked += ((totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) * 1E18) / vault.stakedTokens;
+        if(vault.stakedTokens > 0) {    
+            vaultAccount.rewardsAccPerUnitStaked += ((totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) * 1E18) / vault.stakedTokens;
+        }
 
         // update vaultIndex
         vaultAccount.index = distribution.index;
@@ -1275,8 +1277,12 @@ library PoolLogic {
         
         // STAKING POWER: staked realm points | TOKENS: staked moca tokens
         uint256 boostedBalance = distribution.distributionId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
-        // nothing staked -> no rewards accrued, skip
-        if(boostedBalance == 0) return (vaultAccount, distribution);
+        
+        // nothing staked: update main reference index and return
+        if(boostedBalance == 0) {
+            vaultAccount.index = distribution.index;
+            return (vaultAccount, distribution);  
+        }
 
         // Calculate rewards using the balance at the time they were accrued
         uint256 totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index, 1E18);
