@@ -2276,8 +2276,8 @@ contract StateT31_User2MigrateRpToVault2Test is StateT31_User2MigrateRpToVault2 
 
             // calc. newly accrued rewards       
             uint256 boostFactor = pool.PRECISION_BASE() + (stakedNfts * pool.NFT_MULTIPLIER());
-            uint256 boostedRpBalance = stakedTokens * boostFactor / pool.PRECISION_BASE();
-            uint256 newlyAccRewards = calculateRewards(boostedRpBalance, distribution.index, prevVaultIndex, 1E18); 
+            uint256 boostedTokenBalance = stakedTokens * boostFactor / pool.PRECISION_BASE();
+            uint256 newlyAccRewards = calculateRewards(boostedTokenBalance, distribution.index, prevVaultIndex, 1E18); 
             // eval. rounding error
             uint256 newlyAccRewardsExpected = 10 ether;                   // d1 started @t21
             assertApproxEqAbs(newlyAccRewards, newlyAccRewardsExpected, 1800);

@@ -135,7 +135,7 @@ t = 36 [delta: 5]
  *vault1 updated due to unstake: can check vault1 and vaultAccounts for both distributions - maybe can drop due to t30 checks*
 
 t = 41 [delta: 5]
- user3 stakes half of assets to vault2
+ user2 stakes half of assets to vault2
 
 t = 46 [delta: 5]
  vault2: updateMaximumFeeFactor
