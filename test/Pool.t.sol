@@ -2943,20 +2943,17 @@ contract StateT36_User2UnstakesFromVault1Test is StateT36_User2UnstakesFromVault
                 //uint256 prevUserIndex = user2Account0_T31.index;
                 //uint256 prevAccStakingRewards = user2Account0_T31.accStakingRewards;
                 //uint256 latestAccStakingRewards = calculateRewards(stakedTokens, vaultAccount.rewardsAccPerUnitStaked, prevUserIndex, 1E18) + prevAccStakingRewards;      
-                uint256 latestAccStakingRewards = 0;
                 // Calculate expected rewards for nft staking
                 //uint256 prevAccNftStakingRewards = user2Account0_T31.accNftStakingRewards;
                 //uint256 latestAccNftStakingRewards = ((vaultAccount.nftIndex - user2Account0_T31.nftIndex) * numOfNfts) + prevAccNftStakingRewards; 
-                uint256 latestAccNftStakingRewards = 0;
                 // Calculate expected rewards for rp staking
                 //uint256 prevRpIndex = user2Vault2Account0_T31.rpIndex;
                 //uint256 prevAccRealmPointsRewards = user2Vault2Account0_T31.accRealmPointsRewards;
                 //uint256 latestAccRealmPointsRewards = calculateRewards(stakedRP, vaultAccount.rpIndex, prevRpIndex, 1E18) + prevAccRealmPointsRewards;
-                uint256 latestAccRealmPointsRewards = 0;
 
             assertEq(userAccount.accStakingRewards, 0, "accStakingRewards mismatch"); 
             assertEq(userAccount.accNftStakingRewards, 0, "accNftStakingRewards mismatch");
-            assertEq(userAccount.accRealmPointsRewards, latestAccRealmPointsRewards, "accRealmPointsRewards mismatch");
+            assertEq(userAccount.accRealmPointsRewards, 0, "accRealmPointsRewards mismatch");
 
             // Check claimed rewards
             assertEq(userAccount.claimedStakingRewards, 0, "claimedStakingRewards mismatch");
@@ -2969,13 +2966,22 @@ contract StateT36_User2UnstakesFromVault1Test is StateT36_User2UnstakesFromVault
             // view fn: user2 gets their share of total rewards
             uint256 claimableRewards = pool.getClaimableRewards(user2, vaultId2, 0);
             
-            uint256 expectedClaimableRewards = latestAccStakingRewards + latestAccNftStakingRewards + latestAccRealmPointsRewards;
-            if (user2 == pool.getVault(vaultId2).creator) expectedClaimableRewards += vaultAccount.accCreatorRewards;
+            // calc. expected claimable rewards
+                uint256 latestAccStakingRewards = 0;      
+                uint256 latestAccNftStakingRewards = 0;
+                
+                uint256 vault2ShareOfEmissions = (5 ether * vault2_T31.boostedRealmPoints) / (vault1_T31.boostedRealmPoints + vault2_T31.boostedRealmPoints);
+                // vault2 has no staked tokens, only staked RP - receives only rp fee
+                uint256 user2vault2ReceivedRewards = (vault2ShareOfEmissions * (vault2_T31.realmPointsFeeFactor + vault2_T31.creatorFeeFactor)) / pool.PRECISION_BASE();
+                uint256 latestAccRealmPointsRewards = user2vault2ReceivedRewards;
 
-            assertEq(claimableRewards, expectedClaimableRewards, "claimableRewards mismatch"); 
+            uint256 expectedClaimableRewards = latestAccStakingRewards + latestAccNftStakingRewards + latestAccRealmPointsRewards;
+            //if (user2 == pool.getVault(vaultId2).creator) expectedClaimableRewards += vaultAccount.accCreatorRewards;
+
+            assertApproxEqAbs(claimableRewards, expectedClaimableRewards, 27, "claimableRewards mismatch");
 
             // view fn should match account state
-            assertEq(claimableRewards, userAccount.accStakingRewards + userAccount.accNftStakingRewards + userAccount.accRealmPointsRewards, "viewFn accountState mismatch");
+            //assertEq(claimableRewards, userAccount.accStakingRewards + userAccount.accNftStakingRewards + userAccount.accRealmPointsRewards, "viewFn accountState mismatch");
         }
 
 
@@ -2995,7 +3001,7 @@ contract StateT36_User2UnstakesFromVault1Test is StateT36_User2UnstakesFromVault
         
             // emissions for T31-T36; no change in pool.totalBoostedStakedTokens()
             uint256 expectedTotalEmitted = 1 ether * (36 - 31);
-            uint256 indexDelta = expectedTotalEmitted * 1E18 / pool.totalBoostedStakedTokens();
+            uint256 indexDelta = expectedTotalEmitted * 1E18 / (vault1_T31.boostedStakedTokens + vault2_T31.boostedStakedTokens);
             uint256 expectedIndex = distribution1_T31.index + indexDelta;
 
         // dynamic

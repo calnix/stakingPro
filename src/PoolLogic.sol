@@ -744,7 +744,7 @@ library PoolLogic {
 
         DataTypes.UpdateAccountsIndexesParams memory params,
         uint256 distributionId
-    ) external view returns (uint256) {
+    ) external /*view*/ returns (uint256) {
         
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
@@ -900,7 +900,6 @@ library PoolLogic {
 
         //note: indexes are denominated in 1E18
         uint256 nextDistributionIndex = ((emittedRewardsRebased * 1E18) / totalBalance) + distribution.index;        
-
         return (nextDistributionIndex, currentTimestamp, emittedRewards);
     }
 
@@ -1256,7 +1255,7 @@ library PoolLogic {
         DataTypes.VaultAccount memory vaultAccount, 
         DataTypes.Distribution memory distribution_,
         DataTypes.UpdateAccountsIndexesParams memory params
-    ) external view returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
+    ) external /*view*/ returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
         return _viewVaultAccount(vault, vaultAccount, distribution_, params);
     }
 
@@ -1352,6 +1351,7 @@ library PoolLogic {
 
         // index expressed in 1E18
         uint256 totalBoostedBalance = distribution.distributionId == 0 ? totalBoostedRealmPoints : totalBoostedStakedTokens;
+
         (uint256 nextIndex, uint256 currentTimestamp, uint256 emittedRewards) = _calculateDistributionIndex(distribution, totalBoostedBalance);
 
         if (nextIndex > distribution.index) {
