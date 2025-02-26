@@ -14,3 +14,5 @@ therefore, nftRegistry cannot take in pool address as constructor.
 ## 3. can i expressed rp in integer values?
 
 - will it round to 0, if so where?
+
+## 4. add checkls for assets transfers

@@ -6,6 +6,9 @@ import "./Pool.t.sol";
 abstract contract StateT36_User2UnstakesFromVault1 is StateT31_User2MigrateRpToVault2 {
     
     // for reference
+    DataTypes.Vault vault1_T36; 
+    DataTypes.Vault vault2_T36;
+
     DataTypes.Distribution distribution0_T36;
     DataTypes.Distribution distribution1_T36;
     //vault1
@@ -14,12 +17,19 @@ abstract contract StateT36_User2UnstakesFromVault1 is StateT31_User2MigrateRpToV
     //vault2
     DataTypes.VaultAccount vault2Account0_T36;
     DataTypes.VaultAccount vault2Account1_T36;
-    //user1
+    //user1+vault1
     DataTypes.UserAccount user1Account0_T36;
     DataTypes.UserAccount user1Account1_T36;
-    //user2
+    //user2+vault1
     DataTypes.UserAccount user2Account0_T36;
     DataTypes.UserAccount user2Account1_T36;
+    //user1+vault2
+    DataTypes.UserAccount user1Vault2Account0_T36;
+    DataTypes.UserAccount user1Vault2Account1_T36;
+    //user2+vault2
+    DataTypes.UserAccount user2Vault2Account0_T36;
+    DataTypes.UserAccount user2Vault2Account1_T36;
+
 
     function setUp() public virtual override {
         super.setUp();
@@ -36,6 +46,9 @@ abstract contract StateT36_User2UnstakesFromVault1 is StateT31_User2MigrateRpToV
         vm.stopPrank();
 
         // save state
+        vault1_T36 = pool.getVault(vaultId1);
+        vault2_T36 = pool.getVault(vaultId2);
+        
         distribution0_T36 = getDistribution(0);
         distribution1_T36 = getDistribution(1);
         vault1Account0_T36 = getVaultAccount(vaultId1, 0);
@@ -46,6 +59,10 @@ abstract contract StateT36_User2UnstakesFromVault1 is StateT31_User2MigrateRpToV
         user1Account1_T36 = getUserAccount(user1, vaultId1, 1);
         user2Account0_T36 = getUserAccount(user2, vaultId1, 0);
         user2Account1_T36 = getUserAccount(user2, vaultId1, 1);
+        user1Vault2Account0_T36 = getUserAccount(user1, vaultId2, 0);
+        user1Vault2Account1_T36 = getUserAccount(user1, vaultId2, 1);
+        user2Vault2Account0_T36 = getUserAccount(user2, vaultId2, 0);
+        user2Vault2Account1_T36 = getUserAccount(user2, vaultId2, 1);
     }   
 }   
 
@@ -227,22 +244,22 @@ contract StateT36_User2UnstakesFromVault1Test is StateT36_User2UnstakesFromVault
         assertEq(vaultAccount.nftIndex, latestNftIndex);  // 4 nfts staked frm t31-t36
         assertEq(vaultAccount.rpIndex, latestRpIndex);    
 
-        // calc. accumulated rewards
-        uint256 totalAccRewards = newlyAccRewards + vault1Account0_T31.totalAccRewards;
-        // calc. accumulated fees
-        uint256 latestAccCreatorFee = newlyAccCreatorFee + vault1Account0_T31.accCreatorRewards;
-        uint256 latestAccTotalNftFee = newlyAccTotalNftFee + vault1Account0_T31.accNftStakingRewards;
-        uint256 latestAccRealmPointsFee = newlyAccRealmPointsFee + vault1Account0_T31.accRealmPointsRewards;
+            // calc. accumulated rewards
+            uint256 totalAccRewards = newlyAccRewards + vault1Account0_T31.totalAccRewards;
+            // calc. accumulated fees
+            uint256 latestAccCreatorFee = newlyAccCreatorFee + vault1Account0_T31.accCreatorRewards;
+            uint256 latestAccTotalNftFee = newlyAccTotalNftFee + vault1Account0_T31.accNftStakingRewards;
+            uint256 latestAccRealmPointsFee = newlyAccRealmPointsFee + vault1Account0_T31.accRealmPointsRewards;
 
-        // heck accumulated rewards + fees
+        // check accumulated rewards + fees
         assertEq(vaultAccount.totalAccRewards, totalAccRewards);
         assertEq(vaultAccount.accCreatorRewards, latestAccCreatorFee); 
         assertEq(vaultAccount.accNftStakingRewards, latestAccTotalNftFee); 
         assertEq(vaultAccount.accRealmPointsRewards, latestAccRealmPointsFee); 
 
-        // rewardsAccPerUnitStaked: for moca stakers
-        uint256 latestAccRewardsLessOfFees = newlyAccRewards - newlyAccCreatorFee - newlyAccTotalNftFee - newlyAccRealmPointsFee;
-        uint256 expectedRewardsAccPerUnitStaked = (latestAccRewardsLessOfFees * 1E18 / stakedTokens) + vault1Account0_T31.rewardsAccPerUnitStaked;
+            // rewardsAccPerUnitStaked: for moca stakers
+            uint256 latestAccRewardsLessOfFees = newlyAccRewards - newlyAccCreatorFee - newlyAccTotalNftFee - newlyAccRealmPointsFee;
+            uint256 expectedRewardsAccPerUnitStaked = (latestAccRewardsLessOfFees * 1E18 / stakedTokens) + vault1Account0_T31.rewardsAccPerUnitStaked;
 
         // rewardsAccPerUnitStaked
         assertEq(vaultAccount.rewardsAccPerUnitStaked, expectedRewardsAccPerUnitStaked); 
@@ -628,4 +645,65 @@ contract StateT36_User2UnstakesFromVault1Test is StateT36_User2UnstakesFromVault
             //--------------------------------
             
         }
+ /*   
+    // connector: TODO
+    function testUser2CanStakeToVault2() public {
+
+        // initial token balances
+        uint256 initialUserMocaBalance = mocaToken.balanceOf(user2);
+        //uint256 initialVaultMocaBalance = mocaToken.balanceOf(vaultId2);
+        uint256 initialPoolMocaBalance = mocaToken.balanceOf(address(pool));
+
+        // Check NFT ownership via registry
+        address owner0; bytes32 vaultIdOfTokenId0;
+        address owner1; bytes32 vaultIdOfTokenId1;
+        (owner0, vaultIdOfTokenId0) = nftRegistry.nfts(user2NftsArray[0]);
+        (owner1, vaultIdOfTokenId1) = nftRegistry.nfts(user2NftsArray[1]);
+        assertEq(owner0, user2); assertEq(vaultIdOfTokenId0, 0);
+        assertEq(owner1, user2); assertEq(vaultIdOfTokenId1, 0);
+        
+        uint256[] memory nftsToStake = new uint256[](2);
+        nftsToStake[0] = user2NftsArray[0];
+        nftsToStake[1] = user2NftsArray[1];
+
+        // stake
+        vm.startPrank(user2);
+            mocaToken.approve(address(pool), user2Moca/2);
+            pool.stakeTokens(vaultId2, user2Moca/2);
+            pool.stakeNfts(vaultId2, nftsToStake);
+        vm.stopPrank();
+
+        // Check token transfers
+        assertEq(mocaToken.balanceOf(user2), initialUserMocaBalance - user2Moca/2);
+        assertEq(mocaToken.balanceOf(address(pool)), initialPoolMocaBalance + user2Moca/2);
+
+        // Check NFT ownership via registry
+        (owner0, vaultIdOfTokenId0) = nftRegistry.nfts(user2NftsArray[0]);
+        (owner1, vaultIdOfTokenId1) = nftRegistry.nfts(user2NftsArray[1]);
+        assertEq(owner0, address(pool));
+        assertEq(owner1, address(pool));
+        assertEq(vaultIdOfTokenId0, vaultId2);
+        assertEq(vaultIdOfTokenId1, vaultId2);
+
+        // Check vault2 assets
+        DataTypes.Vault memory vault2 = pool.getVault(vaultId2);
+        assertEq(vault2.stakedTokens, user2Moca/2);
+        assertEq(vault2.stakedRealmPoints, user2Rp/2);
+        assertEq(vault2.stakedNfts, 2);
+
+        // Check boosted values
+        uint256 boostFactor = pool.PRECISION_BASE() + (vault2.stakedNfts * pool.NFT_MULTIPLIER());
+        uint256 expectedBoostedRp = (vault2.stakedRealmPoints * boostFactor) / pool.PRECISION_BASE();
+        uint256 expectedBoostedTokens = (vault2.stakedTokens * boostFactor) / pool.PRECISION_BASE();
+
+        assertEq(vault2.totalBoostFactor, boostFactor);
+        assertEq(vault2.boostedRealmPoints, expectedBoostedRp);
+        assertEq(vault2.boostedStakedTokens, expectedBoostedTokens);
+
+        // Check pool totals
+        assertEq(pool.totalStakedTokens(), user2Moca + user1Moca);
+        assertEq(pool.totalStakedRealmPoints(), user2Rp + user1Rp);
+        //assertEq(pool.totalBoostedStakedTokens(), expectedBoostedTokens);
+        //assertEq(pool.totalBoostedRealmPoints(), expectedBoostedRp);
+    }*/
 }
