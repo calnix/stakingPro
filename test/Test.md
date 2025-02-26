@@ -138,10 +138,15 @@ t = 41 [delta: 5]
  user2 stakes half of assets to vault2
 
 t = 46 [delta: 5]
- vault2: updateMaximumFeeFactor
+ vault1: updateVaultFees by user1
+ vault2: updateVaultFees by user2
+ all vaults and users are updated - sanity test all
+ [fees are dropped and increased proportionally, net transfer from creator to others]
 
 t = 51 [delta: 5]
- vault1: activateCooldown
+ vault1: updateVaultFees by user1
+ just to trigger update, to check that updated fees are applied
+ [creator fees are dropped entirely; other fees remain unchanged]
 
 t = 56 [delta: 5]
  vault1: endVaults
@@ -159,8 +164,9 @@ split timeline fork
 1. endDistribution + claimRewards
 2. endContract + claimRewards
 3. update NFT multiplier
-4. updateMinimumRealmPoints
-5. emergencyExit
+4. updateMaximumFeeFactor
+5. updateMinimumRealmPoints
+6. emergencyExit
 
 claimRewards [after end contract]
 =========== [can i fork?]

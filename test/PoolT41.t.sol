@@ -30,7 +30,7 @@ abstract contract StateT41_User2StakesToVault2 is StateT36_User2UnstakesFromVaul
     DataTypes.UserAccount user2Vault2Account0_T41;
     DataTypes.UserAccount user2Vault2Account1_T41;
 
-    function setUp() public override {
+    function setUp() public virtual override {
         super.setUp();
 
         // set t41
