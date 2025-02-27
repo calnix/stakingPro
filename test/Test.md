@@ -138,26 +138,47 @@ t = 41 [delta: 5]
  user2 stakes half of assets to vault2
 
 t = 46 [delta: 5]
- vault1: both users claims rewards
- vault2: both users claims rewards
- all vaults and users are updated - sanity test all
+ both vaults will accrue rewards from both distributions -- check
+ vault1: updateVaultFees by user1
+ vault2: updateVaultFees by user2
+ updated: 
+ - both distributions updated
+ - both vault accounts updated
+ - user1+vault1 updated
+ - user2+vault1 NOT updated
+ - user1+vault2 NOT updated
+ - user2+vault2 updated
  [fees are dropped and increased proportionally, net transfer from creator to others]
 
 t = 51 [delta: 5]
  vault1: updateVaultFees by user1
- just to trigger update, to check that updated fees are applied
+ vault2: updateVaultFees by user2
  [creator fees are dropped entirely; other fees remain unchanged]
 
 t = 56 [delta: 5]
- vault1: endVaults
+ vault1: both users claims rewards, for d1
+ vault2: both users claims rewards, for d1
+ - only d1 is updated; d0 is not updated
+ - vaults accounts for d1 are updated
+ - user accounts for d1 are updated
+ - user accounts for d0 are NOT updated
+  *distribution0 cannot be claimed from. so updateVaultFees to check accumulated rewards for user accounts*
 
 t = 61 [delta: 5]
- updateVaultCooldown
+ vault1: endVaults
 
 t = 66 [delta: 5]
- vault2: activateCooldown
+updateVaultCooldown
 
 t = 71 [delta: 5]
+ vault2: activateCooldown
+
+t = 76 [delta: 5]
+ vault2: endVaults
+
+t = 81 [delta: 5]
+ updateDistribution
+
 
 ---
 split timeline fork

@@ -18,11 +18,11 @@ abstract contract StateT41_User2StakesToVault2 is StateT36_User2UnstakesFromVaul
     DataTypes.VaultAccount vault2Account0_T41;
     DataTypes.VaultAccount vault2Account1_T41;
     //user1+vault1
-    DataTypes.UserAccount user1Account0_T41;
-    DataTypes.UserAccount user1Account1_T41;
+    DataTypes.UserAccount user1Vault1Account0_T41;
+    DataTypes.UserAccount user1Vault1Account1_T41;
     //user2+vault1
-    DataTypes.UserAccount user2Account0_T41;
-    DataTypes.UserAccount user2Account1_T41;
+    DataTypes.UserAccount user2Vault1Account0_T41;
+    DataTypes.UserAccount user2Vault1Account1_T41;
     //user1+vault2
     DataTypes.UserAccount user1Vault2Account0_T41;
     DataTypes.UserAccount user1Vault2Account1_T41;
@@ -57,10 +57,10 @@ abstract contract StateT41_User2StakesToVault2 is StateT36_User2UnstakesFromVaul
         vault1Account1_T41 = getVaultAccount(vaultId1, 1);  
         vault2Account0_T41 = getVaultAccount(vaultId2, 0);
         vault2Account1_T41 = getVaultAccount(vaultId2, 1);
-        user1Account0_T41 = getUserAccount(user1, vaultId1, 0);
-        user1Account1_T41 = getUserAccount(user1, vaultId1, 1);
-        user2Account0_T41 = getUserAccount(user2, vaultId1, 0);
-        user2Account1_T41 = getUserAccount(user2, vaultId1, 1);
+        user1Vault1Account0_T41 = getUserAccount(user1, vaultId1, 0);
+        user1Vault1Account1_T41 = getUserAccount(user1, vaultId1, 1);
+        user2Vault1Account0_T41 = getUserAccount(user2, vaultId1, 0);
+        user2Vault1Account1_T41 = getUserAccount(user2, vaultId1, 1);
         user1Vault2Account0_T41 = getUserAccount(user1, vaultId2, 0);
         user1Vault2Account1_T41 = getUserAccount(user1, vaultId2, 1);
         user2Vault2Account0_T41 = getUserAccount(user2, vaultId2, 0);
@@ -399,7 +399,7 @@ contract StateT41_User2StakesToVault2Test is StateT41_User2StakesToVault2 {
     // ---------------- distribution 1 ----------------
 
     // STARTED AT T21
-    function testDistribution1_T36() public {
+    function testDistribution1_T41() public {
         DataTypes.Distribution memory distribution = getDistribution(1);
         
         // static
@@ -638,6 +638,8 @@ contract StateT41_User2StakesToVault2Test is StateT41_User2StakesToVault2 {
             assertEq(claimableRewards, 0, "claimableRewards mismatch"); 
         }
 
-    // TODO: connector, claimRewards() test emits, etc
+    
+
+    // TODO: connector: updateVaultFees() test
 
 }

@@ -1162,7 +1162,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         return users[user][vaultId];
     }
 
-    function getClaimableRewards(address user, bytes32 vaultId, uint256 distributionId) external /*view*/ returns(uint256) {
+    function getClaimableRewards(address user, bytes32 vaultId, uint256 distributionId) external view returns(uint256) {
 
         // staking not started: return early
         if (block.timestamp <= startTime) return 0;

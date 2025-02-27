@@ -744,7 +744,7 @@ library PoolLogic {
 
         DataTypes.UpdateAccountsIndexesParams memory params,
         uint256 distributionId
-    ) external /*view*/ returns (uint256) {
+    ) external view returns (uint256) {
         
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
