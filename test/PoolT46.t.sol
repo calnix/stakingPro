@@ -70,7 +70,6 @@ abstract contract StateT46BothUsersClaimRewards is StateT41_User2StakesToVault2 
         user2Vault2Account0_T46 = getUserAccount(user2, vaultId2, 0);
         user2Vault2Account1_T46 = getUserAccount(user2, vaultId2, 1);
     }
-
 }
 
 /** check assets: T46
@@ -262,8 +261,8 @@ contract StateT46BothUsersClaimRewardsTest is StateT46BothUsersClaimRewards {
         // rewardsAccPerUnitStaked
         assertEq(vaultAccount.rewardsAccPerUnitStaked, expectedRewardsAccPerUnitStaked); 
 
-        // totalClaimedRewards
-        assertEq(vaultAccount.totalClaimedRewards, 0);
+        // totalClaimedRewards: all claimed by all users@T46
+        assertEq(vaultAccount.totalClaimedRewards, totalAccRewards, "totalClaimedRewards mismatch");
     }
     
     function testVault2Account0_T46() public {
@@ -330,8 +329,8 @@ contract StateT46BothUsersClaimRewardsTest is StateT46BothUsersClaimRewards {
         // rewardsAccPerUnitStaked
         assertEq(vaultAccount.rewardsAccPerUnitStaked, expectedRewardsAccPerUnitStaked, "rewardsAccPerUnitStaked mismatch"); 
 
-        // totalClaimedRewards
-        assertEq(vaultAccount.totalClaimedRewards, 0, "totalClaimedRewards mismatch");
+        // totalClaimedRewards: all claimed by all users@T46
+        assertEq(vaultAccount.totalClaimedRewards, totalAccRewards, "totalClaimedRewards mismatch");
     }
 
         // --------------- d0:vault1:users --------------- 
@@ -368,11 +367,11 @@ contract StateT46BothUsersClaimRewardsTest is StateT46BothUsersClaimRewards {
             assertEq(userAccount.accNftStakingRewards, latestAccNftStakingRewards, "accNftStakingRewards mismatch"); // 0
             assertEq(userAccount.accRealmPointsRewards, latestAccRealmPointsRewards, "accRealmPointsRewards mismatch");
         
-            // Check claimed rewards
-            assertEq(userAccount.claimedStakingRewards, 0, "claimedStakingRewards mismatch");
-            assertEq(userAccount.claimedNftRewards, 0, "claimedNftRewards mismatch");
-            assertEq(userAccount.claimedRealmPointsRewards, 0, "claimedRealmPointsRewards mismatch");
-            assertEq(userAccount.claimedCreatorRewards, 0, "claimedCreatorRewards mismatch");
+            // Check claimed rewards: user1 claimed all rewards from vault1@T46
+            assertEq(userAccount.claimedStakingRewards, latestAccStakingRewards, "claimedStakingRewards mismatch");
+            assertEq(userAccount.claimedNftRewards, latestAccNftStakingRewards, "claimedNftRewards mismatch");
+            assertEq(userAccount.claimedRealmPointsRewards, latestAccRealmPointsRewards, "claimedRealmPointsRewards mismatch");
+            assertEq(userAccount.claimedCreatorRewards, vault1Account0_T46.accCreatorRewards, "claimedCreatorRewards mismatch");
         }
 
         function testUser2_ForVault1Account0_T46() public {
@@ -408,11 +407,11 @@ contract StateT46BothUsersClaimRewardsTest is StateT46BothUsersClaimRewards {
             assertEq(userAccount.accNftStakingRewards, latestAccNftStakingRewards, "accNftStakingRewards mismatch");
             assertEq(userAccount.accRealmPointsRewards, latestAccRealmPointsRewards, "accRealmPointsRewards mismatch");
 
-            // Check claimed rewards
-            assertEq(userAccount.claimedStakingRewards, 0, "claimedStakingRewards mismatch");
-            assertEq(userAccount.claimedNftRewards, 0, "claimedNftRewards mismatch");
-            assertEq(userAccount.claimedRealmPointsRewards, 0, "claimedRealmPointsRewards mismatch");
-            assertEq(userAccount.claimedCreatorRewards, 0, "claimedCreatorRewards mismatch");
+            // Check claimed rewards: user2 claimed all rewards from vault1@T46
+            assertEq(userAccount.claimedStakingRewards, latestAccStakingRewards, "claimedStakingRewards mismatch");
+            assertEq(userAccount.claimedNftRewards, latestAccNftStakingRewards, "claimedNftRewards mismatch");
+            assertEq(userAccount.claimedRealmPointsRewards, latestAccRealmPointsRewards, "claimedRealmPointsRewards mismatch");
+            assertEq(userAccount.claimedCreatorRewards, 0, "claimedCreatorRewards mismatch");   //user 2 did not create vault
         }
 
         // --------------- d0:vault2:user2 ---------------
@@ -475,11 +474,14 @@ contract StateT46BothUsersClaimRewardsTest is StateT46BothUsersClaimRewards {
             assertEq(userAccount.accNftStakingRewards, latestAccNftStakingRewards, "accNftStakingRewards mismatch");
             assertEq(userAccount.accRealmPointsRewards, latestAccRealmPointsRewards, "accRealmPointsRewards mismatch");
 
-            // Check claimed rewards
-            assertEq(userAccount.claimedStakingRewards, 0, "claimedStakingRewards mismatch");
-            assertEq(userAccount.claimedNftRewards, 0, "claimedNftRewards mismatch");
-            assertEq(userAccount.claimedRealmPointsRewards, 0, "claimedRealmPointsRewards mismatch");
-            assertEq(userAccount.claimedCreatorRewards, 0, "claimedCreatorRewards mismatch");
+            // Check claimed rewards: user2 claimed all rewards from vault2@T46
+            assertEq(userAccount.claimedStakingRewards, latestAccStakingRewards, "claimedStakingRewards mismatch");
+            assertEq(userAccount.claimedNftRewards, latestAccNftStakingRewards, "claimedNftRewards mismatch");
+            assertEq(userAccount.claimedRealmPointsRewards, latestAccRealmPointsRewards, "claimedRealmPointsRewards mismatch");
+            assertEq(userAccount.claimedCreatorRewards, vault2Account0_T46.accCreatorRewards, "claimedCreatorRewards mismatch");    // user2 -> vault2 creator
         }
+
+
+    // ---------------- distribution 1 ----------------
 
 }
