@@ -628,7 +628,7 @@ contract StateT46BothUsersClaimRewardsTest is StateT46BothVaultsFeesUpdated {
         // Check rewardsAccPerUnitStaked
         assertEq(vaultAccount.rewardsAccPerUnitStaked, expectedRewardsAccPerUnitStaked, "rewardsAccPerUnitStaked mismatch");
 
-        // Check totalClaimedRewards: both users claimed at T46
+        // Check totalClaimedRewards
         assertEq(vaultAccount.totalClaimedRewards, 0, "totalClaimedRewards mismatch");
     }
 
@@ -689,7 +689,7 @@ contract StateT46BothUsersClaimRewardsTest is StateT46BothVaultsFeesUpdated {
 
         assertEq(vaultAccount.rewardsAccPerUnitStaked, expectedRewardsAccPerUnitStaked, "rewardsAccPerUnitStaked mismatch");
 
-        // Check totalClaimedRewards: both users claimed at T46
+        // Check totalClaimedRewards
         assertEq(vaultAccount.totalClaimedRewards, 0, "totalClaimedRewards mismatch");
     }
 
@@ -846,7 +846,7 @@ contract StateT46BothUsersClaimRewardsTest is StateT46BothVaultsFeesUpdated {
             assertEq(userAccount.nftIndex, vaultAccount.nftIndex, "nftIndex mismatch");
             assertEq(userAccount.rpIndex, vaultAccount.rpIndex, "rpIndex mismatch");
 
-            // Check accumulated rewards: NONE, since no stakedTokens
+            // Check accumulated rewards
                 uint256 prevUserIndex = user2Vault2Account1_T41.index;
                 uint256 prevUserNftIndex = user2Vault2Account1_T41.nftIndex;
                 uint256 prevUserRpIndex = user2Vault2Account1_T41.rpIndex;
