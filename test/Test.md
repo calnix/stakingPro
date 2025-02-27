@@ -138,8 +138,8 @@ t = 41 [delta: 5]
  user2 stakes half of assets to vault2
 
 t = 46 [delta: 5]
- vault1: updateVaultFees by user1
- vault2: updateVaultFees by user2
+ vault1: both users claims rewards
+ vault2: both users claims rewards
  all vaults and users are updated - sanity test all
  [fees are dropped and increased proportionally, net transfer from creator to others]
 

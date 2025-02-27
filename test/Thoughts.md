@@ -16,3 +16,5 @@ therefore, nftRegistry cannot take in pool address as constructor.
 - will it round to 0, if so where?
 
 ## 4. add checkls for assets transfers
+
+## 5. should accounts be updated on creation? how are they to be updated before 1st stake?

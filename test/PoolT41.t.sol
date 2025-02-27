@@ -352,11 +352,10 @@ contract StateT41_User2StakesToVault2Test is StateT41_User2StakesToVault2 {
         // stale: vault1 accounts are stale at t36 - no action taken since
         /*function testUser2_ForVault1Account0_T41() public {}*/
 
-        // --------------- d0:vault2:users ---------------
-
-        // stale: user1's account was last updated at t16. no action taken by user since.
-        /*function testUser1_ForVault2Account0_T41() public {}*/
+        // --------------- d0:vault2:user2 ---------------
         
+        // user1 does not have any assets in vault2
+
         // updated at T41
         function testUser2_ForVault2Account0_T41() public {
             DataTypes.UserAccount memory userAccount = getUserAccount(user2, vaultId2, 0);
@@ -639,5 +638,6 @@ contract StateT41_User2StakesToVault2Test is StateT41_User2StakesToVault2 {
             assertEq(claimableRewards, 0, "claimableRewards mismatch"); 
         }
 
+    // TODO: connector, claimRewards() test emits, etc
 
 }
