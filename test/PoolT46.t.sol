@@ -3,7 +3,7 @@ pragma solidity ^0.8.26;
 
 import "./PoolT41.t.sol";
 
-abstract contract StateT46BothUsersClaimRewards is StateT41_User2StakesToVault2 {
+abstract contract StateT46BothVaultsFeesUpdated is StateT41_User2StakesToVault2 {
 
     // for reference
     DataTypes.Vault vault1_T46; 
@@ -18,11 +18,11 @@ abstract contract StateT46BothUsersClaimRewards is StateT41_User2StakesToVault2 
     DataTypes.VaultAccount vault2Account0_T46;
     DataTypes.VaultAccount vault2Account1_T46;
     //user1+vault1
-    DataTypes.UserAccount user1Account0_T46;
-    DataTypes.UserAccount user1Account1_T46;
+    DataTypes.UserAccount user1Vault1Account0_T46;
+    DataTypes.UserAccount user1Vault1Account1_T46;
     //user2+vault1
-    DataTypes.UserAccount user2Account0_T46;
-    DataTypes.UserAccount user2Account1_T46;
+    DataTypes.UserAccount user2Vault1Account0_T46;
+    DataTypes.UserAccount user2Vault1Account1_T46;
     //user1+vault2
     DataTypes.UserAccount user1Vault2Account0_T46;
     DataTypes.UserAccount user1Vault2Account1_T46;
@@ -63,10 +63,10 @@ abstract contract StateT46BothUsersClaimRewards is StateT41_User2StakesToVault2 
         vault1Account1_T46 = getVaultAccount(vaultId1, 1);  
         vault2Account0_T46 = getVaultAccount(vaultId2, 0);
         vault2Account1_T46 = getVaultAccount(vaultId2, 1);
-        user1Account0_T46 = getUserAccount(user1, vaultId1, 0);
-        user1Account1_T46 = getUserAccount(user1, vaultId1, 1);
-        user2Account0_T46 = getUserAccount(user2, vaultId1, 0);
-        user2Account1_T46 = getUserAccount(user2, vaultId1, 1);
+        user1Vault1Account0_T46 = getUserAccount(user1, vaultId1, 0);
+        user1Vault1Account1_T46 = getUserAccount(user1, vaultId1, 1);
+        user2Vault1Account0_T46 = getUserAccount(user2, vaultId1, 0);
+        user2Vault1Account1_T46 = getUserAccount(user2, vaultId1, 1);
         user1Vault2Account0_T46 = getUserAccount(user1, vaultId2, 0);
         user1Vault2Account1_T46 = getUserAccount(user1, vaultId2, 1);
         user2Vault2Account0_T46 = getUserAccount(user2, vaultId2, 0);
@@ -82,10 +82,11 @@ abstract contract StateT46BothUsersClaimRewards is StateT41_User2StakesToVault2 
      vault1: rp: user1Rp + user2Rp/2 | tokens: user1Moca + user2Moca/2 | nfts: 2
      vault2: rp: user1Rp + user2Rp/2 | tokens: user1Moca + user2Moca/2 | nfts: 2
 
-    check all user and vault accounts
- */
+      - user1+vault1 updated
+      - user2+vault2 updated
+*/
 
-contract StateT46BothUsersClaimRewardsTest is StateT46BothUsersClaimRewards {
+contract StateT46BothUsersClaimRewardsTest is StateT46BothVaultsFeesUpdated {
 
     // ---------------- base assets ----------------
 

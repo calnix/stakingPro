@@ -138,9 +138,10 @@ t = 41 [delta: 5]
  user2 stakes half of assets to vault2
 
 t = 46 [delta: 5]
- both vaults will accrue rewards from both distributions -- check
  vault1: updateVaultFees by user1
  vault2: updateVaultFees by user2
+  [fees are dropped and increased proportionally, net transfer from creator to others]
+  [check both vaults accrue rewards from both distributions; assets staked since t46]
  updated: 
  - both distributions updated
  - both vault accounts updated
@@ -148,21 +149,33 @@ t = 46 [delta: 5]
  - user2+vault1 NOT updated
  - user1+vault2 NOT updated
  - user2+vault2 updated
- [fees are dropped and increased proportionally, net transfer from creator to others]
 
 t = 51 [delta: 5]
+ [creator fees are dropped entirely; other fees remain unchanged]
  vault1: updateVaultFees by user1
  vault2: updateVaultFees by user2
- [creator fees are dropped entirely; other fees remain unchanged]
-
+  - check that rewards are accrued correctly, accounting for recent fee changes
+ updated:
+ - both distributions updated
+ - both vault accounts updated
+ - user1+vault1 updated
+ - user2+vault1 NOT updated
+ - user1+vault2 NOT updated
+ - user2+vault2 updated
+ 
 t = 56 [delta: 5]
- vault1: both users claims rewards, for d1
- vault2: both users claims rewards, for d1
- - only d1 is updated; d0 is not updated
- - vaults accounts for d1 are updated
- - user accounts for d1 are updated
- - user accounts for d0 are NOT updated
-  *distribution0 cannot be claimed from. so updateVaultFees to check accumulated rewards for user accounts*
+ user2 claims rewards from vault1+d1
+ user1 claims rewards from vault2+d1
+ this checks the combo: (user2+vault1), (user1+vault2); which was not checked at t46
+  - check that rewards are accrued correctly, accounting for recent fee changes
+ updated:
+ - both distributions updated
+ - both vault accounts updated
+ - user1+vault1 NOT updated
+ - user2+vault1 updated
+ - user1+vault2 updated
+ - user2+vault2 NOT updated
+
 
 t = 61 [delta: 5]
  vault1: endVaults
