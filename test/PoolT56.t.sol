@@ -439,7 +439,7 @@ contract StateT56_UsersClaimRewardsFromBothVaultsTest is StateT56_UsersClaimRewa
             assertEq(claimableRewards, expectedClaimableRewards, "claimableRewards mismatch"); 
         }*/
 
-        // --------------- d0:vault2:user2 ---------------
+        // --------------- d0:vault2:users ---------------
 
         // user1 does not have any assets in vault2
         /*function testUser1_ForVault2Account0_T51() public {
@@ -571,55 +571,6 @@ contract StateT56_UsersClaimRewardsFromBothVaultsTest is StateT56_UsersClaimRewa
             uint256 expectedClaimableRewards = latestAccStakingRewards + latestAccNftStakingRewards + latestAccRealmPointsRewards;
             if (user1 == pool.getVault(vaultId1).creator) expectedClaimableRewards += vaultAccount.accCreatorRewards;
 
-            assertEq(claimableRewards, expectedClaimableRewards, "claimableRewards mismatch"); 
-        }*/
-
-        // stale: user2's account was last updated at t36
-        /*function testUser2_ForVault1Account0_T46() public {
-            DataTypes.UserAccount memory userAccount = getUserAccount(user2, vaultId1, 0);
-            DataTypes.VaultAccount memory vaultAccount = getVaultAccount(vaultId1, 0);
-
-            //--- user2+vault1: last updated at t41
-            uint256 stakedRP = user2Rp/2;
-            uint256 stakedTokens = user2Moca/2; 
-            uint256 numOfNfts = 2; 
-
-            // Check indices match vault@t46
-            assertEq(userAccount.index, vaultAccount.rewardsAccPerUnitStaked, "userIndex mismatch");
-            assertEq(userAccount.nftIndex, vaultAccount.nftIndex, "nftIndex mismatch");
-            assertEq(userAccount.rpIndex, vaultAccount.rpIndex, "rpIndex mismatch");
-
-            // Check accumulated rewards
-
-                // Calculate expected rewards for user2's staked tokens 
-                uint256 prevUserIndex = user2Account0_T41.index;
-                uint256 prevAccStakingRewards = user2Account0_T41.accStakingRewards;
-                uint256 latestAccStakingRewards = calculateRewards(stakedTokens, vaultAccount.rewardsAccPerUnitStaked, prevUserIndex, 1E18) + prevAccStakingRewards;     
-
-                // Calculate expected rewards for nft staking
-                uint256 prevAccNftStakingRewards = user2Account0_T41.accNftStakingRewards;
-                uint256 latestAccNftStakingRewards = ((vaultAccount.nftIndex - user2Account0_T41.nftIndex) * numOfNfts) + prevAccNftStakingRewards; 
-                // Calculate expected rewards for rp staking
-                uint256 prevRpIndex = user2Account0_T41.rpIndex;
-                uint256 prevAccRealmPointsRewards = user2Account0_T41.accRealmPointsRewards;
-                uint256 latestAccRealmPointsRewards = calculateRewards(stakedRP, vaultAccount.rpIndex, prevRpIndex, 1E18) + prevAccRealmPointsRewards;
-
-            assertEq(userAccount.accStakingRewards, latestAccStakingRewards, "accStakingRewards mismatch"); 
-            assertEq(userAccount.accNftStakingRewards, latestAccNftStakingRewards, "accNftStakingRewards mismatch");
-            assertEq(userAccount.accRealmPointsRewards, latestAccRealmPointsRewards, "accRealmPointsRewards mismatch");
-
-            // Check claimed rewards: staking power cannot be claimed
-            assertEq(userAccount.claimedStakingRewards, 0, "claimedStakingRewards mismatch");
-            assertEq(userAccount.claimedNftRewards, 0, "claimedNftRewards mismatch");
-            assertEq(userAccount.claimedRealmPointsRewards, 0, "claimedRealmPointsRewards mismatch");
-            assertEq(userAccount.claimedCreatorRewards, 0, "claimedCreatorRewards mismatch");   //user 2 did not create vault
-
-            //--------------------------------
-
-            // view fn: user2 gets their share of total rewards
-            uint256 claimableRewards = pool.getClaimableRewards(user2, vaultId1, 0);
-            uint256 expectedClaimableRewards = latestAccStakingRewards + latestAccNftStakingRewards + latestAccRealmPointsRewards;
-            
             assertEq(claimableRewards, expectedClaimableRewards, "claimableRewards mismatch"); 
         }*/
 
@@ -971,4 +922,29 @@ contract StateT56_UsersClaimRewardsFromBothVaultsTest is StateT56_UsersClaimRewa
             // just claimed all
             assertEq(claimableRewards, 0, "claimableRewards mismatch"); 
         }
+
+    
+    // --------------- connector ---------------
+
+    function testUserCannotActivateCooldown() public {
+        
+        vm.startPrank(user1);
+            vm.expectRevert(Errors.UserIsNotCreator.selector);
+            pool.activateCooldown(vaultId2);
+        vm.stopPrank();
+    }
+
+    function testVault2ActivateCooldown() public {
+        uint256 expectedEndTime = block.timestamp + pool.VAULT_COOLDOWN_DURATION();
+
+        vm.startPrank(user2);
+            vm.expectEmit(true, true, true, true);
+            emit VaultCooldownActivated(vaultId2, expectedEndTime);
+            pool.activateCooldown(vaultId2);
+        vm.stopPrank();
+
+        // Check vault state
+        DataTypes.Vault memory vault = pool.getVault(vaultId2);
+        assertEq(vault.endTime, expectedEndTime, "Incorrect endTime");
+    }
 }

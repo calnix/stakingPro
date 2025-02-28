@@ -177,26 +177,24 @@ t = 56 [delta: 5]
  - user1+vault2 updated
  - user2+vault2 NOT updated
 
-remaining:
-- activateCooldown
-- endVaults
-- claimRewards
-
 t = 61 [delta: 5]
- vault1: endVaults
+ vault2: activateCooldown
+ updated:
+ - both distributions updated
+ - vault2 accounts updated
+ - user2 accounts updated
+ - stale: vault1 accounts, user1 accounts
 
 t = 66 [delta: 5]
-updateVaultCooldown
+ vault2: endVault
 
 t = 71 [delta: 5]
- vault2: activateCooldown
+ - claimRewards after vault ended
 
 t = 76 [delta: 5]
- vault2: endVaults
-
+ 
 t = 81 [delta: 5]
- updateDistribution
-
+ 
 
 ---
 split timeline fork
