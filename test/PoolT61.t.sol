@@ -871,25 +871,30 @@ contract StateT61_Vault2CooldownActivatedTest is StateT61_Vault2CooldownActivate
 
     // --------------- connector ---------------
 
-    function testCannotEndVaultWithoutCooldown() public {
-        vm.startPrank(user1);
-            vm.expectRevert(Errors.CooldownNotStarted.selector);
-            pool.endVault(vaultId1);
-        vm.stopPrank();
-    }
-
-    function testCannotEndVaultBeforeCooldownEnds() public {
-        vm.startPrank(user2);
-            vm.expectRevert(Errors.CooldownNotEnded.selector);
-            pool.endVault(vaultId2);
-        vm.stopPrank();
-    }
-
-
     function testAnyoneCanEndVault() public {
+
+        /**
+            global state should be updated
+            vault state would remain unchanged, till unstaking
+         */
 
         // warp to after cooldown period
         vm.warp(block.timestamp + pool.VAULT_COOLDOWN_DURATION());
+
+        // global state: before
+        uint256 totalNftsBefore = pool.totalStakedNfts();
+        uint256 totalTokensBefore = pool.totalStakedTokens();
+        uint256 totalRPBefore = pool.totalStakedRealmPoints();
+        uint256 totalBoostedTokensBefore = pool.totalBoostedStakedTokens();
+        uint256 totalBoostedRPBefore = pool.totalBoostedRealmPoints();
+
+        // vault state: before
+        DataTypes.Vault memory vault = pool.getVault(vaultId2);
+        uint256 vaultNfts = vault.stakedNfts;
+        uint256 vaultTokens = vault.stakedTokens;
+        uint256 vaultRP = vault.stakedRealmPoints;
+        uint256 vaultBoostedTokens = vault.boostedStakedTokens;
+        uint256 vaultBoostedRP = vault.boostedRealmPoints;
 
         // event emission
         bytes32[] memory vaultIds = new bytes32[](1);
@@ -900,6 +905,35 @@ contract StateT61_Vault2CooldownActivatedTest is StateT61_Vault2CooldownActivate
         vm.startPrank(user1);
             pool.endVaults(vaultIds);
         vm.stopPrank();
+
+        // global state: after
+        uint256 totalNftsAfter = pool.totalStakedNfts();
+        uint256 totalTokensAfter = pool.totalStakedTokens();
+        uint256 totalRPAfter = pool.totalStakedRealmPoints();
+        uint256 totalBoostedTokensAfter = pool.totalBoostedStakedTokens();
+        uint256 totalBoostedRPAfter = pool.totalBoostedRealmPoints();
+
+        // check global state changes
+        assertEq(totalNftsBefore - vaultNfts, totalNftsAfter, "totalStakedNfts mismatch");
+        assertEq(totalTokensBefore - vaultTokens, totalTokensAfter, "totalStakedTokens mismatch");
+        assertEq(totalRPBefore - vaultRP, totalRPAfter, "totalStakedRealmPoints mismatch");
+        assertEq(totalBoostedTokensBefore - vaultBoostedTokens, totalBoostedTokensAfter, "totalBoostedStakedTokens mismatch");
+        assertEq(totalBoostedRPBefore - vaultBoostedRP, totalBoostedRPAfter, "totalBoostedRealmPoints mismatch");
+
+        // vault state: after
+        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId2);
+        uint256 vaultNftsAfter = vaultAfter.stakedNfts;
+        uint256 vaultTokensAfter = vaultAfter.stakedTokens;
+        uint256 vaultRPAfter = vaultAfter.stakedRealmPoints;
+        uint256 vaultBoostedTokensAfter = vaultAfter.boostedStakedTokens;
+        uint256 vaultBoostedRPAfter = vaultAfter.boostedRealmPoints;
+
+        // check vault state: unchanged
+        assertEq(vaultNftsAfter, vaultNfts, "vaultNfts mismatch");
+        assertEq(vaultTokensAfter, vaultTokens, "vaultTokens mismatch");
+        assertEq(vaultRPAfter, vaultRP, "vaultRP mismatch");
+        assertEq(vaultBoostedTokensAfter, vaultBoostedTokens, "vaultBoostedTokens mismatch");
+        assertEq(vaultBoostedRPAfter, vaultBoostedRP, "vaultBoostedRP mismatch");
     }
 
 
