@@ -185,7 +185,7 @@ t = 61 [delta: 5]
  - user2 accounts updated
  - stale: vault1 accounts, user1 accounts
 
-t = 66 [delta: 5]
+t = 61+1day [delta: 1 day]
  vault2: endVault
 
 t = 71 [delta: 5]

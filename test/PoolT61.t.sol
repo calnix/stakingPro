@@ -869,5 +869,40 @@ contract StateT61_Vault2CooldownActivatedTest is StateT61_Vault2CooldownActivate
             assertEq(claimableRewards, expectedClaimableRewards, "claimableRewards mismatch"); 
         }        
 
+    // --------------- connector ---------------
+
+    function testCannotEndVaultWithoutCooldown() public {
+        vm.startPrank(user1);
+            vm.expectRevert(Errors.CooldownNotStarted.selector);
+            pool.endVault(vaultId1);
+        vm.stopPrank();
+    }
+
+    function testCannotEndVaultBeforeCooldownEnds() public {
+        vm.startPrank(user2);
+            vm.expectRevert(Errors.CooldownNotEnded.selector);
+            pool.endVault(vaultId2);
+        vm.stopPrank();
+    }
+
+
+    function testAnyoneCanEndVault() public {
+
+        // warp to after cooldown period
+        vm.warp(block.timestamp + pool.VAULT_COOLDOWN_DURATION());
+
+        // event emission
+        bytes32[] memory vaultIds = new bytes32[](1);
+        vaultIds[0] = vaultId2;
+        vm.expectEmit(true, true, true, true);
+        emit VaultsEnded(vaultIds, 0);
+
+        vm.startPrank(user1);
+            pool.endVaults(vaultIds);
+        vm.stopPrank();
+    }
+
+
+
 }
 
