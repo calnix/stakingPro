@@ -39,7 +39,7 @@ contract DataTypes {
 //        bytes32 tokenAddr;  
 
         // index: reward token
-        uint256 index;             //rewardsAccPerAllocPoint
+        uint256 index;             //rewardsAccPerUnitBoostedBalance
         uint256 nftIndex;          //rewardsAccPerNFT
         uint256 rpIndex;           //rewardsAccPerRealmPoint 
 

@@ -28,6 +28,7 @@ library Errors {
     error UserHasNothingStaked(bytes32 vaultId, address user);
     
     // claimRewards
+    error NoStakedAssets();
     error StakingPowerDistribution();
     error DistributionDoesNotExist();
 

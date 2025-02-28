@@ -298,13 +298,17 @@ library PoolLogic {
         
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
-
-        // get corresponding user+vault account for this distribution 
-        DataTypes.Distribution memory distribution = distributions[distributionId];
         
-        // ensure distribution exists
+        // revert if user has no staked assets
+        if (userVaultAssets.stakedTokens == 0 && userVaultAssets.stakedRealmPoints == 0 && userVaultAssets.tokenIds.length == 0) {
+            revert Errors.NoStakedAssets();
+        }
+
+        // get + check distribution exists
+        DataTypes.Distribution memory distribution = distributions[distributionId];
         if(distribution.startTime == 0) revert Errors.DistributionDoesNotExist();
         
+        // get corresponding user+vault account for distribution         
         DataTypes.VaultAccount memory vaultAccount = vaultAccounts[params.vaultId][distributionId];
         DataTypes.UserAccount memory userAccount = userAccounts[params.user][params.vaultId][distributionId];
 
@@ -317,7 +321,7 @@ library PoolLogic {
         // expressed in 1E18 precision
         uint256 totalUnclaimedRewards;
         
-        // staking MOCA rewards |  accStakingRewards expressed in 1E18 precision
+        // staked MOCA rewards |  accStakingRewards expressed in 1E18 precision
         if (userAccount.accStakingRewards > userAccount.claimedStakingRewards) {
 
             uint256 unclaimedRewards = userAccount.accStakingRewards - userAccount.claimedStakingRewards;
@@ -328,18 +332,7 @@ library PoolLogic {
             totalUnclaimedRewards += unclaimedRewards;
         }
 
-        // staking RP rewards |  accRealmPointsRewards expressed in 1E18 precision
-        if (userAccount.accRealmPointsRewards > userAccount.claimedRealmPointsRewards) {
-
-            uint256 unclaimedRpRewards = userAccount.accRealmPointsRewards - userAccount.claimedRealmPointsRewards;
-
-            userAccount.claimedRealmPointsRewards += unclaimedRpRewards;
-            vaultAccount.totalClaimedRewards += unclaimedRpRewards;
-
-            totalUnclaimedRewards += unclaimedRpRewards;
-        }
-
-        // staking NFT rewards |  accNftStakingRewards expressed in 1E18 precision
+        // staked NFT rewards |  accNftStakingRewards expressed in 1E18 precision
         if (userAccount.accNftStakingRewards > userAccount.claimedNftRewards) {
 
             uint256 unclaimedNftRewards = userAccount.accNftStakingRewards - userAccount.claimedNftRewards;
@@ -348,6 +341,17 @@ library PoolLogic {
             vaultAccount.totalClaimedRewards += unclaimedNftRewards;
 
             totalUnclaimedRewards += unclaimedNftRewards;
+        }
+
+        // staked RP rewards |  accRealmPointsRewards expressed in 1E18 precision
+        if (userAccount.accRealmPointsRewards > userAccount.claimedRealmPointsRewards) {
+
+            uint256 unclaimedRpRewards = userAccount.accRealmPointsRewards - userAccount.claimedRealmPointsRewards;
+
+            userAccount.claimedRealmPointsRewards += unclaimedRpRewards;
+            vaultAccount.totalClaimedRewards += unclaimedRpRewards;
+
+            totalUnclaimedRewards += unclaimedRpRewards;
         }
 
         // creator rewards 
@@ -1255,7 +1259,7 @@ library PoolLogic {
         DataTypes.VaultAccount memory vaultAccount, 
         DataTypes.Distribution memory distribution_,
         DataTypes.UpdateAccountsIndexesParams memory params
-    ) external /*view*/ returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
+    ) external view returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
         return _viewVaultAccount(vault, vaultAccount, distribution_, params);
     }
 

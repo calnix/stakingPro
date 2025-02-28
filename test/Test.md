@@ -142,7 +142,7 @@ t = 46 [delta: 5]
  vault2: updateVaultFees by user2
   [fees are dropped and increased proportionally, net transfer from creator to others]
   [check both vaults accrue rewards from both distributions; assets staked since t46]
- updated: 
+ updated:
  - both distributions updated
  - both vault accounts updated
  - user1+vault1 updated
@@ -162,11 +162,12 @@ t = 51 [delta: 5]
  - user2+vault1 NOT updated
  - user1+vault2 NOT updated
  - user2+vault2 updated
- 
+
 t = 56 [delta: 5]
  user2 claims rewards from vault1+d1
- user1 claims rewards from vault2+d1
- this checks the combo: (user2+vault1), (user1+vault2); which was not checked at t46
+ user2 claims rewards from vault2+d1 
+ user1 cannot claim rewards from vault2+d1 -> nothing staked
+ this checks the combo: (user2+vault1), (user1+vault2); which was not checked at t46 or t51
   - check that rewards are accrued correctly, accounting for recent fee changes
  updated:
  - both distributions updated
@@ -176,6 +177,10 @@ t = 56 [delta: 5]
  - user1+vault2 updated
  - user2+vault2 NOT updated
 
+remaining:
+- activateCooldown
+- endVaults
+- claimRewards
 
 t = 61 [delta: 5]
  vault1: endVaults
