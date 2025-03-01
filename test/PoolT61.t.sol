@@ -896,9 +896,10 @@ contract StateT61_Vault2CooldownActivatedTest is StateT61_Vault2CooldownActivate
         uint256 vaultBoostedTokens = vault.boostedStakedTokens;
         uint256 vaultBoostedRP = vault.boostedRealmPoints;
 
-        // event emission
+        // input array
         bytes32[] memory vaultIds = new bytes32[](1);
         vaultIds[0] = vaultId2;
+
         vm.expectEmit(true, true, true, true);
         emit VaultsEnded(vaultIds, 0);
 

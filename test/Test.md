@@ -187,14 +187,11 @@ t = 61 [delta: 5]
 
 t = 61+1day [delta: 1 day]
  vault2: endVault
-
-t = 71 [delta: 5]
  - claimRewards after vault ended
 
+t = 71 [delta: 5]
 t = 76 [delta: 5]
- 
 t = 81 [delta: 5]
- 
 
 ---
 split timeline fork

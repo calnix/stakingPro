@@ -505,7 +505,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     
-//------------------------------ Operator functions ------------------------------------------------
+//------------------------------ Operator functions ------------------------------------------
 
     /**
      * @notice Stakes tokens on behalf of multiple users into multiple vaults
@@ -750,7 +750,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
     
 
-//-----------------------------  NFT MULTIPLIER  --------------------------------------------
+//-----------------------------  NFT MULTIPLIER  ---------------------------------------------
     
     /**    
         1. enableMaintenance
@@ -1024,7 +1024,8 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
         (
-            uint256 totalNftsToRemove, 
+            uint256 totalStakedNftsToRemove,
+            uint256 totalCreationNftsToRemove,
             uint256 totalTokensToRemove, 
             uint256 totalRealmPointsToRemove, 
             uint256 totalBoostedTokensToRemove, 
@@ -1034,7 +1035,8 @@ contract StakingPro is EIP712, Pausable, AccessControl {
                 vaultIds, numOfVaults, NFT_REGISTRY);
 
         // Update global state
-        totalStakedNfts -= totalNftsToRemove;
+        totalStakedNfts -= totalStakedNftsToRemove;
+        totalCreationNfts -= totalCreationNftsToRemove;
         totalStakedTokens -= totalTokensToRemove;
         totalStakedRealmPoints -= totalRealmPointsToRemove;
         totalBoostedStakedTokens -= totalBoostedTokensToRemove;
@@ -1124,7 +1126,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         _;
     }
 
-//-------------------------------view------------------------------------------- 
+//-------------------------------view--------------------------------------------------------- 
 
     /*//////////////////////////////////////////////////////////////
                                 HELPERS

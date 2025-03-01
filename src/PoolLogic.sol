@@ -472,10 +472,11 @@ library PoolLogic {
         bytes32[] calldata vaultIds,
         uint256 numOfVaults,
         INftRegistry NFT_REGISTRY
-    ) external returns (uint256, uint256, uint256, uint256, uint256) {
+    ) external returns (uint256, uint256, uint256, uint256, uint256, uint256) {
 
         // Track total assets to remove from global state
-        uint256 totalNftsToRemove;
+        uint256 totalStakedNfts;
+        uint256 totalCreationNfts;
         uint256 totalTokensToRemove; 
         uint256 totalRealmPointsToRemove;
         uint256 totalBoostedTokensToRemove;
@@ -523,7 +524,8 @@ library PoolLogic {
 
                 // Track assets to remove (only need to do this once per vault)
                 if(i == 0) {
-                    totalNftsToRemove += vault.stakedNfts;
+                    totalStakedNfts += vault.stakedNfts;
+                    totalCreationNfts += vault.creationTokenIds.length;
                     totalTokensToRemove += vault.stakedTokens;
                     totalRealmPointsToRemove += vault.stakedRealmPoints;
                     totalBoostedTokensToRemove += vault.boostedStakedTokens;
@@ -544,7 +546,7 @@ library PoolLogic {
         uint256 vaultsSkipped = numOfVaults - vaultsEnded; 
         emit VaultsEnded(vaultIds, vaultsSkipped);
 
-        return (totalNftsToRemove, totalTokensToRemove, totalRealmPointsToRemove, totalBoostedTokensToRemove, totalBoostedRealmPointsToRemove);
+        return (totalStakedNfts, totalCreationNfts, totalTokensToRemove, totalRealmPointsToRemove, totalBoostedTokensToRemove, totalBoostedRealmPointsToRemove);
     }
 
     function executeStakeOnBehalfOf(
