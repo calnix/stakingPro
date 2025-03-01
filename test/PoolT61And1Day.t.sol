@@ -683,4 +683,34 @@ contract StateT61And1Day_Vault2EndedTest is StateT61And1Day_Vault2Ended {
 
     // --------------- connector ---------------
 
+    function testUser2CanUnstakeAfterVault2Ended() public {
+        // Get initial balances and states
+        uint256 initialUserMocaBalance = MOCA.balanceOf(user2);
+        uint256 initialPoolMocaBalance = MOCA.balanceOf(address(pool));
+        uint256 initialPoolTotalStaked = pool.totalStakedTokens();
+        uint256 initialVaultStaked = vault2_T61.stakedTokens;
+        uint256 initialUserStaked = user2Vault2Account1_T61.stakedTokens;
+
+        // User2 unstakes from vault2
+        vm.prank(user2);
+        pool.unstake(vaultId2, 1);
+
+        // Check user received tokens
+        assertEq(MOCA.balanceOf(user2), initialUserMocaBalance + initialUserStaked, "User MOCA balance not increased");
+        assertEq(MOCA.balanceOf(address(pool)), initialPoolMocaBalance - initialUserStaked, "Pool MOCA balance not decreased");
+
+        // Check pool state updated
+        assertEq(pool.totalStakedTokens(), initialPoolTotalStaked - initialUserStaked, "Pool total staked not decreased");
+
+        // Check vault state
+        DataTypes.Vault memory vaultAfter = getVault(vaultId2);
+        assertEq(vaultAfter.stakedTokens, initialVaultStaked - initialUserStaked, "Vault staked tokens not decreased");
+
+        // Check user account cleared
+        DataTypes.UserAccount memory userAccountAfter = getUserAccount(user2, vaultId2, 1);
+        assertEq(userAccountAfter.stakedTokens, 0, "User staked tokens not cleared");
+        assertEq(userAccountAfter.stakedNfts, 0, "User staked NFTs not cleared");
+        assertEq(userAccountAfter.stakedRealmPoints, 0, "User staked RP not cleared");
+    }
+
 }
