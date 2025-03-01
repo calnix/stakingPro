@@ -186,7 +186,14 @@ t = 61 [delta: 5]
  - stale: vault1 accounts, user1 accounts
 
 t = 61+1day [delta: 1 day]
- vault2: endVault
+ vault2: endVaults
+ updated:
+ - both distributions updated
+ - vault2 accounts updated
+ - stale: vault1 accounts, user accounts
+
+
+ 
  - claimRewards after vault ended
 
 t = 71 [delta: 5]

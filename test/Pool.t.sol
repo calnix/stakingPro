@@ -721,11 +721,11 @@ abstract contract StateT11_Distribution1Created is StateT6_User2StakeAssetsToVau
         // distribution params
         uint256 distributionId = 1;
         uint256 distributionStartTime = 21;
-        uint256 distributionEndTime = 21 + 100;
+        uint256 distributionEndTime = 21 + 2 days;
         uint256 emissionPerSecond = 1 ether;
         uint256 tokenPrecision = 1E18;
         bytes32 tokenAddress = rewardsVault.addressToBytes32(address(rewardsToken1));
-        uint256 totalRequired = 100 * emissionPerSecond;
+        uint256 totalRequired = 2 days * emissionPerSecond;
 
         // operator sets up distribution
         vm.startPrank(operator);
@@ -768,7 +768,7 @@ contract StateT11_Distribution1CreatedTest is StateT11_Distribution1Created {
         assertEq(distribution.distributionId, 1);
         assertEq(distribution.TOKEN_PRECISION, 1e18);
 
-        assertEq(distribution.endTime, 121);
+        assertEq(distribution.endTime, 21 + 2 days);
         assertEq(distribution.startTime, 21);
         assertEq(distribution.emissionPerSecond, 1 ether);
 
@@ -1098,7 +1098,7 @@ contract StateT16_BothUsersStakeAgainTest is StateT16_BothUsersStakeAgain {
         // static
         assertEq(distribution.distributionId, 1);
         assertEq(distribution.TOKEN_PRECISION, 1e18); 
-        assertEq(distribution.endTime, 100 + 21);
+        assertEq(distribution.endTime, 21 + 2 days);
         assertEq(distribution.startTime, 21);
         assertEq(distribution.emissionPerSecond, 1 ether);
         assertEq(distribution.manuallyEnded, 0);        
@@ -1547,14 +1547,14 @@ contract StateT26_User2CreatesVault2Test is StateT26_User2CreatesVault2 {
         // ---------------- distribution 1 ----------------
         
         // distribution 1 started@T21: state not updated
-        function testDistribution1_T16() public {
+        function testDistribution1_T26() public {
             // Check all Distribution struct fields
             DataTypes.Distribution memory distribution = getDistribution(1);
             
             // static
             assertEq(distribution.distributionId, 1);
             assertEq(distribution.TOKEN_PRECISION, 1e18); 
-            assertEq(distribution.endTime, 100 + 21);
+            assertEq(distribution.endTime, 21 + 2 days);
             assertEq(distribution.startTime, 21);
             assertEq(distribution.emissionPerSecond, 1 ether);
             assertEq(distribution.manuallyEnded, 0);        
@@ -1565,7 +1565,7 @@ contract StateT26_User2CreatesVault2Test is StateT26_User2CreatesVault2 {
             assertEq(distribution.lastUpdateTimeStamp, 21);
         }
 
-        function testVault1Account1_T16() public {
+        function testVault1Account1_T26() public {
             DataTypes.Distribution memory distribution = getDistribution(1);
             DataTypes.Vault memory vault = pool.getVault(vaultId1);
 
@@ -1589,7 +1589,7 @@ contract StateT26_User2CreatesVault2Test is StateT26_User2CreatesVault2 {
             assertEq(vaultAccount.totalClaimedRewards, 0);
         }
 
-        function testUser1_ForVault1Account1_T16() public {
+        function testUser1_ForVault1Account1_T26() public {
             DataTypes.UserAccount memory userAccount = getUserAccount(user1, vaultId1, 1);
             DataTypes.VaultAccount memory vaultAccount = getVaultAccount(vaultId1, 1);
             
@@ -1610,7 +1610,7 @@ contract StateT26_User2CreatesVault2Test is StateT26_User2CreatesVault2 {
             assertEq(userAccount.claimedCreatorRewards, 0);
         }
 
-        function testUser2_ForVault1Account1_T16() public {
+        function testUser2_ForVault1Account1_T26() public {
             DataTypes.UserAccount memory userAccount = getUserAccount(user2, vaultId1, 1);
             DataTypes.VaultAccount memory vaultAccount = getVaultAccount(vaultId1, 1);
             
@@ -2243,7 +2243,7 @@ contract StateT31_User2MigrateRpToVault2Test is StateT31_User2MigrateRpToVault2 
         // static
         assertEq(distribution.distributionId, 1);
         assertEq(distribution.TOKEN_PRECISION, 1e18); 
-        assertEq(distribution.endTime, 100 + 21);
+        assertEq(distribution.endTime, 21 + 2 days);
         assertEq(distribution.startTime, 21);
         assertEq(distribution.emissionPerSecond, 1 ether);
         assertEq(distribution.manuallyEnded, 0);        

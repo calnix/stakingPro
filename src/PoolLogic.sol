@@ -521,9 +521,9 @@ library PoolLogic {
                 DataTypes.VaultAccount memory vaultAccount = vaultAccounts[vaultId][distributionId];
                 (vaultAccount, ) = _updateVaultAccount(vault, vaultAccount, distribution, activeDistributions, params);
                 vaultAccounts[vaultId][distributionId] = vaultAccount;
-
-                // Track assets to remove (only need to do this once per vault)
-                if(i == 0) {
+                
+                // Track assets to remove on last distribution (only need to do this once per vault)
+                if(i == numOfDistributions - 1) {
                     totalStakedNfts += vault.stakedNfts;
                     totalCreationNfts += vault.creationTokenIds.length;
                     totalTokensToRemove += vault.stakedTokens;

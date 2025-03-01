@@ -429,7 +429,7 @@ contract StateT36_User2UnstakesFromVault1Test is StateT36_User2UnstakesFromVault
         // static
         assertEq(distribution.distributionId, 1);
         assertEq(distribution.TOKEN_PRECISION, 1e18); 
-        assertEq(distribution.endTime, 100 + 21);
+        assertEq(distribution.endTime, 21 + 2 days);
         assertEq(distribution.startTime, 21);
         assertEq(distribution.emissionPerSecond, 1 ether);
         assertEq(distribution.manuallyEnded, 0);        
