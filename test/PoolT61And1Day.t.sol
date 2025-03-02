@@ -3,7 +3,8 @@ pragma solidity ^0.8.26;
 
 import "./PoolT61.t.sol";
 
-abstract contract StateT61And1Day_Vault2Ended is StateT61_Vault2CooldownActivated {
+// 61 + 1 day
+abstract contract StateT86461_Vault2Ended is StateT61_Vault2CooldownActivated {
 
     // for reference
     DataTypes.Vault vault1_T61And1Day; 
@@ -65,9 +66,9 @@ abstract contract StateT61And1Day_Vault2Ended is StateT61_Vault2CooldownActivate
     }
 }
 
-contract StateT61And1Day_Vault2EndedTest is StateT61And1Day_Vault2Ended {
+contract StateT86461_Vault2EndedTest is StateT86461_Vault2Ended {
 
-    function testPool_T61And1Day() public {
+    function testPool_T86461() public {
         DataTypes.Vault memory vault1 = pool.getVault(vaultId1);
         DataTypes.Vault memory vault2 = pool.getVault(vaultId2);
 
@@ -103,7 +104,7 @@ contract StateT61And1Day_Vault2EndedTest is StateT61And1Day_Vault2Ended {
         assertEq(pool.totalBoostedStakedTokens(), expectedTotalBoostedTokens);
     }
 
-    function testVault1_T61And1Day() public {
+    function testVault1_T86461() public {
         DataTypes.Vault memory vault1 = pool.getVault(vaultId1);    
         
         // Check base balances
@@ -127,7 +128,7 @@ contract StateT61And1Day_Vault2EndedTest is StateT61And1Day_Vault2Ended {
     }   
 
     // vault2 assets are removed from the system, but still exist in the vault
-    function testVault2_T61And1Day() public {
+    function testVault2_T86461() public {
         DataTypes.Vault memory vault2 = pool.getVault(vaultId2);
         
         // Check base balances
@@ -153,7 +154,7 @@ contract StateT61And1Day_Vault2EndedTest is StateT61And1Day_Vault2Ended {
     // ---------------- distribution 0 ----------------
     
     // previously updated at T61
-    function testDistribution0_T61And1Day() public {
+    function testDistribution0_T86461() public {
         DataTypes.Distribution memory distribution = getDistribution(0);
 
         // static
@@ -263,7 +264,7 @@ contract StateT61And1Day_Vault2EndedTest is StateT61And1Day_Vault2Ended {
     }*/
 
     // previously updated at T61: 86400 ether emitted
-    function testVault2Account0_T61And1Day() public {
+    function testVault2Account0_T86461() public {
         DataTypes.Distribution memory distribution = getDistribution(0);
         DataTypes.Vault memory vault2 = pool.getVault(vaultId2);
         DataTypes.VaultAccount memory vaultAccount = getVaultAccount(vaultId2, 0);
@@ -523,7 +524,7 @@ contract StateT61And1Day_Vault2EndedTest is StateT61And1Day_Vault2Ended {
 
     // ---------------- distribution 1 ----------------
 
-    function testDistribution1_T61And1Day() public {
+    function testDistribution1_T86461() public {
         DataTypes.Distribution memory distribution = getDistribution(1);
         
         // static
@@ -548,7 +549,7 @@ contract StateT61And1Day_Vault2EndedTest is StateT61And1Day_Vault2Ended {
     }
 
     //vault1 accounts not updated
-    /*function testVault1Account1_T61() public {
+    /*function testVault1Account1_T86461() public {
         DataTypes.Distribution memory distribution = getDistribution(1);
         DataTypes.Vault memory vault = pool.getVault(vaultId1);
 
@@ -618,7 +619,7 @@ contract StateT61And1Day_Vault2EndedTest is StateT61And1Day_Vault2Ended {
         assertApproxEqAbs(vaultAccount.totalClaimedRewards, vaultAccount.totalAccRewards, 4314, "totalClaimedRewards mismatch");
     }*/
 
-    function testVault2Account1_T61And1Day() public {
+    function testVault2Account1_T86461() public {
         DataTypes.Distribution memory distribution = getDistribution(1);
         DataTypes.Vault memory vault = pool.getVault(vaultId2);
 
@@ -684,33 +685,68 @@ contract StateT61And1Day_Vault2EndedTest is StateT61And1Day_Vault2Ended {
     // --------------- connector ---------------
 
     function testUser2CanUnstakeAfterVault2Ended() public {
-        // Get initial balances and states
-        uint256 initialUserMocaBalance = MOCA.balanceOf(user2);
-        uint256 initialPoolMocaBalance = MOCA.balanceOf(address(pool));
+        
+        // get initial token balances
+        uint256 initialUserMocaBalance = mocaToken.balanceOf(user2);
+        uint256 initialPoolMocaBalance = mocaToken.balanceOf(address(pool));
+
+        // get initial user state
+        DataTypes.User memory initialUser = pool.getUser(user2, vaultId2);
+        assertEq(initialUser.tokenIds.length, 2, "User staked NFTs mismatch");
+        assertEq(initialUser.stakedTokens, user2Moca/2, "User staked tokens mismatch");
+        assertEq(initialUser.stakedRealmPoints, user2Rp/2, "User staked RP mismatch");
+
+        // get initial pool state
         uint256 initialPoolTotalStaked = pool.totalStakedTokens();
-        uint256 initialVaultStaked = vault2_T61.stakedTokens;
-        uint256 initialUserStaked = user2Vault2Account1_T61.stakedTokens;
+        uint256 initialPoolStakedNfts = pool.totalStakedNfts();
+        uint256 initialPoolStakedRealmPoints = pool.totalStakedRealmPoints();
+        uint256 initialPoolBoostedStaked = pool.totalBoostedStakedTokens();
+        uint256 initialPoolBoostedRealmPoints = pool.totalBoostedRealmPoints();
+        
+        // get initial vault state
+        DataTypes.Vault memory initialVault = pool.getVault(vaultId2);
+        assertEq(initialVault.stakedNfts, 2, "Vault staked NFTs mismatch");
+        assertEq(initialVault.stakedTokens, user2Moca/2, "Vault staked tokens mismatch");
+        assertEq(initialVault.stakedRealmPoints, user2Rp/2, "Vault staked RP mismatch");
+        // Calculate boost factor: 10% boost per NFT
+        uint256 boostFactor = pool.PRECISION_BASE() + (initialVault.stakedNfts * pool.NFT_MULTIPLIER());
+        assertEq(initialVault.boostedStakedTokens, user2Moca/2 * boostFactor / pool.PRECISION_BASE(), "Vault boosted staked mismatch");
+        assertEq(initialVault.boostedRealmPoints, user2Rp/2 * boostFactor / pool.PRECISION_BASE(), "Vault boosted RP mismatch");
+
+
 
         // User2 unstakes from vault2
-        vm.prank(user2);
-        pool.unstake(vaultId2, 1);
+        vm.startPrank(user2);
+            pool.unstake(vaultId2, initialUser.stakedTokens, initialUser.tokenIds);
+        vm.stopPrank();
 
-        // Check user received tokens
-        assertEq(MOCA.balanceOf(user2), initialUserMocaBalance + initialUserStaked, "User MOCA balance not increased");
-        assertEq(MOCA.balanceOf(address(pool)), initialPoolMocaBalance - initialUserStaked, "Pool MOCA balance not decreased");
+        // Check final token balances
+        assertEq(mocaToken.balanceOf(user2), initialUserMocaBalance + initialUser.stakedTokens, "User MOCA balance not increased");
+        assertEq(mocaToken.balanceOf(address(pool)), initialPoolMocaBalance - initialUser.stakedTokens, "Pool MOCA balance not decreased");
 
-        // Check pool state updated
-        assertEq(pool.totalStakedTokens(), initialPoolTotalStaked - initialUserStaked, "Pool total staked not decreased");
+        // Check user vault assets cleared
+        DataTypes.User memory userAfter = pool.getUser(user2, vaultId2);
+        assertEq(userAfter.stakedTokens, 0, "User staked tokens not cleared");
+        assertEq(userAfter.tokenIds.length, 0, "User staked NFTs not cleared");
+        assertEq(userAfter.stakedRealmPoints, initialUser.stakedRealmPoints, "Rp incorrectly cleared");
 
         // Check vault state
-        DataTypes.Vault memory vaultAfter = getVault(vaultId2);
-        assertEq(vaultAfter.stakedTokens, initialVaultStaked - initialUserStaked, "Vault staked tokens not decreased");
+        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId2);
+        assertEq(vaultAfter.stakedNfts, 0, "Vault staked NFTs mismatch");
+        assertEq(vaultAfter.stakedTokens, 0, "Non-zero stakedTokens in vault2");
+        assertEq(vaultAfter.boostedStakedTokens, 0, "Non-zero boostedStakedTokens in vault2");
+        // rp should remain unchanged - except for boosting update
+        assertEq(vaultAfter.stakedRealmPoints, initialVault.stakedRealmPoints, "Rp incorrectly cleared");
+        assertEq(vaultAfter.boostedRealmPoints, initialVault.stakedRealmPoints, "Non-zero boostedRealmPoints in vault2");
 
-        // Check user account cleared
-        DataTypes.UserAccount memory userAccountAfter = getUserAccount(user2, vaultId2, 1);
-        assertEq(userAccountAfter.stakedTokens, 0, "User staked tokens not cleared");
-        assertEq(userAccountAfter.stakedNfts, 0, "User staked NFTs not cleared");
-        assertEq(userAccountAfter.stakedRealmPoints, 0, "User staked RP not cleared");
+        // Check pool state updated
+        assertEq(pool.totalStakedTokens(), initialPoolTotalStaked - initialUser.stakedTokens, "Pool total staked not decreased");
+        assertEq(pool.totalStakedNfts(), initialPoolStakedNfts - initialUser.tokenIds.length, "Pool total staked NFTs not decreased");
+        assertEq(pool.totalBoostedStakedTokens(), initialPoolBoostedStaked - initialVault.boostedStakedTokens, "Pool boosted staked not decreased"); 
+        // rp should remain unchanged - except for boosting update
+        assertEq(pool.totalStakedRealmPoints(), initialPoolStakedRealmPoints, "Rp incorrectly decreased");
+        assertEq(pool.totalBoostedRealmPoints(), initialPoolBoostedRealmPoints - initialVault.boostedRealmPoints + initialUser.stakedRealmPoints, "Pool boosted RP not correctly updated");
+
     }
 
 }
