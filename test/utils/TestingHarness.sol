@@ -146,8 +146,13 @@ abstract contract TestingHarness is Test {
         vm.stopPrank();
 
         // set nftRegistry pool
-        vm.prank(owner);
-        nftRegistry.setPool(address(pool));
+        vm.startPrank(owner);
+            nftRegistry.setPool(address(pool));
+        vm.stopPrank();
+
+        vm.startPrank(operator);
+            pool.setRewardsVault(address(rewardsVault));
+        vm.stopPrank();
     }
 
     function generateSignature(address user, bytes32 vaultId, uint256 amount, uint256 expiry, uint256 nonce) public returns (bytes memory) {

@@ -180,17 +180,17 @@ t = 86471 [delta: 5]
 - vault2 checks and user2 accounts should tally as per main timeline's values
 
 `updateActiveDistributions`
-- pick a random point in time
+- split at T16. [D1 created at T11]
 - update active distributions and check new limit
 
 `updateMaximumFeeFactor`
-- split on vault2 updateFees
+- split on T46; both users update fees on both vaults
 
 `updateMinimumRealmPoints`
 - split when stakeRp is called
 
 `updateCreationNfts`
-- confirm tested. 
+- confirm tested. at t21
 
 `updateVaultCooldown`
 - split before activateCooldown is called on vault2
@@ -208,6 +208,18 @@ t = 86471 [delta: 5]
 - split at T26; d1 starts at T21
 - upgrade to rewardsVaultV2
 
+```solidity
+    function testOperatorCanSetRewardsVault() public {
+        
+        vm.startPrank(operator);
+            vm.expectEmit(true, false, false, false);
+            emit RewardsVaultSet(address(0), address(rewardsVault));
+            pool.setRewardsVault(address(rewardsVault));
+        vm.stopPrank();
+
+        assertEq(address(pool.REWARDS_VAULT()), address(rewardsVault));
+    }
+```
 
 ## update NFT multiplier process
 

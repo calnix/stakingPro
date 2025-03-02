@@ -251,14 +251,62 @@ contract StateT6_User2StakeAssetsToVault1Test is StateT6_User2StakeAssetsToVault
         assertEq(rewards, 0);
     }
 
-    function testOperatorCanSetRewardsVault() public {
-        
+    // state transition
+    function testOperatorCanSetupDistribution() public {
+        // operator sets up distribution
         vm.startPrank(operator);
-            vm.expectEmit(true, false, false, false);
-            emit RewardsVaultSet(address(0), address(rewardsVault));
-            pool.setRewardsVault(address(rewardsVault));
+
+            // distribution params
+            uint256 distributionId = 1;
+            uint256 distributionStartTime = 21;
+            uint256 distributionEndTime = 21 + 2 days;
+            uint256 emissionPerSecond = 1 ether;
+            uint256 tokenPrecision = 1E18;
+            bytes32 tokenAddress = rewardsVault.addressToBytes32(address(rewardsToken1));
+            uint256 totalRequired = 2 days * emissionPerSecond;
+
+            // check rewards vault call
+            vm.expectCall(
+                address(rewardsVault),
+                abi.encodeCall(rewardsVault.setupDistribution, (distributionId, dstEid, tokenAddress, totalRequired))
+            );
+
+            // create distribution 1
+            vm.expectEmit(true, true, true, true);
+            emit DistributionCreated(
+                distributionId,
+                distributionStartTime,
+                distributionEndTime,
+                emissionPerSecond,
+                tokenPrecision
+            );
+            pool.setupDistribution(
+                distributionId, 
+                distributionStartTime, 
+                distributionEndTime, 
+                emissionPerSecond, 
+                tokenPrecision,
+                dstEid, tokenAddress
+            );
+
         vm.stopPrank();
 
-        assertEq(address(pool.REWARDS_VAULT()), address(rewardsVault));
+        // check active distributions length increased
+        assertEq(pool.getActiveDistributionsLength(), 2);
+
+        // verify distribution params were set correctly in rewardsVault
+        (
+            uint32 storedDstEid,
+            bytes32 storedTokenAddress,
+            uint256 storedTotalRequired,
+            uint256 totalClaimed,
+            uint256 totalDeposited
+        ) = rewardsVault.distributions(distributionId);
+
+        assertEq(storedDstEid, dstEid);
+        assertEq(storedTokenAddress, tokenAddress);
+        assertEq(storedTotalRequired, totalRequired);
+        assertEq(totalClaimed, 0);
+        assertEq(totalDeposited, 0);
     }
 }
