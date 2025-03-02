@@ -706,4 +706,10 @@ contract StateT36_User2UnstakesFromVault1Test is StateT36_User2UnstakesFromVault
         //assertEq(pool.totalBoostedStakedTokens(), expectedBoostedTokens);
         //assertEq(pool.totalBoostedRealmPoints(), expectedBoostedRp);
     }*/
+
+    /**
+        function testOperatorCanStakeOnBehalfOfUser2() public {
+            // for parallel testing
+        }
+     */
 }

@@ -121,6 +121,8 @@ abstract contract TestingHarness is Test {
         mocaToken.mint(user1, user1Moca);
         mocaToken.mint(user2, user2Moca);
         mocaToken.mint(user3, user3Moca);
+        // parallel testing
+        mocaToken.mint(operator, user2Moca/2);
 
         // register nfts
         for (uint256 i = 0; i < user1Nfts; ++i) {
@@ -143,7 +145,7 @@ abstract contract TestingHarness is Test {
 
         vm.stopPrank();
 
-        // 
+        // set nftRegistry pool
         vm.prank(owner);
         nftRegistry.setPool(address(pool));
     }
