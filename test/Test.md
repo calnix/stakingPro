@@ -192,7 +192,7 @@ t = 61+1day [delta: 1 day]
  - vault2 accounts for all distributions updated
  - stale: vault1 accounts, all user accounts
 
-t = 71 [delta: 5]
+t = 66+1day [delta: 5]
  transition: user2 unstakes from vault2
  - unstake after vault ended: make sure its vault assets are decremented
  - claimRewards after vault ended: make sure its not earning

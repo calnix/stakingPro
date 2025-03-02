@@ -7,29 +7,29 @@ import "./PoolT61.t.sol";
 abstract contract StateT86461_Vault2Ended is StateT61_Vault2CooldownActivated {
 
     // for reference
-    DataTypes.Vault vault1_T61And1Day; 
-    DataTypes.Vault vault2_T61And1Day;
+    DataTypes.Vault vault1_T86461; 
+    DataTypes.Vault vault2_T86461;
 
-    DataTypes.Distribution distribution0_T61And1Day;
-    DataTypes.Distribution distribution1_T61And1Day;
+    DataTypes.Distribution distribution0_T86461;
+    DataTypes.Distribution distribution1_T86461;
     //vault1
-    DataTypes.VaultAccount vault1Account0_T61And1Day;
-    DataTypes.VaultAccount vault1Account1_T61And1Day;
+    DataTypes.VaultAccount vault1Account0_T86461;
+    DataTypes.VaultAccount vault1Account1_T86461;
     //vault2
-    DataTypes.VaultAccount vault2Account0_T61And1Day;
-    DataTypes.VaultAccount vault2Account1_T61And1Day;
+    DataTypes.VaultAccount vault2Account0_T86461;
+    DataTypes.VaultAccount vault2Account1_T86461;
     //user1+vault1
-    DataTypes.UserAccount user1Vault1Account0_T61And1Day;
-    DataTypes.UserAccount user1Vault1Account1_T61And1Day;
+    DataTypes.UserAccount user1Vault1Account0_T86461;
+    DataTypes.UserAccount user1Vault1Account1_T86461;
     //user2+vault1
-    DataTypes.UserAccount user2Vault1Account0_T61And1Day;
-    DataTypes.UserAccount user2Vault1Account1_T61And1Day;
+    DataTypes.UserAccount user2Vault1Account0_T86461;
+    DataTypes.UserAccount user2Vault1Account1_T86461;
     //user1+vault2
-    DataTypes.UserAccount user1Vault2Account0_T61And1Day;
-    DataTypes.UserAccount user1Vault2Account1_T61And1Day;
+    DataTypes.UserAccount user1Vault2Account0_T86461;
+    DataTypes.UserAccount user1Vault2Account1_T86461;
     //user2+vault2
-    DataTypes.UserAccount user2Vault2Account0_T61And1Day;
-    DataTypes.UserAccount user2Vault2Account1_T61And1Day;
+    DataTypes.UserAccount user2Vault2Account0_T86461;
+    DataTypes.UserAccount user2Vault2Account1_T86461;
 
     function setUp() public virtual override {
         super.setUp();
@@ -44,25 +44,25 @@ abstract contract StateT86461_Vault2Ended is StateT61_Vault2CooldownActivated {
         pool.endVaults(vaultIds);
     
         // save state
-        vault1_T61And1Day = pool.getVault(vaultId1);
-        vault2_T61And1Day = pool.getVault(vaultId2);
+        vault1_T86461 = pool.getVault(vaultId1);
+        vault2_T86461 = pool.getVault(vaultId2);
         
-        distribution0_T61And1Day = getDistribution(0); 
-        distribution1_T61And1Day = getDistribution(1);
+        distribution0_T86461 = getDistribution(0); 
+        distribution1_T86461 = getDistribution(1);
 
-        vault1Account0_T61And1Day = getVaultAccount(vaultId1, 0);
-        vault1Account1_T61And1Day = getVaultAccount(vaultId1, 1);  
-        vault2Account0_T61And1Day = getVaultAccount(vaultId2, 0);
-        vault2Account1_T61And1Day = getVaultAccount(vaultId2, 1);
+        vault1Account0_T86461 = getVaultAccount(vaultId1, 0);
+        vault1Account1_T86461 = getVaultAccount(vaultId1, 1);  
+        vault2Account0_T86461 = getVaultAccount(vaultId2, 0);
+        vault2Account1_T86461 = getVaultAccount(vaultId2, 1);
 
-        user1Vault1Account0_T61And1Day = getUserAccount(user1, vaultId1, 0);
-        user1Vault1Account1_T61And1Day = getUserAccount(user1, vaultId1, 1);
-        user2Vault1Account0_T61And1Day = getUserAccount(user2, vaultId1, 0);
-        user2Vault1Account1_T61And1Day = getUserAccount(user2, vaultId1, 1);
-        user1Vault2Account0_T61And1Day = getUserAccount(user1, vaultId2, 0);
-        user1Vault2Account1_T61And1Day = getUserAccount(user1, vaultId2, 1);
-        user2Vault2Account0_T61And1Day = getUserAccount(user2, vaultId2, 0);
-        user2Vault2Account1_T61And1Day = getUserAccount(user2, vaultId2, 1);
+        user1Vault1Account0_T86461 = getUserAccount(user1, vaultId1, 0);
+        user1Vault1Account1_T86461 = getUserAccount(user1, vaultId1, 1);
+        user2Vault1Account0_T86461 = getUserAccount(user2, vaultId1, 0);
+        user2Vault1Account1_T86461 = getUserAccount(user2, vaultId1, 1);
+        user1Vault2Account0_T86461 = getUserAccount(user1, vaultId2, 0);
+        user1Vault2Account1_T86461 = getUserAccount(user1, vaultId2, 1);
+        user2Vault2Account0_T86461 = getUserAccount(user2, vaultId2, 0);
+        user2Vault2Account1_T86461 = getUserAccount(user2, vaultId2, 1);
     }
 }
 
@@ -81,11 +81,11 @@ contract StateT86461_Vault2EndedTest is StateT86461_Vault2Ended {
         assertEq(pool.totalStakedTokens(), user1Moca + user2Moca/2);   
         assertEq(pool.totalStakedRealmPoints(), user1Rp + user2Rp/2);  
         // x-ref pool against vault1
-        assertEq(pool.totalStakedNfts(), vault1_T61And1Day.stakedNfts);                       
-        assertEq(pool.totalStakedTokens(), vault1_T61And1Day.stakedTokens);   
-        assertEq(pool.totalStakedRealmPoints(), vault1_T61And1Day.stakedRealmPoints);
-        assertEq(pool.totalBoostedStakedTokens(), vault1_T61And1Day.boostedStakedTokens);   
-        assertEq(pool.totalBoostedRealmPoints(), vault1_T61And1Day.boostedRealmPoints);
+        assertEq(pool.totalStakedNfts(), vault1_T86461.stakedNfts);                       
+        assertEq(pool.totalStakedTokens(), vault1_T86461.stakedTokens);   
+        assertEq(pool.totalStakedRealmPoints(), vault1_T86461.stakedRealmPoints);
+        assertEq(pool.totalBoostedStakedTokens(), vault1_T86461.boostedStakedTokens);   
+        assertEq(pool.totalBoostedRealmPoints(), vault1_T86461.boostedRealmPoints);
         
         // check boosted assets: vault1 enjoys boosting
         
@@ -712,8 +712,6 @@ contract StateT86461_Vault2EndedTest is StateT86461_Vault2Ended {
         uint256 boostFactor = pool.PRECISION_BASE() + (initialVault.stakedNfts * pool.NFT_MULTIPLIER());
         assertEq(initialVault.boostedStakedTokens, user2Moca/2 * boostFactor / pool.PRECISION_BASE(), "Vault boosted staked mismatch");
         assertEq(initialVault.boostedRealmPoints, user2Rp/2 * boostFactor / pool.PRECISION_BASE(), "Vault boosted RP mismatch");
-
-
 
         // User2 unstakes from vault2
         vm.startPrank(user2);
