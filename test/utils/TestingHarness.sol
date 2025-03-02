@@ -3,17 +3,17 @@ pragma solidity ^0.8.13;
 
 import {Test, console2, stdStorage, StdStorage} from "forge-std/Test.sol";
 
-import "../src/StakingPro.sol";
-import "../src/RewardsVaultV1.sol";
+import "./../../src/StakingPro.sol";
+import {RewardsVaultV1} from "./../../src/RewardsVaultV1.sol";
 
 // mocks
-import "../test/mocks/MocaToken.sol";
+import "../mocks/MocaToken.sol";
+import "../mocks/MockRegistry.sol";
+import { EndpointV2Mock } from "../mocks/EndpointV2Mock.sol";
 import "openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
-import "../test/mocks/MockRegistry.sol";
-import { EndpointV2Mock } from "./mocks/EndpointV2Mock.sol";
 
 // interfaces
-import {IRealmPoints} from "./../src/interfaces/IRealmPoints.sol";
+import {IRealmPoints} from "./../../src/interfaces/IRealmPoints.sol";
 
 // utils
 import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";

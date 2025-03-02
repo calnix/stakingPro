@@ -7,39 +7,6 @@
 - setup 2 vaults: vault1, vault2
 - 3 users: user1, user2, user3
 
-**Deploy**
-- StateSetUpDistribution: staking power
-**StartTime**
-- StateCreateVault - *user 1 creates vault1*
-- StateStakeTokens
-- StateStakeNfts
-- StateStakeRP
-- StateUnstake
-**- StateSetUpDistribution: someToken** [*fork: for risk testing*]
-- StateUpdateCreationNfts
-- StateCreateVault_2 [new creation nfts amount]
-- StateMigrateVaults
-- StateStakeOnBehalfOf
-**- StateClaimRewards**
-- setRewardsVault: negative test; cannot claim existing rewards
-- **StateUpdateVaultFees**:
-    - nftFeeFactor
-    - creatorFeeFactor
-    - realmPointsFeeFactor
-- StateActivateCooldown
-- StateEndVaults: end vault1
-**- StateUpdateDistribution**
-- test updated distribution
-- StateUpdateVaultCooldown: end vault2
-**- StateEndDistributionImmediately** 
-- StateSetRewardsVault: positive test; new distribution setup
-**- StateSetEndTime**
-
-## misc fork [Pool Management]
-- StateUpdateCreationNfts
-- StateUpdateMinimumRealmPoints
-- StateSetRewardsVault
-- partial deposits for distributions
 
 ## Risk testing
 
@@ -61,8 +28,6 @@ X-Chain
 ## Migration
 
 - v1 to v2: rewardsVault
-
-## User fns
 
 ### user fns
 
@@ -196,22 +161,62 @@ t = 66+1day [delta: 5]
  transition: user2 unstakes from vault2
  - unstake after vault ended: make sure its vault assets are decremented
  - claimRewards after vault ended: make sure its not earning
- 
-t = 76 [delta: 5]
-t = 81 [delta: 5]
+
+t = 71 [delta: 5]
 
 ---
-split timeline fork
-1. endDistribution + claimRewards
-2. endContract + claimRewards
-3. update NFT multiplier
-4. updateMaximumFeeFactor
-5. updateMinimumRealmPoints
-6. emergencyExit
+## Pool Management fns: split timeline fork
 
-claimRewards [after end contract]
-=========== [can i fork?]
-stakeOnBehalfOf
-updateDistribution
-endDistribution
-setEndTime
+`stakeOnBehalfOf`
+- split on vault2 creation
+- user2 restakes nfts and migrates RP to vault2
+- user2 unstakes from tokens from vault1; but does not restake tokens
+- instead OPERATOR restakes on behalf of user2
+- vault2 checks and user2 accounts should tally as per main timeline's values
+
+`setEndTime`
+- use main timeline
+- transition fn checks setEndTime
+- on transition, check other fns's endTime checks
+- check claimRewards
+
+`setRewardsVault`
+- pick a random point in time
+- upgrade to rewardsVaultV2
+
+`updateActiveDistributions`
+- pick a random point in time
+- update active distributions and check new limit
+
+`updateMaximumFeeFactor`
+- split on vault2 updateFees
+
+`updateMinimumRealmPoints`
+- split when stakeRp is called
+
+`updateCreationNfts`
+- confirm tested. 
+
+`updateVaultCooldown`
+- split before activateCooldown is called on vault2
+- run is parallel to main timeline, when vault2 can end in 5 seconds
+
+`updateDistribution`
+- split sometime after distribution 1 is created
+- might need a couple of parallels to test different scenarios
+
+`endDistribution`
+- split sometime after distribution 1 is created
+- run in parallel to main timeline
+- check claimRewards
+
+## update NFT multiplier process
+
+
+## Risk fns
+
+emergencyExit
+
+## others 
+
+- partial deposits for distributions

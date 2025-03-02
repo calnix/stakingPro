@@ -3,7 +3,8 @@ pragma solidity ^0.8.26;
 
 import "forge-std/Test.sol";
 
-import "./TestingHarness.sol";
+import "../utils/TestingHarness.sol";
+
 
 abstract contract StateT0_Deploy is TestingHarness {    
 
@@ -94,6 +95,7 @@ contract StateT0_DeployAndSetupStakingPowerTest is StateT0_DeployAndSetupStaking
         stuff you can can w/ distribvution, but before setup
     */
 }
+
 
 
 abstract contract StateT1_Started is StateT0_DeployAndSetupStakingPower {
@@ -449,6 +451,8 @@ contract StateT1_User1StakeAssetsToVault1Test is StateT1_User1StakeAssetsToVault
     }
 }
 
+
+
 abstract contract StateT6_User2StakeAssetsToVault1 is StateT1_User1StakeAssetsToVault1 {
 
     // for reference
@@ -709,6 +713,8 @@ contract StateT6_User2StakeAssetsToVault1Test is StateT6_User2StakeAssetsToVault
     }
 }
 
+
+
 //note: 5 seconds delta. another 5 ether of staking power emitted @1ether/second
 abstract contract StateT11_Distribution1Created is StateT6_User2StakeAssetsToVault1 {
 
@@ -779,6 +785,8 @@ contract StateT11_Distribution1CreatedTest is StateT11_Distribution1Created {
         assertEq(distribution.manuallyEnded, 0);
     }
 }
+
+
 
 abstract contract StateT16_BothUsersStakeAgain is StateT11_Distribution1Created {
     
@@ -1190,6 +1198,8 @@ contract StateT16_BothUsersStakeAgainTest is StateT16_BothUsersStakeAgain {
 
 }
 
+
+
 //note: creation nfts updated at t21 | distribution_1 starts at t21
 abstract contract StateT21_CreationNftsUpdated is StateT16_BothUsersStakeAgain {
 
@@ -1290,6 +1300,8 @@ contract StateT21_CreationNftsUpdatedTest is StateT21_CreationNftsUpdated {
         assertEq(vault.boostedStakedTokens, 0);
     }
 }
+
+
 
 //note: creation nfts updated at t21 | distribution_1 starts at t21
 abstract contract StateT26_User2CreatesVault2 is StateT21_CreationNftsUpdated {
@@ -1801,6 +1813,9 @@ contract StateT26_User2CreatesVault2Test is StateT26_User2CreatesVault2 {
         assertEq(vault2After.boostedStakedTokens, (vault2After.stakedTokens * expectedVault2BoostFactor) / pool.PRECISION_BASE(), "Vault2 boosted tokens incorrect");
     }
 }
+
+
+
 
 //note: user2 migrates half his RP to vault2
 abstract contract StateT31_User2MigrateRpToVault2 is StateT26_User2CreatesVault2 {
