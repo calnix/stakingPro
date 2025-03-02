@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import "./Pool.t.sol";
+import "./PoolT31.t.sol";
 
 abstract contract StateT36_User2UnstakesFromVault1 is StateT31_User2MigrateRpToVault2 {
     
@@ -645,6 +645,7 @@ contract StateT36_User2UnstakesFromVault1Test is StateT36_User2UnstakesFromVault
             //--------------------------------
             
         }
+        
  /*   
     // connector: TODO
     function testUser2CanStakeToVault2() public {
@@ -707,9 +708,43 @@ contract StateT36_User2UnstakesFromVault1Test is StateT36_User2UnstakesFromVault
         //assertEq(pool.totalBoostedRealmPoints(), expectedBoostedRp);
     }*/
 
-    /**
-        function testOperatorCanStakeOnBehalfOfUser2() public {
-            // for parallel testing
-        }
-     */
+    // for parallel testing: PoolT41p_StakeOnBehalf
+    function testOperatorCanStakeOnBehalfOfUser2() public {
+        // check initial token balances
+        uint256 operatorInitialBalance = mocaToken.balanceOf(operator);
+        uint256 poolInitialBalance = mocaToken.balanceOf(address(pool));
+
+        // get vault2 assets before operator stakes
+        DataTypes.Vault memory vault2Before = pool.getVault(vaultId2);
+        assertEq(vault2Before.stakedTokens, 0);
+        
+        // operator stakes on behalf of user2
+        vm.startPrank(operator);
+            
+            bytes32[] memory vaultIds = new bytes32[](1);
+            vaultIds[0] = vaultId2;
+            
+            address[] memory onBehalfOfs = new address[](1);
+            onBehalfOfs[0] = user2;
+            
+            uint256[] memory amounts = new uint256[](1);
+            amounts[0] = user2Moca/2;
+            
+            mocaToken.approve(address(pool), user2Moca/2);
+            
+            vm.expectEmit(true, true, true, true);
+            emit StakedOnBehalfOf(onBehalfOfs, vaultIds, amounts);
+            
+            pool.stakeOnBehalfOf(vaultIds, onBehalfOfs, amounts);
+        vm.stopPrank();
+
+        // check token transfers
+        assertEq(mocaToken.balanceOf(operator), operatorInitialBalance - user2Moca/2, "Operator balance not reduced correctly");
+        assertEq(mocaToken.balanceOf(address(pool)), poolInitialBalance + user2Moca/2, "Pool balance not increased correctly");
+
+        // check vault2 assets
+        DataTypes.Vault memory vault2After = pool.getVault(vaultId2);
+        assertEq(vault2After.stakedTokens, user2Moca/2);
+    }
+    
 }

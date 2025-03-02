@@ -162,7 +162,12 @@ t = 66+1day [delta: 5]
  - unstake after vault ended: make sure its vault assets are decremented
  - claimRewards after vault ended: make sure its not earning
 
-t = 71 [delta: 5]
+t = 86471 [delta: 5]
+ `setEndTime`
+    - use main timeline
+    - transition fn checks setEndTime
+    - on transition, check other fns's endTime checks
+    - check claimRewards
 
 ---
 ## Pool Management fns: split timeline fork
@@ -173,16 +178,6 @@ t = 71 [delta: 5]
 - user2 unstakes from tokens from vault1; but does not restake tokens
 - instead OPERATOR restakes on behalf of user2
 - vault2 checks and user2 accounts should tally as per main timeline's values
-
-`setEndTime`
-- use main timeline
-- transition fn checks setEndTime
-- on transition, check other fns's endTime checks
-- check claimRewards
-
-`setRewardsVault`
-- pick a random point in time
-- upgrade to rewardsVaultV2
 
 `updateActiveDistributions`
 - pick a random point in time
@@ -209,6 +204,10 @@ t = 71 [delta: 5]
 - split sometime after distribution 1 is created
 - run in parallel to main timeline
 - check claimRewards
+`setRewardsVault`
+- split at T26; d1 starts at T21
+- upgrade to rewardsVaultV2
+
 
 ## update NFT multiplier process
 

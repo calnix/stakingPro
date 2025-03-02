@@ -12,7 +12,6 @@ import "./PoolT86461.t.sol";
  */
 
 // 66+1day
-
 abstract contract StateT86466_User2UnstakedFromVault2 is StateT86461_Vault2Ended {
 
     function setUp() public virtual override {
@@ -55,7 +54,72 @@ contract StateT86466_User2UnstakedFromVault2Test is StateT86466_User2UnstakedFro
 
         // check that what as claimed is the same as what was claimable in T86461: i.e. vault did not accrued rewards after endTime
         uint256 claimableAtT86461 = vault2Account1_T86461.totalAccRewards - vault2Account1_T86461.totalClaimedRewards;
-        assertApproxEqAbs(claimableRewards, claimableAtT86461, 1676, "Claimed rewards do not match expected amount from T86461");
-        
+        assertApproxEqAbs(claimableRewards, claimableAtT86461, 1676, "Claimed rewards do not match expected amount from T86461");   
     }
+
+    function testCannotSetZeroEndTime() public {
+        vm.startPrank(operator);
+            vm.expectRevert(Errors.InvalidEndTime.selector);
+            pool.setEndTime(0);
+        vm.stopPrank();
+    }
+
+    function testCannotSetEndTimeInPast() public {
+        vm.startPrank(operator);
+            vm.expectRevert(Errors.InvalidEndTime.selector);
+            pool.setEndTime(block.timestamp - 1);
+        vm.stopPrank();
+    }
+
+    function testCanSetEndTimeMultipleTimes() public {
+        vm.startPrank(operator);
+            // Set first end time
+            uint256 firstEndTime = block.timestamp + 5;
+            pool.setEndTime(firstEndTime);
+            assertEq(pool.endTime(), firstEndTime);
+
+            // Set second end time
+            uint256 secondEndTime = block.timestamp + 10; 
+            pool.setEndTime(secondEndTime);
+            assertEq(pool.endTime(), secondEndTime);
+        vm.stopPrank();
+    }
+
+    // transition
+    function testSetContractEndTime() public {
+        // get initial endTime
+        uint256 initialEndTime = pool.endTime();
+        assertEq(initialEndTime, 0);
+
+        // get initial distribution endTimes
+        uint256[] memory initialDistributionEndTimes = new uint256[](pool.getActiveDistributionsLength());
+        for(uint256 i; i < pool.getActiveDistributionsLength(); ++i) {
+            DataTypes.Distribution memory distribution = getDistribution(i);
+            initialDistributionEndTimes[i] = distribution.endTime;
+        }
+
+        uint256 newEndTime = block.timestamp + 5;
+        
+        // set new endTime
+        vm.startPrank(operator);
+            vm.expectEmit(true, true, true, true);
+            emit StakingEndTimeSet(newEndTime);
+            pool.setEndTime(newEndTime);
+        vm.stopPrank();
+
+        // check that endTime is set
+        assertEq(pool.endTime(), newEndTime);
+
+        // check that distribution endTimes are updated
+        for(uint256 i; i < pool.getActiveDistributionsLength(); ++i) {
+            DataTypes.Distribution memory distribution = getDistribution(i);
+
+            if(initialDistributionEndTimes[i] > newEndTime) {
+                assertEq(distribution.endTime, newEndTime, "Distribution endTime not updated");
+            } else {
+                assertEq(distribution.endTime, initialDistributionEndTimes[i], "Distribution endTime incorrectly updated");
+            }
+        }
+    }
+
 }

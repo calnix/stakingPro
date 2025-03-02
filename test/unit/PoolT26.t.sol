@@ -437,7 +437,7 @@ contract StateT26_User2CreatesVault2Test is StateT26_User2CreatesVault2 {
         assertEq(vaultAccount.totalClaimedRewards, 0);
     }
 
-    // next state
+    // state transition
     function testUser2MigrateRp() public {
         
         // get initial values
@@ -512,4 +512,5 @@ contract StateT26_User2CreatesVault2Test is StateT26_User2CreatesVault2 {
         assertEq(vault2After.totalBoostFactor, expectedVault2BoostFactor, "Vault2 boost factor incorrect");
         assertEq(vault2After.boostedStakedTokens, (vault2After.stakedTokens * expectedVault2BoostFactor) / pool.PRECISION_BASE(), "Vault2 boosted tokens incorrect");
     }
+
 }

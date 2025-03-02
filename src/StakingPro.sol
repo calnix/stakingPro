@@ -1080,7 +1080,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
     //note > or >= ?
     function _whenNotEnded() internal view {
-        if(endTime > 0 && block.timestamp >= endTime) revert Errors.StakingEnded();
+        if(endTime > 0 && block.timestamp > endTime) revert Errors.StakingEnded();
     }
 
     function _whenNotFrozen() internal view {
