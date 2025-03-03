@@ -258,6 +258,7 @@ abstract contract StateT1_User1StakeAssetsToVault1 is StateT1_CreateVault1 {
 
 // accounts only exist for distribution 0
 contract StateT1_User1StakeAssetsToVault1Test is StateT1_User1StakeAssetsToVault1 {
+
     function testPool_T1() public {
         
         // Check total staked assets
@@ -353,5 +354,33 @@ contract StateT1_User1StakeAssetsToVault1Test is StateT1_User1StakeAssetsToVault
         assertEq(userAccount.claimedNftRewards, 0);
         assertEq(userAccount.claimedRealmPointsRewards, 0);
         assertEq(userAccount.claimedCreatorRewards, 0);
+    }
+
+
+
+    // transition fn: parallel test
+    function testOperatorCanUpdateMinimumRealmPoints() public {
+        // lower minimum realm points
+        uint256 originalMinimumRealmPoints = pool.MINIMUM_REALMPOINTS_REQUIRED();
+        uint256 newMinimumRealmPoints = originalMinimumRealmPoints/2;
+
+        vm.startPrank(operator);
+            vm.expectEmit(true, true, true, true);
+            emit MinimumRealmPointsUpdated(originalMinimumRealmPoints, newMinimumRealmPoints);
+            pool.updateMinimumRealmPoints(newMinimumRealmPoints);
+        vm.stopPrank();
+
+        assertEq(pool.MINIMUM_REALMPOINTS_REQUIRED(), newMinimumRealmPoints);
+
+        // increase minimum realm points
+        uint256 newerMinimumRealmPoints = originalMinimumRealmPoints*2;
+
+        vm.startPrank(operator);
+            vm.expectEmit(true, true, true, true);
+            emit MinimumRealmPointsUpdated(newMinimumRealmPoints, newerMinimumRealmPoints);
+            pool.updateMinimumRealmPoints(newerMinimumRealmPoints);
+        vm.stopPrank();
+
+        assertEq(pool.MINIMUM_REALMPOINTS_REQUIRED(), newerMinimumRealmPoints);
     }
 }

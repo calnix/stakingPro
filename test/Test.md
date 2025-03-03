@@ -183,11 +183,22 @@ t = 86471 [delta: 5]
 - split at T16. [D1 created at T11]
 - update active distributions and check new limit
 
-`updateMaximumFeeFactor`
+# `updateMaximumFeeFactor` [!!!]
 - split on T46; both users update fees on both vaults
+- T46: both users update fees on both vaults
+- T51: user1 updates fees on vault1; user2 updates fees on vault2
+
+maximumFeeFactor determines how much of the rewards are taken as fees.
+totalFeeFactor cannot exceed maximumFeeFactor.
+if maximumFeeFactor is lowered: amount of rewards taken as fees is lowered.
+if maximumFeeFactor is raised: amount of rewards taken as fees is increased.
+- creatorFeeFactor can only be lowered;
 
 `updateMinimumRealmPoints`
-- split when stakeRp is called
+- t1: user1 staked half their rp
+- t6: user2 staked half their rp
+ transition fn on T1: updateMinimumRealmPoints
+ split on T6: user2 stakes lower amount of rp
 
 `updateCreationNfts`
 - confirm tested. at t21
