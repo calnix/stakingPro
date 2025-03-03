@@ -924,7 +924,7 @@ contract StateT56_UsersClaimRewardsFromBothVaultsTest is StateT56_UsersClaimRewa
         }
 
     
-    // --------------- connector ---------------
+    // --------------- state transition ---------------
 
     function testUserCannotActivateCooldown() public {
         
@@ -947,4 +947,27 @@ contract StateT56_UsersClaimRewardsFromBothVaultsTest is StateT56_UsersClaimRewa
         DataTypes.Vault memory vault = pool.getVault(vaultId2);
         assertEq(vault.endTime, expectedEndTime, "Incorrect endTime");
     }
-}
+
+    // state transition: for parallel tests - `PoolT61p_UpdateVaultCooldown`
+    function testUserCannotUpdateVaultCooldown() public {
+        vm.startPrank(user1);
+            vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user1, pool.OPERATOR_ROLE()));
+            pool.updateVaultCooldown(5);
+        vm.stopPrank();
+    }
+    
+    function testOperatorCanUpdateVaultCooldown() public {
+        uint256 oldCooldown = pool.VAULT_COOLDOWN_DURATION();
+        uint256 newCooldown = 5;
+
+        vm.startPrank(operator);
+            vm.expectEmit(true, true, true, true);
+            emit VaultCooldownDurationUpdated(oldCooldown, newCooldown);
+            pool.updateVaultCooldown(newCooldown);
+        vm.stopPrank();
+
+        // Check cooldown duration was updated
+        assertEq(pool.VAULT_COOLDOWN_DURATION(), newCooldown);
+    }
+}   
+

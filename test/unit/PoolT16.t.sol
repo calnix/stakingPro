@@ -400,8 +400,15 @@ contract StateT16_BothUsersStakeAgainTest is StateT16_BothUsersStakeAgain {
 
     // ---------------- others ----------------
 
+    function testNonOperatorCannotUpdateCreationNfts(uint256 newAmount) public {
+        vm.startPrank(user1);
+            vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user1, pool.OPERATOR_ROLE()));
+            pool.updateCreationNfts(newAmount);
+        vm.stopPrank();
+    }
+
+    // operator updates CREATION_NFTS_REQUIRED
     function testUpdateCreationNfts(uint256 newAmount) public {
-        // operator updates CREATION_NFTS_REQUIRED
         vm.startPrank(operator);
             vm.expectEmit(true, true, false, false);
             emit CreationNftRequiredUpdated(pool.CREATION_NFTS_REQUIRED(), newAmount);

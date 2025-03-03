@@ -201,11 +201,14 @@ if maximumFeeFactor is raised: amount of rewards taken as fees is increased.
  split on T6: user2 stakes lower amount of rp
 
 `updateCreationNfts`
-- confirm tested. at t21
+- transition fn: T16
+- state tested on T21
 
 `updateVaultCooldown`
 - split before activateCooldown is called on vault2
 - run is parallel to main timeline, when vault2 can end in 5 seconds
+- transition fn: T56 - test `updateVaultCooldown`
+- split test on T61: activateCooldown w/ new cooldown period [copy T61 tests]
 
 `updateDistribution`
 - split sometime after distribution 1 is created

@@ -14,6 +14,7 @@ import "openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
 
 // interfaces
 import {IRealmPoints} from "./../../src/interfaces/IRealmPoints.sol";
+import {IAccessControl} from "openzeppelin-contracts/contracts/access/IAccessControl.sol";
 
 // utils
 import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
