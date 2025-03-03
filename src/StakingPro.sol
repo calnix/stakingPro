@@ -585,7 +585,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     /**
-     * @notice Updates the maximum fee factor; which dictates the amount of rewards that go to moca stakers
+     * @notice Updates the maximum fee factor; dictates the amount of rewards that go to moca stakers
      * @dev Fee factor must be non-zero
      * @param newFactor The new maximum fee factor to set
      */
