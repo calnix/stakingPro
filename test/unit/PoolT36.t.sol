@@ -18,11 +18,11 @@ abstract contract StateT36_User2UnstakesFromVault1 is StateT31_User2MigrateRpToV
     DataTypes.VaultAccount vault2Account0_T36;
     DataTypes.VaultAccount vault2Account1_T36;
     //user1+vault1
-    DataTypes.UserAccount user1Account0_T36;
-    DataTypes.UserAccount user1Account1_T36;
+    DataTypes.UserAccount user1Vault1Account0_T36;
+    DataTypes.UserAccount user1Vault1Account1_T36;
     //user2+vault1
-    DataTypes.UserAccount user2Account0_T36;
-    DataTypes.UserAccount user2Account1_T36;
+    DataTypes.UserAccount user2Vault1Account0_T36;
+    DataTypes.UserAccount user2Vault1Account1_T36;
     //user1+vault2
     DataTypes.UserAccount user1Vault2Account0_T36;
     DataTypes.UserAccount user1Vault2Account1_T36;
@@ -55,10 +55,10 @@ abstract contract StateT36_User2UnstakesFromVault1 is StateT31_User2MigrateRpToV
         vault1Account1_T36 = getVaultAccount(vaultId1, 1);  
         vault2Account0_T36 = getVaultAccount(vaultId2, 0);
         vault2Account1_T36 = getVaultAccount(vaultId2, 1);
-        user1Account0_T36 = getUserAccount(user1, vaultId1, 0);
-        user1Account1_T36 = getUserAccount(user1, vaultId1, 1);
-        user2Account0_T36 = getUserAccount(user2, vaultId1, 0);
-        user2Account1_T36 = getUserAccount(user2, vaultId1, 1);
+        user1Vault1Account0_T36 = getUserAccount(user1, vaultId1, 0);
+        user1Vault1Account1_T36 = getUserAccount(user1, vaultId1, 1);
+        user2Vault1Account0_T36 = getUserAccount(user2, vaultId1, 0);
+        user2Vault1Account1_T36 = getUserAccount(user2, vaultId1, 1);
         user1Vault2Account0_T36 = getUserAccount(user1, vaultId2, 0);
         user1Vault2Account1_T36 = getUserAccount(user1, vaultId2, 1);
         user2Vault2Account0_T36 = getUserAccount(user2, vaultId2, 0);
@@ -708,7 +708,25 @@ contract StateT36_User2UnstakesFromVault1Test is StateT36_User2UnstakesFromVault
         //assertEq(pool.totalBoostedRealmPoints(), expectedBoostedRp);
     }*/
 
-    // for parallel testing: PoolT41p_StakeOnBehalf
+
+    // ---- state transition: for PoolT41p_StakeOnBehalfOf.t.sol ----
+
+    function testUserCannotStakeOnBehalfOf() public {
+        bytes32[] memory vaultIds = new bytes32[](1);
+        vaultIds[0] = vaultId2;
+        
+        address[] memory onBehalfOfs = new address[](1);
+        onBehalfOfs[0] = user2;
+        
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = user2Moca/2;
+
+        vm.startPrank(user1);
+            vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user1, pool.OPERATOR_ROLE()));
+            pool.stakeOnBehalfOf(vaultIds, onBehalfOfs, amounts);
+        vm.stopPrank();
+    }
+
     function testOperatorCanStakeOnBehalfOfUser2() public {
         // check initial token balances
         uint256 operatorInitialBalance = mocaToken.balanceOf(operator);

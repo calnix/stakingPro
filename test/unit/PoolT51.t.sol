@@ -3,7 +3,7 @@ pragma solidity ^0.8.26;
 
 import "./PoolT46.t.sol";
 
-abstract contract StateT51BothVaultsFeesUpdated is StateT46BothVaultsFeesUpdated {
+abstract contract StateT51_BothVaultsFeesUpdated is StateT46_BothVaultsFeesUpdated {
 
     // for reference
     DataTypes.Vault vault1_T51; 
@@ -88,7 +88,7 @@ abstract contract StateT51BothVaultsFeesUpdated is StateT46BothVaultsFeesUpdated
       - user2+vault2 updated
  */
 
-contract StateT51BothVaultsFeesUpdatedTest is StateT51BothVaultsFeesUpdated {
+contract StateT51_BothVaultsFeesUpdatedTest is StateT51_BothVaultsFeesUpdated {
 
     // ---------------- base assets ----------------
 

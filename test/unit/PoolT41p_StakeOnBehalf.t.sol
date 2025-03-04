@@ -662,7 +662,7 @@ contract StateT41_User2StakesToVault2_OperatorStakesOnBehalfTest is StateT41_Use
 
 // forward 5s to check rewards are accrued correctly
 // note: we clone T46 to test this, using updateVaultFees as an update trigger
-abstract contract StateT46_CheckRewardsAccrued is StateT41_User2StakesToVault2_OperatorStakesOnBehalf {
+abstract contract StateT46_CheckRewardsAccrued_AfterStakeOnBehalf is StateT41_User2StakesToVault2_OperatorStakesOnBehalf {
     
     function setUp() public virtual override {
         super.setUp();
@@ -689,7 +689,7 @@ abstract contract StateT46_CheckRewardsAccrued is StateT41_User2StakesToVault2_O
     }
 }
 
-contract StateT46_CheckRewardsAccruedTest is StateT46_CheckRewardsAccrued {
+contract StateT46_CheckRewardsAccrued_AfterStakeOnBehalfTest is StateT46_CheckRewardsAccrued_AfterStakeOnBehalf {
 
     // ---------------- base assets ----------------
 

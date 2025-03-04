@@ -638,8 +638,148 @@ contract StateT41_User2StakesToVault2Test is StateT41_User2StakesToVault2 {
             assertEq(claimableRewards, 0, "claimableRewards mismatch"); 
         }
 
-    
+    // ---- state transition: for PoolT46.t.sol ----
 
-    // TODO: connector: updateVaultFees() test
+    function testUserCannotUpdateVaultFees() public {
+        vm.startPrank(user2);
+            vm.expectRevert(Errors.UserIsNotCreator.selector);
+            pool.updateVaultFees(vaultId1, 1000, 1000, 1000);
+        vm.stopPrank();
+    }
+
+    function testCannotExceedMaximumFeeFactor() public {
+        // Get current creator fee
+        uint256 currentCreatorFee = pool.getVault(vaultId1).creatorFeeFactor;
+        
+        // Try to set fees that would exceed maximum
+        uint256 nftFeeFactor = 2500;
+        uint256 realmPointsFeeFactor = 2500;
+        
+        vm.startPrank(user1);
+            vm.expectRevert(Errors.MaximumFeeFactorExceeded.selector);
+            pool.updateVaultFees(vaultId1, nftFeeFactor, currentCreatorFee, realmPointsFeeFactor);
+        vm.stopPrank();
+    }
+
+    function testCreatorCannotIncreaseCreatorFees() public {
+        // Get current creator fee
+        uint256 currentCreatorFee = pool.getVault(vaultId1).creatorFeeFactor;
+        
+        // Try to increase creator fee
+        uint256 higherCreatorFee = currentCreatorFee + 100;
+        
+        vm.startPrank(user1);
+            vm.expectRevert(Errors.CreatorFeeCanOnlyBeDecreased.selector);
+            pool.updateVaultFees(vaultId1, 1000, higherCreatorFee, 1000);
+        vm.stopPrank();
+    }
+
+    function testCreatorCannotDecreaseNftFees() public {
+        // Get current nft fee
+        uint256 currentNftFee = pool.getVault(vaultId1).nftFeeFactor;
+        
+        // Try to decrease nft fee
+        uint256 lowerNftFee = currentNftFee - 100;
+        
+        vm.startPrank(user1);
+            vm.expectRevert(Errors.NftFeeCanOnlyBeIncreased.selector);
+            pool.updateVaultFees(vaultId1, lowerNftFee, 500, 1000);
+        vm.stopPrank();
+    }
+
+    function testCreatorCannotDecreaseRpFees() public {
+        // Get current rp fee
+        uint256 currentRpFee = pool.getVault(vaultId1).realmPointsFeeFactor;
+        
+        // Try to decrease rp fee
+        uint256 lowerRpFee = currentRpFee - 100;
+        
+        vm.startPrank(user1);
+            vm.expectRevert(Errors.RealmPointsFeeCanOnlyBeIncreased.selector);
+            pool.updateVaultFees(vaultId1, 1000, 500, lowerRpFee);
+        vm.stopPrank();
+    }
+
+    function testCreatorCanUpdateVaultFees() public {
+        // Vault1 fees - user1 reduces creator fee, increases nft and rp fees
+        uint256 creatorFeeFactor1 = 500; // Reduced from 1000
+        uint256 nftFeeFactor1 = 1250;
+        uint256 realmPointsFeeFactor1 = 1250;
+
+        vm.startPrank(user1);
+            pool.updateVaultFees(vaultId1, nftFeeFactor1, creatorFeeFactor1, realmPointsFeeFactor1);
+        vm.stopPrank();
+
+        assertEq(pool.getVault(vaultId1).creatorFeeFactor, creatorFeeFactor1);
+        assertEq(pool.getVault(vaultId1).nftFeeFactor, nftFeeFactor1);
+        assertEq(pool.getVault(vaultId1).realmPointsFeeFactor, realmPointsFeeFactor1);
+    }
+
+    // ---- state transition: for PoolT46p_EndDistribution.t.sol ----
+
+    function testUserCannotEndDistribution() public {
+        vm.startPrank(user1);
+            vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user1, pool.OPERATOR_ROLE()));
+            pool.endDistribution(1);
+        vm.stopPrank();
+    }
+
+    function testOperatorCannotEndDistribution0() public {
+        vm.startPrank(operator);
+            vm.expectRevert(Errors.InvalidDistributionId.selector);
+            pool.endDistribution(0);
+        vm.stopPrank();
+    }
+
+    function testOperatorCannotEndNonExistentDistribution() public {
+        vm.startPrank(operator);
+            vm.expectRevert(Errors.NonExistentDistribution.selector);
+            pool.endDistribution(99);
+        vm.stopPrank();
+    }
+
+    function testOperatorCannotEndAlreadyEndedDistribution() public {
+        // Warp to after distribution end time
+        vm.warp(distribution1_T41.endTime + 1);
+        
+        vm.startPrank(operator);
+            vm.expectRevert(Errors.DistributionEnded.selector);
+            pool.endDistribution(1);
+        vm.stopPrank();
+    }
+
+    function testOperatorCanEndDistribution() public {
+
+        // get totalRequired on rewards vault contract
+        DataTypes.Distribution memory distributionInitial = getDistribution(1);
+        uint256 totalRequiredInitial = distributionInitial.emissionPerSecond * (distributionInitial.endTime - distributionInitial.startTime);
+
+        (, , uint256 totalRequiredInitialOnRewardsVault, , ) = rewardsVault.distributions(1);    
+        assertEq(totalRequiredInitial, totalRequiredInitialOnRewardsVault);
+
+        
+        vm.startPrank(operator);
+            vm.expectEmit(true, true, true, true);
+            emit DistributionEnded(1, block.timestamp, distribution1_T41.totalEmitted);
+            
+            // Expect rewards vault call
+            vm.expectCall(
+                address(pool.REWARDS_VAULT()),
+                abi.encodeCall(IRewardsVault.endDistribution, (1, distribution1_T41.totalEmitted))
+            );
+            
+            pool.endDistribution(1);
+        vm.stopPrank();
+
+        // Check distribution was updated correctly on pool
+        DataTypes.Distribution memory distribution = getDistribution(1);
+        assertEq(distribution.manuallyEnded, 1);
+        assertEq(distribution.endTime, block.timestamp);
+        
+        // Check rewards vault contract was updated correctly
+        (, , uint256 totalRequired, , ) = rewardsVault.distributions(1);    
+        assertEq(totalRequired, distribution.totalEmitted);
+        assertNotEq(totalRequired, totalRequiredInitial);
+    }
 
 }

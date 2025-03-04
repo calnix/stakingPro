@@ -3,7 +3,7 @@ pragma solidity ^0.8.26;
 
 import "./PoolT41.t.sol";
 
-abstract contract StateT46BothVaultsFeesUpdated is StateT41_User2StakesToVault2 {
+abstract contract StateT46_BothVaultsFeesUpdated is StateT41_User2StakesToVault2 {
 
     // for reference
     DataTypes.Vault vault1_T46; 
@@ -86,7 +86,7 @@ abstract contract StateT46BothVaultsFeesUpdated is StateT41_User2StakesToVault2 
       - user2+vault2 updated
 */
 
-contract StateT46BothUsersClaimRewardsTest is StateT46BothVaultsFeesUpdated {
+contract StateT46_BothVaultsFeesUpdatedTest is StateT46_BothVaultsFeesUpdated {
 
     // ---------------- base assets ----------------
 
@@ -717,7 +717,7 @@ contract StateT46BothUsersClaimRewardsTest is StateT46BothVaultsFeesUpdated {
                 uint256 prevAccNftStakingRewards = user1Vault1Account1_T41.accNftStakingRewards;
                 uint256 prevAccRealmPointsRewards = user1Vault1Account1_T41.accRealmPointsRewards;
 
-                // Calculate expected rewards for user2's staked tokens 
+                // Calculate expected rewards for user1's staked tokens 
                 uint256 latestAccStakingRewards = calculateRewards(stakedTokens, vaultAccount.rewardsAccPerUnitStaked, prevUserIndex, 1E18) + prevAccStakingRewards;      
                 // Calculate expected rewards for nft staking
                 uint256 latestAccNftStakingRewards = ((vaultAccount.nftIndex - prevNftIndex) * numOfNfts) + prevAccNftStakingRewards; 

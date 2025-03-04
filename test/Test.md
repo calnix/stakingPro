@@ -210,13 +210,18 @@ if maximumFeeFactor is raised: amount of rewards taken as fees is increased.
 - transition fn: T56 - test `updateVaultCooldown`
 - split test on T61: activateCooldown w/ new cooldown period [copy T61 tests]
 
-`updateDistribution`
+# `updateDistribution`[!!!]
 - split sometime after distribution 1 is created
 - might need a couple of parallels to test different scenarios
+startTime, endTime, emissionPerSecond
+- increase/decrease all vars
+- combo checks: increase/decrease in totalRequired: {not started, midway}
+- test endDistribution error: `if(distribution.manuallyEnded == 1) revert Errors.DistributionManuallyEnded();`
 
 `endDistribution`
-- split sometime after distribution 1 is created
-- run in parallel to main timeline
+- split at T46
+- end D1 then warp to T46
+- rewards should only accrued till T41, nothing further
 - check claimRewards
 `setRewardsVault`
 - split at T26; d1 starts at T21

@@ -3,7 +3,7 @@ pragma solidity ^0.8.26;
 
 import "./PoolT51.t.sol";
 
-abstract contract StateT56_UsersClaimRewardsFromBothVaults is StateT51BothVaultsFeesUpdated {
+abstract contract StateT56_UsersClaimRewardsFromBothVaults is StateT51_BothVaultsFeesUpdated {
 
     // for reference
     DataTypes.Vault vault1_T56; 
