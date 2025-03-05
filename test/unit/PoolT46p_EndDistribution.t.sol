@@ -30,6 +30,9 @@ abstract contract StateT46_BothVaultsFeesUpdated_EndDistribution is StateT41_Use
     DataTypes.UserAccount user2Vault2Account0_T46;
     DataTypes.UserAccount user2Vault2Account1_T46;
 
+    // additional
+    uint256 user1Vault1ClaimableAtT41ViewFn;        
+
     function setUp() public virtual override {
         super.setUp();
 
@@ -38,13 +41,27 @@ abstract contract StateT46_BothVaultsFeesUpdated_EndDistribution is StateT41_Use
             pool.endDistribution(1);
         vm.stopPrank();
 
+        // snapshot T41 rewards:
+        user1Vault1ClaimableAtT41ViewFn = pool.getClaimableRewards(user1, vaultId1, 1);
+
+        // snapshot T41 rewards for user1+vault1: update both user and vault at T41
+        vm.startPrank(user1);
+            // Vault1 fees - user1 reduces creator fee, increases nft and rp fees
+            uint256 creatorFeeFactor1 = 500; // Reduced from 1000
+            uint256 nftFeeFactor1 = 1250;
+            uint256 realmPointsFeeFactor1 = 1250;
+            pool.updateVaultFees(vaultId1, nftFeeFactor1, creatorFeeFactor1, realmPointsFeeFactor1);
+            
+            // track T41 rewards: overwrites PoolT41.t.sol
+            user1Vault1Account1_T41 = getUserAccount(user1, vaultId1, 1);
+            vault1Account1_T41 = getVaultAccount(vaultId1, 1);  
+
+        vm.stopPrank();
+
+
         vm.warp(46);
-
-        // Vault1 fees - user1 reduces creator fee, increases nft and rp fees
-        uint256 creatorFeeFactor1 = 500; // Reduced from 1000
-        uint256 nftFeeFactor1 = 1250;
-        uint256 realmPointsFeeFactor1 = 1250;
-
+        
+        // to update user at T46
         vm.startPrank(user1);
             pool.updateVaultFees(vaultId1, nftFeeFactor1, creatorFeeFactor1, realmPointsFeeFactor1);
         vm.stopPrank();
@@ -198,6 +215,12 @@ contract StateT46_BothVaultsFeesUpdated_EndDistributionTest is StateT46_BothVaul
         assertEq(distribution.index, distribution1_T41.index, "index mismatch");
         assertEq(distribution.totalEmitted, distribution1_T41.totalEmitted, "totalEmitted mismatch");
         assertEq(distribution.lastUpdateTimeStamp, 41, "lastUpdateTimeStamp mismatch");
+
+        // vault received and distribution emitted should be the same        
+        DataTypes.VaultAccount memory vaultAccount1 = getVaultAccount(vaultId1, 1);        
+        DataTypes.VaultAccount memory vaultAccount2 = getVaultAccount(vaultId2, 1);
+
+        assertApproxEqAbs(distribution.totalEmitted, vaultAccount1.totalAccRewards + vaultAccount2.totalAccRewards, 200, "totalEmitted mismatch");
     }
 
     // updated at T46; lastUpdated at T36
@@ -460,5 +483,77 @@ contract StateT46_BothVaultsFeesUpdated_EndDistributionTest is StateT46_BothVaul
 
             assertEq(claimableRewards, expectedClaimableRewards, "claimableRewards mismatch"); 
         }
+
+    //--------------------------------
+
+    // claim rewards
+    function testUser1_ClaimDistribution1_Vault1_T46() public {
+        
+        // rewards at t41
+        uint256 AccruedAtT41 = user1Vault1Account1_T41.accStakingRewards + user1Vault1Account1_T41.accNftStakingRewards + user1Vault1Account1_T41.accRealmPointsRewards + vault1Account1_T41.accCreatorRewards;
+        uint256 claimedAtT41 = user1Vault1Account1_T41.claimedStakingRewards + user1Vault1Account1_T41.claimedNftRewards + user1Vault1Account1_T41.claimedRealmPointsRewards + user1Vault1Account1_T41.claimedCreatorRewards; 
+        uint256 claimableAtT41 = AccruedAtT41 - claimedAtT41;
+
+        // rewards at t46
+        uint256 AccruedAtT46 = user1Vault1Account1_T46.accStakingRewards + user1Vault1Account1_T46.accNftStakingRewards + user1Vault1Account1_T46.accRealmPointsRewards + vault1Account1_T46.accCreatorRewards;
+        uint256 claimedAtT46 = user1Vault1Account1_T46.claimedStakingRewards + user1Vault1Account1_T46.claimedNftRewards + user1Vault1Account1_T46.claimedRealmPointsRewards + user1Vault1Account1_T46.claimedCreatorRewards; 
+        uint256 claimableAtT46 = AccruedAtT46 - claimedAtT46;
+
+        // Get user's token balance before claiming
+        uint256 userBalanceBefore = rewardsToken1.balanceOf(user1);
+
+        // Claim rewards
+        vm.startPrank(user1);
+        pool.claimRewards(vaultId1, 1);
+        vm.stopPrank();
+
+        // Get user's token balance after claiming
+        uint256 userBalanceAfter = rewardsToken1.balanceOf(user1);
+
+        // Check claimed amount matches claimable amount
+        assertEq(user1Vault1ClaimableAtT41ViewFn, claimableAtT41, "totalClaimedRewards mismatch");
+        
+        // No further rewards accrued after D1 ended
+        assertEq(claimableAtT41, claimableAtT46, "T41<>T46 mismatch"); // 8.083e18
+
+        // Check that tokens were actually transferred to user
+        assertEq(userBalanceAfter - userBalanceBefore, user1Vault1ClaimableAtT41ViewFn, "token transfer amount mismatch");
+    }
+
+    function testUser2_ClaimDistribution1_Vault2_T46() public {
+        // Get claimable rewards before claiming
+        uint256 claimableRewardsViewFn = pool.getClaimableRewards(user2, vaultId2, 1);
+
+        // rewards at t41
+        uint256 AccruedAtT41 = user2Vault2Account1_T41.accStakingRewards + user2Vault2Account1_T41.accNftStakingRewards + user2Vault2Account1_T41.accRealmPointsRewards + vault2Account1_T41.accCreatorRewards;
+        uint256 claimedAtT41 = user2Vault2Account1_T41.claimedStakingRewards + user2Vault2Account1_T41.claimedNftRewards + user2Vault2Account1_T41.claimedRealmPointsRewards + user2Vault2Account1_T41.claimedCreatorRewards; 
+        uint256 claimableAtT41 = AccruedAtT41 - claimedAtT41;
+
+        // rewards at t46
+        uint256 AccruedAtT46 = user2Vault2Account1_T46.accStakingRewards + user2Vault2Account1_T46.accNftStakingRewards + user2Vault2Account1_T46.accRealmPointsRewards + vault2Account1_T46.accCreatorRewards;
+        uint256 claimedAtT46 = user2Vault2Account1_T46.claimedStakingRewards + user2Vault2Account1_T46.claimedNftRewards + user2Vault2Account1_T46.claimedRealmPointsRewards + user2Vault2Account1_T46.claimedCreatorRewards; 
+        uint256 claimableAtT46 = AccruedAtT46 - claimedAtT46;
+
+        // Get user's token balance before claiming
+        uint256 userBalanceBefore = rewardsToken1.balanceOf(user2);
+
+        // Claim rewards
+        vm.startPrank(user2);
+        pool.claimRewards(vaultId2, 1);
+        vm.stopPrank();
+
+        // Get user's token balance after claiming
+        uint256 userBalanceAfter = rewardsToken1.balanceOf(user2);
+
+        // Check view fn
+        assertEq(claimableRewardsViewFn, claimableAtT41, "totalClaimedRewards mismatch");
+
+        // No further rewards accrued after D1 ended
+        assertEq(claimableAtT41, claimableAtT46, "T41<>T46 mismatch"); 
+        
+        // Check that tokens were actually transferred to user
+        assertEq(userBalanceAfter - userBalanceBefore, claimableRewardsViewFn, "token transfer amount mismatch");
+    }
+    
 
 }

@@ -220,9 +220,9 @@ startTime, endTime, emissionPerSecond
 
 `endDistribution`
 - split at T46
-- end D1 then warp to T46
-- rewards should only accrued till T41, nothing further
+- end D1 then warp to T46: check that rewards are only accrued till T41, nothing further
 - check claimRewards
+
 `setRewardsVault`
 - split at T26; d1 starts at T21
 - upgrade to rewardsVaultV2

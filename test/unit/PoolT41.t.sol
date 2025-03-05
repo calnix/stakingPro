@@ -748,6 +748,14 @@ contract StateT41_User2StakesToVault2Test is StateT41_User2StakesToVault2 {
         vm.stopPrank();
     }
 
+    function testCannotSetRewardsVaultIfActiveDistribution() public {
+        vm.startPrank(operator);
+            vm.expectRevert(Errors.ActiveTokenDistributions.selector);
+            pool.setRewardsVault(address(rewardsVault));
+        vm.stopPrank();
+    }
+    
+
     function testOperatorCanEndDistribution() public {
 
         // get totalRequired on rewards vault contract

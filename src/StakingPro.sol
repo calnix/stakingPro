@@ -562,6 +562,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     /**
      * @notice Updates the rewards vault address
      * @param newRewardsVault The address of the new rewards vault contract
+     * @dev reverts if there are active token distributions - D0 is allowed
      */
     function setRewardsVault(address newRewardsVault) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
         if(newRewardsVault == address(0)) revert Errors.InvalidAddress();   
