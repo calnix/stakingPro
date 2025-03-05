@@ -564,7 +564,10 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @param newRewardsVault The address of the new rewards vault contract
      */
     function setRewardsVault(address newRewardsVault) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
-        if(newRewardsVault == address(0)) revert Errors.InvalidAddress();       
+        if(newRewardsVault == address(0)) revert Errors.InvalidAddress();   
+
+        // other than D0, there should not be any other active distributions
+        if(activeDistributions.length > 1) revert Errors.ActiveTokenDistributions();
 
         emit RewardsVaultSet(address(REWARDS_VAULT), newRewardsVault);
         REWARDS_VAULT = IRewardsVault(newRewardsVault);    

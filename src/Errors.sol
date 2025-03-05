@@ -32,6 +32,9 @@ library Errors {
     error StakingPowerDistribution();
     error DistributionDoesNotExist();
 
+    // setRewardsVault
+    error ActiveTokenDistributions();
+
     // updateActiveDistributions
     error InvalidMaxActiveAllowed();
 
