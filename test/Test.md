@@ -225,19 +225,6 @@ startTime, endTime, emissionPerSecond
 `setRewardsVault`
 - continue on the same split
 
-```solidity
-    function testOperatorCanSetRewardsVault() public {
-        
-        vm.startPrank(operator);
-            vm.expectEmit(true, false, false, false);
-            emit RewardsVaultSet(address(0), address(rewardsVault));
-            pool.setRewardsVault(address(rewardsVault));
-        vm.stopPrank();
-
-        assertEq(address(pool.REWARDS_VAULT()), address(rewardsVault));
-    }
-```
-
 ## update NFT multiplier process
 
 

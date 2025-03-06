@@ -790,4 +790,32 @@ contract StateT41_User2StakesToVault2Test is StateT41_User2StakesToVault2 {
         assertNotEq(totalRequired, totalRequiredInitial);
     }
 
+
+    // ---- state transition: for PoolT46p_MaintenanceMode.t.sol ----
+
+    function testUserCannotEnableMaintenanceMode() public {
+        vm.startPrank(user1);
+            vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user1, pool.OPERATOR_ROLE()));
+            pool.enableMaintenance();
+        vm.stopPrank();
+    }
+
+    function testOperatorCannotDisableMaintenanceMode() public {
+        vm.startPrank(operator);
+            vm.expectRevert(Errors.NotInMaintenance.selector);
+            pool.disableMaintenance();
+        vm.stopPrank();
+    }
+
+    function testOperatorCanEnableMaintenanceMode() public {
+        vm.startPrank(operator);
+            vm.expectEmit(true, true, true, true);
+            emit MaintenanceEnabled(block.timestamp);
+            pool.enableMaintenance();
+        vm.stopPrank();
+
+        assertEq(pool.isUnderMaintenance(), 1);
+    }
+
+
 }
