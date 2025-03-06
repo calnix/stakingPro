@@ -771,13 +771,13 @@ contract StateT41_User2StakesToVault2Test is StateT41_User2StakesToVault2 {
             emit DistributionEnded(1, block.timestamp, distribution1_T41.totalEmitted);
             
             // Expect rewards vault call
-            vm.expectCall(
-                address(pool.REWARDS_VAULT()),
-                abi.encodeCall(IRewardsVault.endDistribution, (1, distribution1_T41.totalEmitted))
-            );
+            vm.expectCall(address(pool.REWARDS_VAULT()), abi.encodeCall(IRewardsVault.endDistribution, (1, distribution1_T41.totalEmitted)));
             
             pool.endDistribution(1);
         vm.stopPrank();
+
+        // check pool
+        assertEq(pool.getActiveDistributionsLength(), 1);
 
         // Check distribution was updated correctly on pool
         DataTypes.Distribution memory distribution = getDistribution(1);

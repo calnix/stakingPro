@@ -816,18 +816,21 @@ library PoolLogic {
         // if paused, do not update distribution
         if(isPaused) return distribution;
 
+        // distribution has ended, and final update done
+        if(distribution.lastUpdateTimeStamp == distribution.endTime) return distribution;
+
         // distribution already updated
-        if(distribution.lastUpdateTimeStamp == block.timestamp) return distribution;
+        // if(distribution.lastUpdateTimeStamp == block.timestamp) return distribution; note: can remove; checked in _calculateDistributionIndex
 
         // distribution has not started
         if(block.timestamp < distribution.startTime) return distribution;
 
-        // distribution has ended: does not apply to staking power, distributionId == 0
-        if (distribution.endTime > 0 && block.timestamp >= distribution.endTime) {
 
-            // If this is the first update after distribution ended, do final update to endTime
+        // ..... Distribution has ended: does not apply to distributionId == 0 .....
+        if (distribution.endTime > 0 && block.timestamp >= distribution.endTime) {
+            // If final update after distribution ended, do final update to endTime
             if (distribution.lastUpdateTimeStamp < distribution.endTime) {
-                
+
                 // distributions w/ endTimes involve tokens, not realmPoints: use totalBoostedStakedTokens
                 (uint256 finalIndex, /*currentTimestamp*/, uint256 finalEmitted) = _calculateDistributionIndex(distribution, totalBoostedStakedTokens);
                 
@@ -853,7 +856,7 @@ library PoolLogic {
             return distribution;
         }    
 
-        // ..... Normal update for active distributions: could be for both tokens and realmPoints .....
+        // ..... Normal update for active distributions: for both tokens and realmPoints .....
 
         uint256 totalBoostedBalance = distribution.distributionId == 0 ? totalBoostedRealmPoints : totalBoostedStakedTokens;
         (uint256 nextIndex, uint256 currentTimestamp, uint256 emittedRewards) = _calculateDistributionIndex(distribution, totalBoostedBalance);

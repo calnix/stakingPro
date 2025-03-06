@@ -16,8 +16,8 @@ contract RewardsVaultV2 is RewardsVaultV1, OApp, Ownable2Step {
     uint256 public constant SOLANA_EID = 30168;
     
 //------- constructor ----------------------------
-    constructor(address moneyManager, address admin, address endpoint, address owner, address pool) 
-        RewardsVaultV1(moneyManager, admin, owner, pool) OApp(endpoint, owner) Ownable(owner) {
+    constructor(address moneyManager, address monitor, address owner, address pool, address endpoint) 
+        RewardsVaultV1(moneyManager, monitor, owner, pool) OApp(endpoint, owner) Ownable(owner) {
     }
 
     /**

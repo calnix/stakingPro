@@ -75,7 +75,7 @@ t = 6 [delta: 5]
  user2 stakes half of their tokens+rp+2nfts into it
 
 t = 11 [delta: 5]
- distribution 1 created [starts @ t=21]
+ distribution 1 created [starts @ t=21]aaaaaaaaaaa
 
 t = 16 [delta: 5]
  user1 stakes remaining assets into vault1 [half of tokens+rp]
@@ -222,10 +222,8 @@ startTime, endTime, emissionPerSecond
 - split at T46
 - end D1 then warp to T46: check that rewards are only accrued till T41, nothing further
 - check claimRewards
-
 `setRewardsVault`
-- split at T26; d1 starts at T21
-- upgrade to rewardsVaultV2
+- continue on the same split
 
 ```solidity
     function testOperatorCanSetRewardsVault() public {

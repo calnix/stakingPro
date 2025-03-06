@@ -5,7 +5,7 @@ import {Test, console2, stdStorage, StdStorage} from "forge-std/Test.sol";
 
 import "./../../src/StakingPro.sol";
 import {RewardsVaultV1} from "./../../src/RewardsVaultV1.sol";
-
+import {RewardsVaultV2} from "./../../src/RewardsVaultV2.sol";
 // mocks
 import "../mocks/MocaToken.sol";
 import "../mocks/MockRegistry.sol";

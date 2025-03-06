@@ -740,12 +740,22 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         // update distribution index
         distribution = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distribution, totalBoostedRealmPoints, totalBoostedStakedTokens, paused());
 
-        // end now
-        distribution.endTime = block.timestamp;
+        // end distribution
         distribution.manuallyEnded = 1;
+        distribution.endTime = block.timestamp;
 
         // update storage   
         distributions[distributionId] = distribution;
+
+        // pop from active distributions
+        for (uint256 i; i < activeDistributions.length; ++i) {
+            if (activeDistributions[i] == distribution.distributionId) {
+                // Move last element to current position and pop
+                activeDistributions[i] = activeDistributions[activeDistributions.length - 1];
+                activeDistributions.pop();
+                break;
+            }
+        }
 
         emit DistributionEnded(distributionId, distribution.endTime, distribution.totalEmitted);
 
