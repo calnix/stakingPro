@@ -865,7 +865,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      */
     function updateNftMultiplier(uint256 newMultiplier) external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE) {
         if(newMultiplier == 0) revert Errors.InvalidMultiplier();
-
+        
         uint256 oldMultiplier = NFT_MULTIPLIER;
         NFT_MULTIPLIER = newMultiplier;
 

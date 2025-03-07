@@ -705,6 +705,7 @@ contract StateT86461_Vault2EndedTest is StateT86461_Vault2Ended {
         
         // get initial vault state
         DataTypes.Vault memory initialVault = pool.getVault(vaultId2);
+        assertEq(initialVault.removed, 1, "vault2 not removed");
         assertEq(initialVault.stakedNfts, 2, "Vault staked NFTs mismatch");
         assertEq(initialVault.stakedTokens, user2Moca/2, "Vault staked tokens mismatch");
         assertEq(initialVault.stakedRealmPoints, user2Rp/2, "Vault staked RP mismatch");
@@ -738,13 +739,12 @@ contract StateT86461_Vault2EndedTest is StateT86461_Vault2Ended {
         assertEq(vaultAfter.boostedRealmPoints, initialVault.stakedRealmPoints, "Non-zero boostedRealmPoints in vault2");
 
         // Check pool state updated
-        assertEq(pool.totalStakedTokens(), initialPoolTotalStaked - initialUser.stakedTokens, "Pool total staked not decreased");
-        assertEq(pool.totalStakedNfts(), initialPoolStakedNfts - initialUser.tokenIds.length, "Pool total staked NFTs not decreased");
-        assertEq(pool.totalBoostedStakedTokens(), initialPoolBoostedStaked - initialVault.boostedStakedTokens, "Pool boosted staked not decreased"); 
+        assertEq(pool.totalStakedTokens(), initialPoolTotalStaked, "Pool total staked not decreased");
+        assertEq(pool.totalStakedNfts(), initialPoolStakedNfts, "Pool total staked NFTs not decreased");
+        assertEq(pool.totalBoostedStakedTokens(), initialPoolBoostedStaked, "Pool boosted staked not decreased"); 
         // rp should remain unchanged - except for boosting update
         assertEq(pool.totalStakedRealmPoints(), initialPoolStakedRealmPoints, "Rp incorrectly decreased");
-        assertEq(pool.totalBoostedRealmPoints(), initialPoolBoostedRealmPoints - initialVault.boostedRealmPoints + initialUser.stakedRealmPoints, "Pool boosted RP not correctly updated");
-
+        assertEq(pool.totalBoostedRealmPoints(), initialPoolBoostedRealmPoints, "Pool boosted RP not correctly updated");
     }
 
 }
