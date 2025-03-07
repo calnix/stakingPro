@@ -882,7 +882,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             totalBoostedStakedTokens -= vault.boostedStakedTokens;
 
             // update vault with new multiplier
-            vault.totalBoostFactor = (vault.stakedNfts * NFT_MULTIPLIER) + PRECISION_BASE;
+            vault.totalBoostFactor = (vault.stakedNfts * NFT_MULTIPLIER) + PRECISION_BASE;  // expressed as 1.XXX
             vault.boostedRealmPoints = (vault.stakedRealmPoints * vault.totalBoostFactor) / PRECISION_BASE;    
             vault.boostedStakedTokens = (vault.stakedTokens * vault.totalBoostFactor) / PRECISION_BASE;
 
