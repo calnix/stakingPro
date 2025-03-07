@@ -329,6 +329,64 @@ contract StateT46p_MaintenanceMode_NftMultiplierUpdatedTest is StateT46p_Mainten
     function testNftMultiplierUpdated() public {
         assertEq(pool.NFT_MULTIPLIER(), newNftMultiplier, "nft multiplier not updated");
     }
+
+    function testUserCannotUpdateBoostedBalances() public {
+        bytes32[] memory vaultIds = new bytes32[](2);   
+        vaultIds[0] = vaultId1;
+        vaultIds[1] = vaultId2;
+
+        vm.startPrank(user1);
+            vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user1, pool.OPERATOR_ROLE()));
+            pool.updateBoostedBalances(vaultIds);
+        vm.stopPrank();
+    }
+
+    //oldMultiplier: 1000, newMultiplier: 2000
+    function testOperatorCanUpdateBoostedBalances() public {
+        bytes32[] memory vaultIds = new bytes32[](2);   
+        vaultIds[0] = vaultId1;
+        vaultIds[1] = vaultId2;
+
+        // Check boosted values before
+        DataTypes.Vault memory vault1Before = pool.getVault(vaultId1);
+        DataTypes.Vault memory vault2Before = pool.getVault(vaultId2);
+        uint256 totalBoostedRpBefore = pool.totalBoostedRealmPoints();
+        uint256 totalBoostedTokensBefore = pool.totalBoostedStakedTokens();
+
+        assertEq(vault1Before.totalBoostFactor, 11_000, "vault1 boost factor not initialized correctly");
+        assertEq(vault2Before.totalBoostFactor, 11_000, "vault2 boost factor not initialized correctly");
+
+        vm.startPrank(operator);
+            vm.expectEmit(true, true, true, true);
+            emit BoostedBalancesUpdated(vaultIds);
+            pool.updateBoostedBalances(vaultIds);
+        vm.stopPrank();
+
+        // Check boosted values after
+        DataTypes.Vault memory vault1After = pool.getVault(vaultId1);
+        DataTypes.Vault memory vault2After = pool.getVault(vaultId2);
+        uint256 totalBoostedRpAfter = pool.totalBoostedRealmPoints();
+        uint256 totalBoostedTokensAfter = pool.totalBoostedStakedTokens();
+
+        // expected boost factor
+        uint256 expectedBoostFactor = (2 * 2000); // 2 nfts staked in each vault
+
+        // check vault boost factors
+        assertEq(vault1After.totalBoostFactor, expectedBoostFactor, "vault1 boost factor not updated correctly");
+        assertEq(vault2After.totalBoostFactor, expectedBoostFactor, "vault2 boost factor not updated correctly");
+        
+        // Verify boosted values were updated
+        assertEq(vault1After.boostedRealmPoints, vault1Before.stakedRealmPoints * vault1After.totalBoostFactor / 10_000, "vault1 boosted realm points not updated correctly");
+        assertEq(vault1After.boostedStakedTokens, vault1Before.stakedTokens * vault1After.totalBoostFactor / 10_000, "vault1 boosted staked tokens not updated correctly");
+
+        assertEq(vault2After.boostedRealmPoints, vault2Before.stakedRealmPoints * vault2After.totalBoostFactor / 10_000, "vault2 boosted realm points not updated correctly");
+        assertEq(vault2After.boostedStakedTokens, vault2Before.stakedTokens * vault2After.totalBoostFactor / 10_000, "vault2 boosted staked tokens not updated correctly");
+
+        assertEq(totalBoostedRpAfter, totalBoostedRpBefore * vault1After.boostedRealmPoints + vault2After.boostedRealmPoints, "total boosted realm points not updated correctly");
+        assertEq(totalBoostedTokensAfter, totalBoostedTokensBefore * vault1After.boostedStakedTokens + vault2After.boostedStakedTokens, "total boosted staked tokens not updated correctly");
+
+    }
+    
 }
 
 
