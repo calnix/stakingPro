@@ -727,20 +727,20 @@ contract StateT31_User2MigrateRpToVault2Test is StateT31_User2MigrateRpToVault2 
 
     // user2 unstakes half their tokens and 2 nfts, from vault1
     function testUser2CanUnstakeAssets_T31() public {
-        // Get initial balances
+        // vault state before unstake
         DataTypes.Vault memory vaultBefore = pool.getVault(vaultId1);
         DataTypes.User memory user2VaultBefore = pool.getUser(user2, vaultId1);
-
+        // pool state before unstake
         uint256 poolNftsBefore = pool.totalStakedNfts();
         uint256 poolTokensBefore = pool.totalStakedTokens();
         uint256 poolBoostedTokensBefore = pool.totalBoostedStakedTokens(); // 2.1e20
-        uint256 poolBoostedRpBefore = pool.totalBoostedRealmPoints(); // 1.9e21
+        uint256 poolBoostedRpBefore = pool.totalBoostedRealmPoints();      // 1.9e21
+        // token balances
+        uint256 user2TokenBalanceBefore = mocaToken.balanceOf(user2);
 
         // user2 unstakes first 2 NFTs and half tokens from vault1
         uint256 tokenAmount = user2Moca/2;
         uint256 tokenAmountBoosted = (tokenAmount * vaultBefore.totalBoostFactor) / pool.PRECISION_BASE();
-        console2.log("tokenAmountBoosted", tokenAmountBoosted);
-        console2.log("vaultBefore.totalBoostFactor", vaultBefore.totalBoostFactor);
 
         uint256[] memory nftsToUnstake = new uint256[](2);
             nftsToUnstake[0] = user2NftsArray[0];
@@ -760,6 +760,10 @@ contract StateT31_User2MigrateRpToVault2Test is StateT31_User2MigrateRpToVault2 
 
             pool.unstake(vaultId1, tokenAmount, nftsToUnstake);
         vm.stopPrank();
+
+        // check token balances
+        uint256 user2TokenBalanceAfter = mocaToken.balanceOf(user2);
+        assertEq(user2TokenBalanceAfter, user2TokenBalanceBefore + tokenAmount, "user2 token balance mismatch");
 
         // Check vault balances updated
         DataTypes.Vault memory vaultAfter = pool.getVault(vaultId1);

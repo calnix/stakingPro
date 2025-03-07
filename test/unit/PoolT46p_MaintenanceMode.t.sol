@@ -382,7 +382,6 @@ contract StateT46p_MaintenanceMode_NftMultiplierUpdatedTest is StateT46p_Mainten
 
         assertEq(totalBoostedRpAfter, vault1After.boostedRealmPoints + vault2After.boostedRealmPoints, "total boosted realm points not updated correctly");
         assertEq(totalBoostedTokensAfter, vault1After.boostedStakedTokens + vault2After.boostedStakedTokens, "total boosted staked tokens not updated correctly");
-
     }
     
 }
@@ -390,4 +389,57 @@ contract StateT46p_MaintenanceMode_NftMultiplierUpdatedTest is StateT46p_Mainten
 
 abstract contract StateT46p_MaintenanceMode_UpdateBoostedBalances is StateT46p_MaintenanceMode_NftMultiplierUpdated {
 
+    function setUp() public virtual override {
+        super.setUp();
+
+        bytes32[] memory vaultIds = new bytes32[](2);   
+        vaultIds[0] = vaultId1;
+        vaultIds[1] = vaultId2;
+
+        vm.startPrank(operator);
+            pool.updateBoostedBalances(vaultIds);
+        vm.stopPrank();
+    }
+}
+
+
+contract StateT46p_MaintenanceMode_UpdateBoostedBalancesTest is StateT46p_MaintenanceMode_UpdateBoostedBalances {
+
+    function testUserCannotDisableMaintenance() public {
+        vm.startPrank(user1);
+            vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user1, pool.OPERATOR_ROLE()));
+            pool.disableMaintenance();
+        vm.stopPrank();
+    }
+
+    function testOperatorCanDisableMaintenance() public {
+        vm.startPrank(operator);
+            vm.expectEmit(true, true, true, true);
+            emit MaintenanceDisabled(block.timestamp);
+            pool.disableMaintenance();
+        vm.stopPrank();
+        assertEq(pool.isUnderMaintenance(), 0, "maintenance not disabled");
+    }
+}
+
+abstract contract StateT46p_MaintenanceMode_DisableMaintenance is StateT46p_MaintenanceMode_UpdateBoostedBalances {
+
+    function setUp() public virtual override {
+        super.setUp();
+        
+        vm.startPrank(operator);
+            pool.disableMaintenance();
+        vm.stopPrank();
+    }
+}
+
+contract StateT46p_MaintenanceMode_DisableMaintenanceTest is StateT46p_MaintenanceMode_DisableMaintenance {
+
+    function testOperatorCannotDisableMaintenanceIfNotUnderMaintenance() public {
+        vm.startPrank(operator);
+            vm.expectRevert(abi.encodeWithSelector(Errors.NotInMaintenance.selector));
+            pool.disableMaintenance();
+        vm.stopPrank();
+    }
+    
 }

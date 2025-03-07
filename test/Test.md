@@ -233,6 +233,6 @@ startTime, endTime, emissionPerSecond
 
 emergencyExit
 
-## others 
+## others
 
 - partial deposits for distributions

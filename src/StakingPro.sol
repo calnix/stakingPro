@@ -340,12 +340,16 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             = PoolLogic.executeMigrateRealmPoints(activeDistributions, vaults, distributions, users, vaultAccounts, userAccounts, oldVaultParams, 
                 newVaultParams, amount);
         
-        if(flag == 1) {
-            // newBoostedRealmPoints > oldBoostedRealmPoints
-            totalBoostedRealmPoints += totalBoostedDelta;
-        } else{
-            // newBoostedRealmPoints < oldBoostedRealmPoints
-            totalBoostedRealmPoints -= totalBoostedDelta;
+        // totalBoostedDelta == 0 if vault had been removed from circulation already
+        if(totalBoostedDelta > 0) {
+            // flag dictates addition/subtraction to global state
+            if(flag == 1) {
+                // newBoostedRealmPoints > oldBoostedRealmPoints
+                totalBoostedRealmPoints += totalBoostedDelta;
+            } else{
+                // newBoostedRealmPoints < oldBoostedRealmPoints
+                totalBoostedRealmPoints -= totalBoostedDelta;
+            }
         }
     }
 
@@ -368,6 +372,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
         (
+            uint256 isRemoved,
             uint256 amountBoosted, 
             uint256 deltaVaultBoostedRealmPoints,
             uint256 deltaVaultBoostedStakedTokens
@@ -376,27 +381,35 @@ contract StakingPro is EIP712, Pausable, AccessControl {
                 NFT_MULTIPLIER, amount, tokenIds);
 
         // decrement user's staked tokens and boosted staked tokens
-        if(amount > 0){
+        if(isRemoved == 0){
 
-            // update global
-            totalStakedTokens -= amount;
-            totalBoostedStakedTokens -= amountBoosted;
+            if(amount > 0){
+                // update global
+                totalStakedTokens -= amount;
+                totalBoostedStakedTokens -= amountBoosted;
 
-            // return MOCA
-            STAKED_TOKEN.safeTransfer(msg.sender, amount);
-        }
+                // return MOCA
+                STAKED_TOKEN.safeTransfer(msg.sender, amount);
+            }
 
-        // update nfts
-        uint256 numOfNftsToUnstake = tokenIds.length;
-        if(numOfNftsToUnstake > 0){    
-            
-            // update global
-            totalStakedNfts -= numOfNftsToUnstake;
-            totalBoostedRealmPoints -= deltaVaultBoostedRealmPoints;
-            totalBoostedStakedTokens -= deltaVaultBoostedStakedTokens;
+            // update nfts
+            uint256 numOfNftsToUnstake = tokenIds.length;
+            if(numOfNftsToUnstake > 0){    
+                
+                // update global
+                totalStakedNfts -= numOfNftsToUnstake;
+                totalBoostedRealmPoints -= deltaVaultBoostedRealmPoints;
+                totalBoostedStakedTokens -= deltaVaultBoostedStakedTokens;
 
-            // record unstake with registry
-            NFT_REGISTRY.recordUnstake(msg.sender, tokenIds, vaultId);
+                // record unstake with registry
+                NFT_REGISTRY.recordUnstake(msg.sender, tokenIds, vaultId);
+            }
+
+        } else{
+
+            // vault has been removed from circulation: return MOCA
+            if(amount > 0) STAKED_TOKEN.safeTransfer(msg.sender, amount);
+            // nftRegistry update is handled by endVaults
         }
     }
 

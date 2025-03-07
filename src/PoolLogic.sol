@@ -150,7 +150,7 @@ library PoolLogic {
         uint256 NFT_MULTIPLIER,
         uint256 amount,
         uint256[] calldata tokenIds
-    ) external returns (uint256, uint256, uint256) {
+    ) external returns (uint256, uint256, uint256, uint256) {
         
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
@@ -210,7 +210,8 @@ library PoolLogic {
         vaults[params.vaultId] = vault;
         users[params.user][params.vaultId] = userVaultAssets;
 
-        return (amountBoosted, deltaVaultBoostedRealmPoints, deltaVaultBoostedStakedTokens);
+        // removed: {0,1}
+        return (vault.removed, amountBoosted, deltaVaultBoostedRealmPoints, deltaVaultBoostedStakedTokens);
     } 
 
     function executeMigrateRealmPoints(
@@ -268,19 +269,25 @@ library PoolLogic {
         users[oldVaultParams.user][oldVaultParams.vaultId] = userOldVaultAssets;
         users[newVaultParams.user][newVaultParams.vaultId] = userNewVaultAssets;
 
-        // global delta
+        // global delta calculations
         uint256 totalBoostedDelta;
-        if(newBoostedRealmPoints > oldBoostedRealmPoints) {
+        if(oldVault.removed == 0){
             
-            totalBoostedDelta = (newBoostedRealmPoints - oldBoostedRealmPoints);    
-            //1: flag for incrementation
-            return(totalBoostedDelta, 1);
+            if(newBoostedRealmPoints > oldBoostedRealmPoints) {
+                totalBoostedDelta = (newBoostedRealmPoints - oldBoostedRealmPoints);    
+                //1: flag for incrementation
+                return(totalBoostedDelta, 1);
+
+            } else{
+                totalBoostedDelta = (oldBoostedRealmPoints - newBoostedRealmPoints);
+                //0: flag for decrementation
+                return(totalBoostedDelta, 0);
+            }
 
         } else{
-
-            totalBoostedDelta = (oldBoostedRealmPoints - newBoostedRealmPoints);
-            //0: flag for decrementation
-            return(totalBoostedDelta, 0);
+            // vault has been removed from circulation
+           totalBoostedDelta = 0;
+           return(0, 0);
         }
     }
 

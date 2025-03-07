@@ -884,4 +884,24 @@ contract StateT51_BothVaultsFeesUpdatedTest is StateT51_BothVaultsFeesUpdated {
         }
     
     // TODO: claimRewards: check tokens transferred, events emitted
+
+
+    // ---- state transition: PoolT56p_Risk.t.sol  ----
+    function testUserCannotPausePool() public {
+        vm.startPrank(user1);
+            vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user1, pool.MONITOR_ROLE()));
+            pool.pause();
+        vm.stopPrank();
+
+        assertEq(pool.paused(), false, "pool not paused");
+    }
+
+    function testMonitorCanPausePool() public {
+        vm.startPrank(monitor);
+            pool.pause();
+        vm.stopPrank();
+
+        assertEq(pool.paused(), true, "pool not paused");
+    }
+    
 }

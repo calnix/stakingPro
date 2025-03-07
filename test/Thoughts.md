@@ -33,7 +33,6 @@ If a user has at least 1 staking asset staked in a vault,
 - even for the one's that user has nothing staked to
 - this ensures that the user Account is kept in sync with the vault
 
-
 ## 6. 
 distributions that have ended are demarked by `distribution.lastUpdateTimeStamp == distribution.endTime`
 
@@ -84,3 +83,19 @@ for `endDistribution()`:
 T41: stakeTokens [distribution.lastUpdateTimeStamp == distribution.endTime]
 T41: endDistribution -> will not go into final update
 ```
+
+## 7. add test for vault that gets removed immediately on activateCooldown
+
+- vaultCooldown is set to 0
+- activateCooldown() will remove the vault
+- _endVaults() will decrement the global state based on vault assets
+- subsequent unstake() will not repeatedly decrement the global state
+- also check migrateRp() - migrating from oldvault that has been removed, totalBoostedDelta == 0, and global state is not decremented
+
+testUser2CanUnstakeAfterVault2Ended
+- tests unstake() after vault2 ended
+- vault2.removed == 1
+
+## 8. why does this not work with updateVaultFees?
+
+- the use of _updateVaultFees instead of claimRewards
