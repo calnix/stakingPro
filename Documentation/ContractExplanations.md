@@ -892,9 +892,6 @@ emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStar
 - This is done by checking the `onBehalfOf` address.
 - The reason for this is to allow both users and us to call the function, to allow for a swift exit.
 
-
-
-
 # Execution Flow
 
 ## 1. Creating a distribution

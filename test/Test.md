@@ -1,63 +1,5 @@
-# Local distribution: all on same chain
+# Overview 
 
-- will not involve EVMVault.sol
-
-[#1]
-- setup 3 distributions: stakingPower:0, someToken:1
-- setup 2 vaults: vault1, vault2
-- 3 users: user1, user2, user3
-
-
-## Risk testing
-
-import fork into separate file
-
-- pause
-- unpause
-- freeze
-- emergencyExit
-
-## integration testing
-
-- lz: refund
-- https://docs.layerzero.network/v2/developers/evm/technical-reference/api#send
-
-X-Chain
-- will involve EVMVault.sol
-
-## Migration
-
-- v1 to v2: rewardsVault
-
-### user fns
-
-createVault
-stakeTokens
-stakeNfts
-stakeRP
-migrateRP
-unstake
-claimRewards
-updateVaultFees
-activateCooldown
-endVaults
-
-PRIV
-
-stakeOnBehalfOf
-setEndTime
-setRewardsVault
-updateMaximumFeeFactor
-updateMinimumRealmPoints
-updateCreationNfts
-updateVaultCooldown
---------------------
-setupDistribution
-updateDistribution
-
-### ---
-
-#### Overview 
 create 2 distributions - update both
 create 2 vaults
     1: user1 creates vault1
@@ -169,6 +111,42 @@ t = 86471 [delta: 5]
     - on transition, check other fns's endTime checks
     - check claimRewards
 
+# Local distribution: all on same chain
+
+- will not involve EVMVault.sol
+
+[#1]
+- setup 3 distributions: stakingPower:0, someToken:1
+- setup 2 vaults: vault1, vault2
+- 3 users: user1, user2, user3
+
+## Risk testing
+
+PoolT56p_Risk.t.sol
+
+- pause
+- unpause
+- freeze
+- emergencyExit
+
+
+
+- lz: refund
+- https://docs.layerzero.network/v2/developers/evm/technical-reference/api#send
+
+X-Chain
+- will involve EVMVault.sol
+
+# Future
+
+## Integration testing
+
+## Migration
+
+- v1 to v2: rewardsVault
+
+
+
 ---
 ## Pool Management fns: split timeline fork
 
@@ -183,16 +161,26 @@ t = 86471 [delta: 5]
 - split at T16. [D1 created at T11]
 - update active distributions and check new limit
 
-# `updateMaximumFeeFactor` [!!!]
-- split on T46; both users update fees on both vaults
-- T46: both users update fees on both vaults
-- T51: user1 updates fees on vault1; user2 updates fees on vault2
+### `updateMaximumFeeFactor`
 
-maximumFeeFactor determines how much of the rewards are taken as fees.
-totalFeeFactor cannot exceed maximumFeeFactor.
-if maximumFeeFactor is lowered: amount of rewards taken as fees is lowered.
-if maximumFeeFactor is raised: amount of rewards taken as fees is increased.
+```solidity
+// createVault()
+        uint256 totalFeeFactor = nftFeeFactor + creatorFeeFactor + realmPointsFeeFactor;
+        if(totalFeeFactor > MAXIMUM_FEE_FACTOR) revert Errors.MaximumFeeFactorExceeded();
+```
+
+- sum of fee factors cannot exceed maximumFeeFactor
+- maximumFeeFactor determines how much of the rewards are taken as fees.
+- `(1 - maximumFeeFactor)` = amount of rewards given to moca staker
+- split on T46; both users update fees on both vaults
+
+Others
+- totalFeeFactor cannot exceed maximumFeeFactor.
+- if maximumFeeFactor is lowered: amount of rewards taken as fees is lowered.
+- if maximumFeeFactor is raised: amount of rewards taken as fees is increased.
 - creatorFeeFactor can only be lowered;
+
+> PoolT46p_MaintenanceMode.t.sol
 
 `updateMinimumRealmPoints`
 - t1: user1 staked half their rp
@@ -228,10 +216,6 @@ startTime, endTime, emissionPerSecond
 ## update NFT multiplier process
 
 - PoolT46p_MaintenanceMode.t.sol
-
-## Risk fns
-
-emergencyExit
 
 ## others
 

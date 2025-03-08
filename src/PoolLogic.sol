@@ -457,8 +457,11 @@ library PoolLogic {
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
         
-        // vault cooldown activated: cannot stake
-        if(vault.endTime > 0) revert Errors.VaultEndTimeSet(params.vaultId);
+        // allow refresh of vault endTime, should VAULT_COOLDOWN_DURATION be updated
+        //if(vault.endTime > 0) revert Errors.VaultEndTimeSet(params.vaultId);
+
+        // vault has been removed
+        if(vault.removed == 1) revert Errors.VaultAlreadyRemoved();
 
         // only creator can activate cooldown
         if(vault.creator != params.user) revert Errors.UserIsNotCreator();

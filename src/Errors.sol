@@ -32,6 +32,9 @@ library Errors {
     error StakingPowerDistribution();
     error DistributionDoesNotExist();
 
+    // activateCooldown
+    error VaultAlreadyRemoved();
+
     // setRewardsVault
     error ActiveTokenDistributions();
 

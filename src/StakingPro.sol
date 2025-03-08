@@ -101,6 +101,8 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(owner == address(0)) revert Errors.InvalidAddress();
         if(startTime_ < block.timestamp) revert Errors.InvalidStartTime();
 
+        if(nftMultiplier == 0) revert Errors.InvalidMultiplier();
+
         // interfaces: supporting contracts
         NFT_REGISTRY = INftRegistry(nftRegistry);       
         STAKED_TOKEN = IERC20(stakedToken);
@@ -773,7 +775,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         emit DistributionEnded(distributionId, distribution.endTime, distribution.totalEmitted);
 
         // only for token distributions
-        if(distributionId > 0) REWARDS_VAULT.endDistribution(distributionId, distribution.totalEmitted);
+        REWARDS_VAULT.endDistribution(distributionId, distribution.totalEmitted);
     }
     
 
