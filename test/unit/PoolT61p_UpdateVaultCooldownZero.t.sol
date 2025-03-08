@@ -182,4 +182,47 @@ contract StateT61p_Vault2CooldownActivated_VaultIsRemovedImmediately_Test is Sta
         assertEq(vaultAfter.boostedStakedTokens, 0, "boostedStakedTokens mismatch");
     }
 
+    function testUser2MigrateRpToVault1DoesNotDecrementGlobalState() public {
+
+        // global state: before
+        uint256 poolTotalRpBefore = pool.totalStakedRealmPoints();
+        uint256 poolTotalBoostedRpBefore = pool.totalBoostedRealmPoints();
+
+        // vault states: before
+        DataTypes.Vault memory vault1Before = pool.getVault(vaultId1);
+        DataTypes.Vault memory vault2Before = pool.getVault(vaultId2);
+
+        // user accounts: before
+        DataTypes.User memory user2Vault1Before = pool.getUser(user2, vaultId1);
+        DataTypes.User memory user2Vault2Before = pool.getUser(user2, vaultId2);
+        uint256 rpToMigrate = user2Vault2Before.stakedRealmPoints;
+
+        vm.startPrank(user2);
+            pool.migrateRealmPoints(vaultId2, vaultId1, rpToMigrate);
+        vm.stopPrank();
+
+        // global state: after
+        uint256 poolTotalRpAfter = pool.totalStakedRealmPoints();
+        uint256 poolTotalBoostedRpAfter = pool.totalBoostedRealmPoints();
+
+        // vault states: after
+        DataTypes.Vault memory vault1After = pool.getVault(vaultId1);
+        DataTypes.Vault memory vault2After = pool.getVault(vaultId2);
+
+        // user accounts: after
+        DataTypes.User memory user2Vault1After = pool.getUser(user2, vaultId1);
+        DataTypes.User memory user2Vault2After = pool.getUser(user2, vaultId2);
+
+        // check global state: no changes
+        assertEq(poolTotalRpBefore, poolTotalRpAfter, "totalStakedRealmPoints mismatch");
+        assertEq(poolTotalBoostedRpBefore, poolTotalBoostedRpAfter, "totalBoostedRealmPoints mismatch");
+
+        // check vault states: rp moved correctly
+        assertEq(vault1After.stakedRealmPoints, vault1Before.stakedRealmPoints + rpToMigrate, "vault1 stakedRealmPoints mismatch");
+        assertEq(vault2After.stakedRealmPoints, vault2Before.stakedRealmPoints - rpToMigrate, "vault2 stakedRealmPoints mismatch");
+
+        // check user accounts: rp moved correctly
+        assertEq(user2Vault1After.stakedRealmPoints, user2Vault1Before.stakedRealmPoints + rpToMigrate, "user2 vault1 stakedRealmPoints mismatch");
+        assertEq(user2Vault2After.stakedRealmPoints, user2Vault2Before.stakedRealmPoints - rpToMigrate, "user2 vault2 stakedRealmPoints mismatch");
+    }
 }

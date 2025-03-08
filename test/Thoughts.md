@@ -2,17 +2,6 @@
 
 ## 4. add checks for assets transfers
 
-## 7. add test for vault that gets removed immediately on activateCooldown
-
-- vaultCooldown is set to 0
-- activateCooldown() will remove the vault
-- _endVaults() will decrement the global state based on vault assets
-- subsequent unstake() will not repeatedly decrement the global state
-- also check migrateRp() - migrating from oldvault that has been removed, totalBoostedDelta == 0, and global state is not decremented
-
-testUser2CanUnstakeAfterVault2Ended
-- tests unstake() after vault2 ended
-- vault2.removed == 1
 
 ## 8. why does this not work with updateVaultFees?
 
