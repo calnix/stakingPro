@@ -75,8 +75,6 @@ contract StateT56p_FrozenTest is StateT56p_Frozen {
         DataTypes.User memory userBefore = pool.getUser(user1, vaultId1);
         // token balance before
         uint256 userTokensBefore = mocaToken.balanceOf(user1);
-        // nft balance before
-        //uint256 userNftsBefore = nftRegistry.balanceOf(user1);
         
         // Expect token transfer and NFT registry calls
         vm.expectCall(address(mocaToken), abi.encodeCall(IERC20.transfer, (user1, userBefore.stakedTokens)));
@@ -96,23 +94,25 @@ contract StateT56p_FrozenTest is StateT56p_Frozen {
         DataTypes.Vault memory vaultAfter = pool.getVault(vaultId1);
         DataTypes.User memory userAfter = pool.getUser(user1, vaultId1);
 
-        // Verify token transfer
+        // token balance after
         uint256 userTokensAfter = mocaToken.balanceOf(user1);
         assertEq(userTokensAfter, userTokensBefore + userBefore.stakedTokens, "tokens not returned to user");
 
         // Verify vault changes
         assertEq(vaultAfter.stakedTokens, vaultBefore.stakedTokens - userBefore.stakedTokens, "vault tokens not decremented");
-        assertEq(vaultAfter.creationTokenIds.length, 0, "vault nfts not decremented");
+        assertEq(vaultAfter.stakedNfts, vaultBefore.stakedNfts - userBefore.tokenIds.length, "vault nfts not decremented");
 
         // Verify user changes
         assertEq(userAfter.stakedTokens, 0, "user tokens not zeroed");
         assertEq(userAfter.tokenIds.length, 0, "user nfts not zeroed");
 
+        // Verify token transfer
+        assertEq(userTokensAfter, userTokensBefore + userBefore.stakedTokens, "tokens not returned to user");
+
         // Verify NFT registry state
-        // Check each creation NFT is properly unstaked
-        for(uint256 i; i < vaultBefore.creationTokenIds.length; i++) {
-            uint256 tokenId = vaultBefore.creationTokenIds[i];
-            (address nftOwner, bytes32 stakedVaultId) = nftRegistry.nfts(tokenId);
+        for(uint256 i; i < vaultBefore.creationTokenIds.length; ++i) {
+            (address nftOwner, bytes32 stakedVaultId) = nftRegistry.nfts(vaultBefore.creationTokenIds[i]);
+            assertEq(nftOwner, user1, "nft owner mismatch");
             assertEq(stakedVaultId, bytes32(0), "nft vault id not cleared");
         }
     }

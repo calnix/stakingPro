@@ -79,3 +79,25 @@ contract StateT61p_UpdateVaultCooldownTest is StateT61_Vault2CooldownActivated_U
 }
 
 
+abstract contract StateT61p_Vault2CooldownActivated_EndVaults is StateT61_Vault2CooldownActivated_UpdatedCooldown {
+
+    function setUp() public virtual override {
+        super.setUp();
+
+        vm.warp(61 + 5);
+
+        vm.startPrank(operator);
+            bytes32[] memory vaultIds = new bytes32[](1);
+            vaultIds[0] = vaultId2;
+            pool.endVaults(vaultIds);
+        vm.stopPrank();
+    }
+}
+
+contract StateT61p_Vault2CooldownActivated_EndVaults_Test is StateT61p_Vault2CooldownActivated_EndVaults {
+
+    function testVault2Ended() public {
+        DataTypes.Vault memory vault = pool.getVault(vaultId2);
+        assertEq(vault.removed, 1, "Vault2 not ended");
+    }
+}

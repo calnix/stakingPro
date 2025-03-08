@@ -40,6 +40,7 @@ event RealmPointsFeeFactorUpdated(bytes32 indexed vaultId, uint256 oldFactor, ui
 
 // activateCooldown
 event VaultCooldownActivated(bytes32 indexed vaultId, uint256 vaultEndTime);
+event VaultEnded(bytes32 indexed vaultId);
 
 // endVaults
 event VaultsEnded(bytes32[] vaultIds, uint256 vaultsNotEnded);

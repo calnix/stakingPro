@@ -457,7 +457,7 @@ library PoolLogic {
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
         
-        // allow refresh of vault endTime, should VAULT_COOLDOWN_DURATION be updated
+        // note: allow refresh of vault endTime, should VAULT_COOLDOWN_DURATION be updated
         //if(vault.endTime > 0) revert Errors.VaultEndTimeSet(params.vaultId);
 
         // vault has been removed
@@ -500,24 +500,26 @@ library PoolLogic {
         for(uint256 i; i < numOfDistributions; ++i) {
             distributionsToProcess[i] = activeDistributions[i];
         }
-
+        
         // For each distribution [always > 0 due to staking power]
         for(uint256 i; i < numOfDistributions; ++i) {
             
             uint256 distributionId = distributionsToProcess[i];
             DataTypes.Distribution memory distribution = distributions[distributionId];
+            uint256 previousLastUpdateTimeStamp = distribution.lastUpdateTimeStamp;
 
             // Update distribution first
             distribution = _updateDistributionIndex(distribution, activeDistributions, params.totalBoostedRealmPoints, params.totalBoostedStakedTokens, params.isPaused);
-            distributions[distributionId] = distribution;
+            // only push to storage if distribution was updated
+            if(distribution.lastUpdateTimeStamp > previousLastUpdateTimeStamp) distributions[distributionId] = distribution; 
             
             // Then update all vault accounts for this distribution
             for(uint256 j; j < numOfVaults; ++j) {
-                
+ 
                 // get vault 
                 bytes32 vaultId = vaultIds[j];
                 DataTypes.Vault memory vault = vaults[vaultId];
-
+                
                 // vault does not exist: skip
                 if(vault.creator == address(0)) continue;
                 // cooldown NOT activated; cannot end vault: skip
@@ -534,6 +536,7 @@ library PoolLogic {
                 
                 // Track assets to remove on last distribution (only need to do this once per vault)
                 if(i == numOfDistributions - 1) {
+ 
                     totalStakedNfts += vault.stakedNfts;
                     totalCreationNfts += vault.creationTokenIds.length;
                     totalTokensToRemove += vault.stakedTokens;
