@@ -679,7 +679,7 @@ library PoolLogic {
         if(newEmissionPerSecond > 0) distribution.emissionPerSecond = newEmissionPerSecond;
             
         // recalc. new token requirements 
-        uint256 newFutureEmissions = distribution.emissionPerSecond  * (distribution.endTime - distribution.lastUpdateTimeStamp);
+        uint256 newFutureEmissions = distribution.emissionPerSecond * (distribution.endTime - distribution.lastUpdateTimeStamp);
         uint256 newTotalRequired = newFutureEmissions + distribution.totalEmitted;
         
         // invariant: newTotalRequired must non-zero

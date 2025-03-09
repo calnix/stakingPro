@@ -13,8 +13,6 @@ abstract contract StateT1_Started is StateT0_DeployAndSetupStakingPower {
     }
 }
 
-
-// TODO
 abstract contract StateT1_CreateVault1 is StateT1_Started {
 
     bytes32 public vaultId1 = 0x8fbe8a20f950b11703e51f11dee9f00d9fa0ebd091cc4f695909e860e994944b;
@@ -146,6 +144,7 @@ contract T50_Case1Test is T50_Case1 {
     }
 }
 
+// ================================================================
 
 // --------- case 2: setup new distribution ---------
 abstract contract NewDistribution_Case2 is StateT1_User1StakeAssetsToVault1 {
@@ -194,8 +193,6 @@ contract NewDistribution_Case2Test is NewDistribution_Case2 {
     }
 }
 
-
-
 // --------- case 2: T50 ---------
 
 abstract contract T50_Case2 is NewDistribution_Case2 {
@@ -237,5 +234,96 @@ contract T50_Case2Test is T50_Case2 {
         uint256 remainingDuration = distribution.endTime - block.timestamp;
         uint256 newDepositable = (remainingDuration * distribution.emissionPerSecond) - totalDeposited;
         assertEq(newDepositable, 310 ether, "newDepositable failed");
+    }
+}
+
+// ================================================================
+
+// --------- case 3: setup new distribution ---------
+abstract contract NewDistribution_Case3 is StateT1_User1StakeAssetsToVault1 {
+
+    function setUp() public virtual override {
+        super.setUp();
+
+        vm.startPrank(operator);
+
+            uint256 distributionId = 1;
+            uint256 distributionStartTime = 1;
+            uint256 distributionEndTime = 101;
+            uint256 emissionPerSecond = 3 ether;
+            uint256 tokenPrecision = 1E18;
+            bytes32 tokenAddress = rewardsVault.addressToBytes32(address(rewardsToken1));
+
+        pool.setupDistribution(distributionId, distributionStartTime, distributionEndTime, emissionPerSecond, tokenPrecision, dstEid, tokenAddress); 
+
+        vm.stopPrank();
+
+        // MINT + DEPOSIT
+        vm.startPrank(depositor);
+
+            // mint needed
+            uint256 totalRequired = (distributionEndTime - distributionStartTime) * emissionPerSecond;
+            rewardsToken1.mint(depositor, totalRequired);
+            rewardsToken1.approve(address(rewardsVault), totalRequired);
+            // deposit
+            rewardsVault.deposit(distributionId, 300 ether, depositor);
+
+        vm.stopPrank();
+    }
+}
+
+contract NewDistribution_Case3Test is NewDistribution_Case3 {
+
+    function test_NewDistribution() public {
+        DataTypes.Distribution memory distribution = getDistribution(1);
+        assertEq(distribution.lastUpdateTimeStamp, 1);
+        
+        // get rewardsVault state
+        (, , uint256 totalRequired, uint256 totalClaimed, uint256 totalDeposited) = rewardsVault.distributions(1);
+        assertEq(totalRequired, 300 ether, "totalRequired failed");
+        assertEq(totalDeposited, 300 ether, "totalDeposited failed");
+        assertEq(totalClaimed, 0 ether, "totalClaimed failed");
+    }
+}
+
+// --------- case 3: T50 ---------
+
+abstract contract T50_Case3 is NewDistribution_Case3 {
+
+    function setUp() public virtual override {
+        super.setUp();
+        
+        vm.warp(50);
+
+        vm.startPrank(operator);
+            uint256 distributionId = 1;
+            uint256 newStartTime = 0;
+            uint256 newEndTime = 201;
+            uint256 newEmissionPerSecond = 1 ether;
+            pool.updateDistribution(distributionId, newStartTime, newEndTime, newEmissionPerSecond);
+        vm.stopPrank();
+    }
+}
+
+contract T50_Case3Test is T50_Case3 {
+
+    function test_T50() public {
+        DataTypes.Distribution memory distribution = getDistribution(1);       
+        assertEq(distribution.lastUpdateTimeStamp, 50, "lastUpdateTimeStamp failed");
+        // new vars
+        assertEq(distribution.emissionPerSecond, 1 ether, "newEmissionPerSecond failed");
+        assertEq(distribution.endTime, 201, "newEndTime failed");
+        assertEq(distribution.totalEmitted, 150 ether, "totalEmitted failed");
+        
+
+        // get rewardsVault state
+        (, , uint256 newTotalRequired, uint256 totalClaimed, uint256 totalDeposited) = rewardsVault.distributions(1);
+        assertEq(newTotalRequired, 150 ether, "newTotalRequired failed");
+        assertEq(totalDeposited, 300 ether, "totalDeposited failed");
+        
+        //
+        uint256 remainingDuration = distribution.endTime - block.timestamp;
+        uint256 newDepositable = (remainingDuration * distribution.emissionPerSecond) - totalDeposited;
+        assertEq(newDepositable, 0 ether, "newDepositable failed");
     }
 }

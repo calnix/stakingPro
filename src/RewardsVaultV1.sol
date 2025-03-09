@@ -207,7 +207,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @notice Withdraws rewards from the vault for a specific distribution
      * @dev Only callable by accounts with MONEY_MANAGER_ROLE. Distribution ID 0 is reserved for staking power.
      * @param distributionId The ID of the distribution to withdraw rewards from
-     * @param amount Amount of rewards to withdraw (in wei)
+     * @param withdrawAmount Amount of rewards to withdraw (in wei)
      * @param to Address to which rewards will be sent
      */
     function withdraw(uint256 distributionId, uint256 withdrawAmount, address to) external whenNotPaused onlyRole(MONEY_MANAGER_ROLE) {
