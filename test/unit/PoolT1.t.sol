@@ -95,13 +95,14 @@ abstract contract StateT1_CreateVault1 is StateT1_Started {
     function setUp() public virtual override {
         super.setUp();
         
-        vm.prank(user1);
+        vm.startPrank(user1);
 
         uint256 nftFeeFactor = 1000;
         uint256 creatorFeeFactor = 1000; 
         uint256 realmPointsFeeFactor = 1000;
 
         pool.createVault(user1NftsArray, nftFeeFactor, creatorFeeFactor, realmPointsFeeFactor);
+        vm.stopPrank();
     }
 }
 

@@ -65,6 +65,7 @@ library Errors {
     error DistributionStarted();
     error DistributionEnded();
     error InvalidEmissionPerSecond();
+    error InvalidNewTotalRequired();
     // endDistributionImmediately
     error DistributionManuallyEnded();
 

@@ -678,11 +678,12 @@ library PoolLogic {
         // emissionPerSecond modification 
         if(newEmissionPerSecond > 0) distribution.emissionPerSecond = newEmissionPerSecond;
             
-        // recalc. new token requirements
-        uint256 newTotalRequired = distribution.emissionPerSecond  * (distribution.endTime - distribution.lastUpdateTimeStamp);
+        // recalc. new token requirements 
+        uint256 newFutureEmissions = distribution.emissionPerSecond  * (distribution.endTime - distribution.lastUpdateTimeStamp);
+        uint256 newTotalRequired = newFutureEmissions + distribution.totalEmitted;
         
         // invariant: newTotalRequired must non-zero
-        if(newTotalRequired < 0) revert Errors.InvalidEmissionPerSecond();
+        if(newTotalRequired == 0) revert Errors.InvalidNewTotalRequired();
         
         // update storage
         distributions[distributionId] = distribution;
