@@ -220,9 +220,12 @@ contract RewardsVaultV1 is Pausable, AccessControl {
         if(distribution.tokenAddress == bytes32(0)) revert Errors.DistributionNotSetup();
         
         // check if enough
-        uint256 spareDepositRequired = distribution.totalRequired - distribution.totalClaimed;
-        if(spareDepositRequired < withdrawAmount) revert Errors.InsufficientDeposits();
+        uint256 availableToWithdraw = distribution.totalDeposited - distribution.totalClaimed;
+        if(availableToWithdraw < withdrawAmount) revert Errors.InsufficientDeposits();
 
+        uint256 balanceRequired = distribution.totalRequired - distribution.totalClaimed;
+        if(balanceRequired < withdrawAmount) revert Errors.BalanceRequiredExceeded();
+        
         // update + storage
         distribution.totalDeposited -= withdrawAmount;
         distributions[distributionId] = distribution;

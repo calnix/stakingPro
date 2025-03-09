@@ -86,7 +86,7 @@ library Errors {
     error InsufficientDeposits();
     error DistributionNotSetup();
     error ExcessiveDeposit();
-    
+    error BalanceRequiredExceeded();
     // payRewards::V2
     error InsufficientGas();
     error PayableBlocked();
