@@ -210,28 +210,28 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @param amount Amount of rewards to withdraw (in wei)
      * @param to Address to which rewards will be sent
      */
-    function withdraw(uint256 distributionId, uint256 amount, address to) external whenNotPaused onlyRole(MONEY_MANAGER_ROLE) {
+    function withdraw(uint256 distributionId, uint256 withdrawAmount, address to) external whenNotPaused onlyRole(MONEY_MANAGER_ROLE) {
         if(distributionId == 0) revert Errors.InvalidDistributionId();
         if(to == address(0)) revert Errors.InvalidAddress();
-        if(amount == 0) revert Errors.InvalidAmount();
+        if(withdrawAmount == 0) revert Errors.InvalidAmount();
 
         // check
         Distribution memory distribution = distributions[distributionId];
         if(distribution.tokenAddress == bytes32(0)) revert Errors.DistributionNotSetup();
         
         // check if enough
-        uint256 remaining = distribution.totalRequired - distribution.totalClaimed;
-        if(remaining < amount) revert Errors.InsufficientDeposits();
+        uint256 spareDepositRequired = distribution.totalRequired - distribution.totalClaimed;
+        if(spareDepositRequired < withdrawAmount) revert Errors.InsufficientDeposits();
 
         // update + storage
-        distribution.totalClaimed += amount;
+        distribution.totalDeposited -= withdrawAmount;
         distributions[distributionId] = distribution;
 
         // local: transfer to receiver
         address token = bytes32ToAddress(distribution.tokenAddress);
-        IERC20(token).safeTransfer(to, amount);
+        IERC20(token).safeTransfer(to, withdrawAmount);
 
-        emit Withdraw(distributionId, distribution.dstEid, to, amount);
+        emit Withdraw(distributionId, distribution.dstEid, to, withdrawAmount);
     }
 
 //------------------------------- risk -------------------------------------------------------
