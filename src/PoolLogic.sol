@@ -284,10 +284,10 @@ library PoolLogic {
                 return(totalBoostedDelta, 0);
             }
 
-        } else{
-            // vault has been removed from circulation
-           totalBoostedDelta = 0;
-           return(0, 0);
+        } else{ 
+            // oldVault.removed is 1: increment global state as per newVault's boost factor
+           totalBoostedDelta = newBoostedRealmPoints;
+           return(totalBoostedDelta, 1);
         }
     }
 
