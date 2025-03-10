@@ -1,13 +1,13 @@
-# Random thoughts
+# Random thoughts on Testing
 
-## 4. add checks for assets transfers
+## 1. add checks for assets transfers
 
-
-## 8. why does this not work with updateVaultFees?
+## 2. why does this not work with updateVaultFees?
 
 - the use of _updateVaultFees instead of claimRewards
+- on the triggering update thingy at 46[?]
 
-## 2. pool address in nft_registry
+## 4. pool address in nft_registry
 
 nftRegistry will be deployed before pool.
 pool will require nftRegistry address in constructor

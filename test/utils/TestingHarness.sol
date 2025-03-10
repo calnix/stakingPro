@@ -88,8 +88,8 @@ abstract contract TestingHarness is Test {
 
         // address endpoint, address owner, address pool, uint32 dstEid
         lzMock = new EndpointV2Mock();
-        nftRegistry = new MockRegistry(address(lzMock), owner, address(pool), dstEid);
-
+        nftRegistry = new MockRegistry(address(lzMock), owner, dstEid);
+        
         // mocaToken
         mocaToken = new MocaToken("MocaToken", "MOCA");   
 
