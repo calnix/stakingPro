@@ -487,7 +487,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @dev When vault is removed, all staked assets are removed from circulation and global totals are updated
      * @param vaultId The ID of the vault to activate cooldown
      */
-    function activateCooldown(bytes32 vaultId) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
+    function activateCooldown(bytes32 vaultId) external whenStarted whenNotPaused whenNotUnderMaintenance {
 
         DataTypes.UpdateAccountsIndexesParams memory params;
             params.user = msg.sender; 
@@ -501,12 +501,21 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
         uint256 vaultCoolDownDuration = VAULT_COOLDOWN_DURATION;
 
-        // set vault endTime
-        vault.endTime = block.timestamp + vaultCoolDownDuration;
+        // calc. vault endTime based on current cooldown duration
+        uint256 endTimeBasedOnCooldown = block.timestamp + vaultCoolDownDuration;
+
+        // take the shorter of endTimes, if contract endTime is set
+        if(endTime > 0) {
+            vault.endTime = endTimeBasedOnCooldown < endTime ? endTimeBasedOnCooldown : endTime;
+        } else{
+            vault.endTime = endTimeBasedOnCooldown;
+        }   
+
         emit VaultCooldownActivated(vaultId, vault.endTime);
 
-        // if zero cooldown, remove vault from circulation immediately 
-        if(vaultCoolDownDuration == 0) {  
+        // if cooldown duration is 0, or vault endTime has passed, remove vault from circulation immediately 
+        // vault endTime could be passed if contract endTime is set and has passed
+        if(vault.endTime <= block.timestamp) {  
             
             // decrement global state
             totalStakedNfts -= vault.stakedNfts;
@@ -535,7 +544,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @dev Removes all staked assets from circulation and updates global totals
      * @param vaultIds Array of vault IDs to end
      */
-    function endVaults(bytes32[] calldata vaultIds) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
+    function endVaults(bytes32[] calldata vaultIds) external whenStarted whenNotPaused whenNotUnderMaintenance {
         uint256 numOfVaults = vaultIds.length;
         if(numOfVaults == 0) revert Errors.InvalidArray();
         
