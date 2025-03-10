@@ -1,115 +1,132 @@
-# Overview 
+# Overview
 
-create 2 distributions - update both
-create 2 vaults
-    1: user1 creates vault1
-    sometime after:
-    - user1 stakes half of assets into it
-    - user2 stakes half of assets into it
-    <new distribution>
-    2: user 2 creates vault2; stakes half of assets into it
+- 2 distributions
+- 2 vaults
+- 2 users
 
-t = 1 [start]
- user1 create vault1
- user1 stakes half of their tokens+rp into it [no more nfts]
+## Unit Testing flow
 
-t = 6 [delta: 5]
- user2 stakes half of their tokens+rp+2nfts into it
+1. T0: Deployment 
+   - Deploy contracts + configuration
 
-t = 11 [delta: 5]
- distribution 1 created [starts @ t=21]aaaaaaaaaaa
+2. T1: Staking starts
+   - User1 creates vault1
+   - User1 stakes 50% of both tokens and RP into vault1
 
-t = 16 [delta: 5]
- user1 stakes remaining assets into vault1 [half of tokens+rp]
- user2 stakes remaining assets into vault1 [half of their tokens+rp +2nfts]
+3. T6: User2 stakes into vault1
+   - User2 stakes 50% of both tokens and RP into vault1
+   - User2 stakes 2 NFTs into vault1
 
-t = 21 [delta: 5]
- distribution 1 started
- updateCreationNfts
- *add: check view fns for pending rewards*
+4. T11: Distribution 1 setup
+   - Distribution 1 only starts at T21
 
-t = 26 [delta: 5]
- user2 creates vault2 [5 seconds into distribution 1]
- check pool.CreationNfts
- *stale checks: maybe move to 21, together w/ check view.*
+5. T16: Additional staking
+   - User1 stakes all remaining tokens/RP into vault1 [50% remaining]
+   - User2 stakes all remaining tokens/RP + 2 NFTs into vault1 [50% remaining + 2 NFTs]
 
-t = 31 [delta: 5]
- user2 migrates half his RP to vault2 [migrateRp]
- *both vaults updated due to migration: check both vaults and vaultAccounts for both distributions*
- 
-t = 36 [delta: 5]
- user2 unstakes half of his tokens+2nfts from vault1 [unstake]
- *vault1 updated due to unstake: can check vault1 and vaultAccounts for both distributions - maybe can drop due to t30 checks*
+6. T21: Distribution 1 begins
+   - Update creation NFTs
+   - Check pending rewards view functions
+   *add: check view fns for pending rewards*
 
-t = 41 [delta: 5]
- user2 stakes half of assets to vault2
+7. T26: User2 creates vault2
+   - vault2 is created 5 seconds into distribution 1
+   - Check pool.CreationNfts()
+   - Verify stale checks
+    *stale checks: maybe move to 21, together w/ check view.*
 
-t = 46 [delta: 5]
- vault1: updateVaultFees by user1
- vault2: updateVaultFees by user2
-  [fees are dropped and increased proportionally, net transfer from creator to others]
-  [check both vaults accrue rewards from both distributions; assets staked since t46]
- updated:
- - both distributions updated
- - both vault accounts updated
- - user1+vault1 updated
- - user2+vault1 NOT updated
- - user1+vault2 NOT updated
- - user2+vault2 updated
+8. T31: RP migration
+   - User2 migrates 50% of his RP to from vault1 to vault2
+   - Both vaults updated due to migrateRp()
+   - Verify updates on both vaults and accounts for both distributions
+    *both vaults updated due to migration: check both vaults and vaultAccounts for both distributions*
 
-t = 51 [delta: 5]
- [creator fees are dropped entirely; other fees remain unchanged]
- vault1: updateVaultFees by user1
- vault2: updateVaultFees by user2
-  - check that rewards are accrued correctly, accounting for recent fee changes
- updated:
- - both distributions updated
- - both vault accounts updated
- - user1+vault1 updated
- - user2+vault1 NOT updated
- - user1+vault2 NOT updated
- - user2+vault2 updated
+9. T36: Partial unstake
+   - User2 unstakes half of his tokens+2nfts from vault1
+   - Vault1 updated due to unstake()
+   - Verify vault1 and account updates
+    *vault1 updated due to unstake: can check vault1 and vaultAccounts for both distributions - maybe can drop due to t30 checks*
 
-t = 56 [delta: 5]
- user2 claims rewards from vault1+d1
- user2 claims rewards from vault2+d1 
- user1 cannot claim rewards from vault2+d1 -> nothing staked
- this checks the combo: (user2+vault1), (user1+vault2); which was not checked at t46 or t51
-  - check that rewards are accrued correctly, accounting for recent fee changes
- updated:
- - both distributions updated
- - both vault accounts updated
- - user1+vault1 NOT updated
- - user2+vault1 updated
- - user1+vault2 updated
- - user2+vault2 NOT updated
+10. T41: New stake into vault2 by user2
+    - User2 stakes half of his tokens+2nfts into vault2
+    - vault2 updated due to stake()
+    - vault1 stale
 
-t = 61 [delta: 5]
- vault2: activateCooldown
- updated:
- - both distributions updated
- - vault2 accounts updated
- - user2 accounts updated
- - stale: vault1 accounts, user1 accounts
+11. T46: Vault fee updates
+    - Vault1: User1 updates fees
+    - Vault2: User2 updates fees
+    - Check proportional fee adjustments
+    - [fees are dropped and increased proportionally, net transfer from creator to others]
+    - [check both vaults accrue rewards from both distributions; assets staked since t46]
 
-t = 61+1day [delta: 1 day]
- vault2: endVaults
- updated:
- - both distributions updated
- - vault2 accounts for all distributions updated
- - stale: vault1 accounts, all user accounts
+    Updated:
+    - both distributions updated  
+    - both vault accounts updated
+    - user1+vault1 updated
+    - *user2+vault1 NOT updated*
+    - *user1+vault2 NOT updated*
+    - user2+vault2 updated
 
-t = 66+1day [delta: 5]
- transition: user2 unstakes from vault2
- - unstake after vault ended: make sure its vault assets are decremented
- - claimRewards after vault ended: make sure its not earning
+12. T51: Additional fee updates
+    - Vault1: User1 drops creator fees entirely [other fees remain unchanged]
+    - Vault2: User2 drops creator fees entirely [other fees remain unchanged]
+    - Verify fees are redistributed proportionally to other fee types
+    - Check that rewards are accrued correctly, accounting for recent fee changes
 
-t = 86471 [delta: 5]
- `setEndTime`
-    - use main timeline
+    Updated:
+    - both distributions updated
+    - both vault accounts updated
+    - user1+vault1 updated
+    - user2+vault1 NOT updated
+    - user1+vault2 NOT updated
+    - user2+vault2 updated
+
+13. T56: Claim Rewards
+    - user1 claims rewards from vault1+d1
+    - user2 claims rewards from vault2+d1
+    - user1 cannot claim rewards from vault2+d1 -> nothing staked
+    - This checks the combo: (user2+vault1), (user1+vault2); which was not checked at t46 or t51
+    - Check that rewards are accrued correctly, accounting for recent fee changes
+
+    Updated:
+    - both distributions updated
+    - both vault accounts updated
+    - user1+vault1 NOT updated
+    - user2+vault1 updated
+    - user1+vault2 updated
+    - user2+vault2 NOT updated
+
+14. T61: Vault2: activateCooldown
+    - both distributions updated
+    - vault2 accounts updated
+    - user2 accounts updated
+    - stale: vault1 accounts, user1 accounts
+
+15. T61+1day: Vault2: endVaults [T86461]
+    - both distributions updated
+    - vault2 accounts for all distributions updated
+    - stale: vault1 accounts, all user accounts
+
+16. T66+1day: Vault2: user2 unstakes [T86466]
+    - unstake after vault ended: make sure its vault assets are decremented
+    - claimRewards after vault ended: make sure its not earning
+
+17. T86471: `setEndTime`
     - transition fn checks setEndTime
     - on transition, check other fns's endTime checks
     - check claimRewards
+
+16. Vault closure (t=76)
+    - Cooldown period ends
+    - User1 unstakes creation NFTs
+    - Verify vault1 permanently closed
+    - Check final reward distributions
+
+17. Final claims (t=81)
+    - Users claim remaining rewards
+    - Verify fee distributions
+    - Check final balances
+
 
 # Local distribution: all on same chain
 
