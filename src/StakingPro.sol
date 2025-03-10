@@ -97,10 +97,18 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         address owner, address monitor, address operator,
         address storedSigner, string memory name, string memory version) payable EIP712(name, version) {
 
-        // sanity check input data: time, period, rewards
+        // sanity check: addresses 
         if(owner == address(0)) revert Errors.InvalidAddress();
+        if(monitor == address(0)) revert Errors.InvalidAddress();
+        if(operator == address(0)) revert Errors.InvalidAddress();
+        if(storedSigner == address(0)) revert Errors.InvalidAddress();
+        if(stakedToken == address(0)) revert Errors.InvalidAddress();
+        if(nftRegistry == address(0)) revert Errors.InvalidAddress();
+
+        // sanity check: startTime
         if(startTime_ < block.timestamp) revert Errors.InvalidStartTime();
 
+        // sanity check: nftMultiplier
         if(nftMultiplier == 0) revert Errors.InvalidMultiplier();
 
         // interfaces: supporting contracts

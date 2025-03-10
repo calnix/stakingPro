@@ -69,18 +69,13 @@ A vault is a collection of staked assets by users:
 
 Each vault has a unique id, that is generated randomly. See `_generateVaultId()`.
 
-A vault can levy fees on the rewards it accrues.
+A vault can be thought of as a unique grouping of boosting effects and fees:
 
-- creatorFee: levied to pay for the creation of the vault
-- nftStakingFee: levied to pay for the staking of NFTs
-- rpStakingFee: levied to pay for the staking of Realm Points
+- nfts staked contribute boosting effects to other staking assets: staked tokens, staked RealmPoints
+- fees are levied on the rewards accrued by the vault
+- vault creator determines fees on vault creation and is free to update them, at any point in time.
 
-The vault creator determines these fees on vault creation and is free to update them, at any point in time.
-
-The only condition is that the total fee factor cannot exceed `MAXIMUM_FEE_FACTOR`.
-
-- maximumFeeFactor determines how much of the rewards are taken as fees.
-- `(10_000 - maximumFeeFactor)` = amount of rewards given to Moca stakers.
+We will explain boosting and fees in later sections.
 
 ## Accounts [user, vault]
 
@@ -148,7 +143,7 @@ The user account is updated next, accounting for the user's share of the rewards
 
 Link to the illustration: https://link.excalidraw.com/l/ZeH3y0tOi6/8T00wtHkie9
 
-### Fees and rewards
+## Fees and rewards
 
 Fees are levied on the vault's accrued rewards, before the rewards are distributed to the vault's stakers.
 
@@ -156,27 +151,40 @@ Fees are levied on the vault's accrued rewards, before the rewards are distribut
 - nftStakingFee: levied to pay for the staking of NFTs
 - rpStakingFee: levied to pay for the staking of RP
 
-Rewards accrued by a vault are paid out to it's stakers of moca tokens.
+- Fees set on creation cannot exceed `MAXIMUM_FEE_FACTOR`.
+- For fee updates, creator fee must be decreased to allow for increased nftStakingFee and rpStakingFee.
+- Alternatively, creator fee can be decreased singularly.
+- Irrespective of the fees set, `MAXIMUM_FEE_FACTOR` must be honoured.
 
-- moca stakers earn rewards less of fees; token rewards or staking power.
-- moca stakers do not levy any fees.
+Accrued vault rewards are paid out to it's stakers of moca tokens.
 
-Hence, it can be said that the rewards paid out to the vault's stakers are the gross rewards accrued by the vault; less of fees.
+- moca stakers earn rewards less of fees; be it token rewards or staking power.
+- `(10_000 - totalFeeFactors)` = proportion of rewards given to Moca stakers.
 
-# Handling varying decimal precisions of  reward tokens: rebasing MOCA tokens, rewards, index and emission calculations
+Hence, it can be said that the rewards due to the vault's moca stakers are the rewards accrued, less of fees.
+
+# Handling varying decimal precisions of reward tokens and staking assets
 
 Handling varying decimal precision for reward tokens, and ensuring that the index and emission calculations are correct.
 
+Staking Assets:
+
+- Moca: 1e18
+- Realm Points: 1e18
+- NFTs: N/A
+
+Staking power is treated in 1e18 precision.
+
 ## 1. Decimal Precision for indexes and rewards
 
-All indexes, rewards, fees are recorded in 1E18 precision.
-Rewards are rebased to the reward token's precision before being being transferred to the user, as per claimRewards().
+All indexes, rewards, fees are recorded in `1E18` precision.
+Rewards are rebased to its native precision before being being transferred to the user, as per `claimRewards`.
 
 While this has no impact on tokens of 1e18 precision, it is much more sympathetic towards tokens of lesser precision and does not subject them to intermediate rebasing actions which will result in compounded rounding down effect.
 
 Downside, tokens > 1E18 precision suffer; but there aren't many of those, so its acceptable.
 
-check and test if precision loss is a problem, given varying token precisions:
+### Check and test if precision loss is a problem, given varying token precisions:
 
 Scenario 1: reward tokens are denominated in 1e1 precision
 
@@ -341,12 +349,12 @@ Exceeding `10_000` is acceptable for NFT_MULTIPLIER, and it can still retain 2dp
 
 ### 2.2 Fee Factors
 
-Fee factors cannot exceed `5000`, as this would be equivalent to 50% fee.
-In  `createVault`, we check if the total fee factor exceeds `5000`:
+Fee factors cannot exceed `MAXIMUM_FEE_FACTOR`.
+In `createVault`, we check if the total fee factor exceeds `MAXIMUM_FEE_FACTOR`:
 
 ```solidity
         uint256 totalFeeFactor = fees.nftFeeFactor + fees.creatorFeeFactor + fees.realmPointsFeeFactor;
-        if(totalFeeFactor > 5000) revert TotalFeeFactorExceeded();
+        if(totalFeeFactor > MAXIMUM_FEE_FACTOR) revert TotalFeeFactorExceeded();
 ```
 
 **This is to ensure that MOCA stakers receive at least 50% of rewards.**
@@ -356,31 +364,32 @@ In `_updateUserAccount`, we calculate the fees accrued by the user:
 ```solidity
     // calc. creator fees
     if(vault.creatorFeeFactor > 0) {
-        accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / PRECISION_BASE;
+        // fees are kept in 1E18 during intermediate calculations
+        accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / params.PRECISION_BASE;
     }
 
     // nft fees accrued only if there were staked NFTs
     if(vault.stakedNfts > 0) {
         if(vault.nftFeeFactor > 0) {
 
-            accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / PRECISION_BASE;
-            vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);              // nftIndex: rewardsAccPerNFT
+            // indexes are denominated in 1E18 | fees are kept in 1E18 during intermediate calculations
+            accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / params.PRECISION_BASE;
+            vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);      // nftIndex: rewardsAccPerNFT            
         }
     }
 
     // rp fees accrued only if there were staked RP 
     if(vault.stakedRealmPoints > 0) {
         if(vault.realmPointsFeeFactor > 0) {
-            accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / PRECISION_BASE;
 
-            // accRealmPointsFee is in reward token precision
-            uint256 stakedRealmPointsRebased = (vault.stakedRealmPoints * distribution.TOKEN_PRECISION) / 1E18;  
-            vaultAccount.rpIndex += (accRealmPointsFee / stakedRealmPointsRebased);              // rpIndex: rewardsAccPerRP
+            // indexes are denominated in 1E18 | fees are kept in 1E18 during intermediate calculations | realmPoints are denominated in 1E18
+            accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / params.PRECISION_BASE;
+            vaultAccount.rpIndex += (accRealmPointsFee * 1E18) / vault.stakedRealmPoints;      // rpIndex: rewardsAccPerRP
         }
     } 
 ```
 
-### 2.3 PrecisionBase reference
+### 2.3 Precision_Base reference
 
 If we only wanted to express fee factors in integer values, (meaning 0 precision), we could set `PRECISION_BASE` to `100`.
 
@@ -399,18 +408,31 @@ If we only wanted to express fee factors in integer values, (meaning 0 precision
 ## Constructor & Initial setup
 
 ```solidity
-    constructor(address nftRegistry, address stakedToken, uint256 startTime_, uint256 nftMultiplier, uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
-        address owner, address monitor, string memory name, string memory version) payable EIP712(name, version) {...}
+    constructor(
+        address nftRegistry, address stakedToken, uint256 startTime_, 
+        /*uint256 maxFeeFactor, uint256 minRpRequired,*/ uint256 nftMultiplier, 
+        uint256 creationNftsRequired, uint256 vaultCoolDownDuration,
+        address owner, address monitor, address operator,
+        address storedSigner, string memory name, string memory version) payable EIP712(name, version) {...}
 ```
 
 On deployment, the following must be defined:
 
-1. address of nft registry contract
-2. address of staked token
-3. startTime: user are only able to call staking functions after startTime.
-4. nftMultiplier: multiplier factor per nft
-5. creationNftsRequired: number of nfts required to create a vault
-6. vaultCoolDownDuration: cooldown period of vault before ending permanently
+1. address of nft registry 
+2. address of staked token [MOCA]
+3. startTime:
+    - user are only able to call staking functions after startTime. 
+    - Must be greater than current block timestamp.
+4. nftMultiplier: multiplier factor per nft.
+    - Must be greater than 0. Used to calculate rewards boost from staked NFTs
+5. creationNftsRequired: number of nfts required to create a vault.
+6. vaultCoolDownDuration: cooldown period of vault before ending permanently. Duration in seconds that must pass after vault is marked for closure
+7. owner: address that will be granted admin, operator and monitor roles. Cannot be zero address
+8. monitor: address that will be granted monitor role for calling pause()
+9. operator: address that will be granted operator role for parameter updates
+10. storedSigner: address used for signature verification
+11. name: name string used for EIP712 domain separator
+12. version: version string used for EIP712 domain separator
 
 This expects that the nft registry contract should be deployed in advance.
 
