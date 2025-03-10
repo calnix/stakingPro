@@ -720,6 +720,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     function setupDistribution(uint256 distributionId, uint256 distributionStartTime, uint256 distributionEndTime, uint256 emissionPerSecond, uint256 tokenPrecision,
         uint32 dstEid, bytes32 tokenAddress
     ) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
+
         // cannot exceed max
         if(activeDistributions.length >= maxActiveAllowed) revert Errors.MaxActiveDistributions();
             
@@ -728,6 +729,14 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
         if(distributionStartTime < startTime) revert Errors.InvalidDistributionStartTime();
         if(distributionStartTime < block.timestamp) revert Errors.InvalidDistributionStartTime();
+
+        // contract endTime set
+        if(endTime > 0){
+            // newEndTime must be <= endTime
+            if(distributionEndTime > endTime) revert Errors.InvalidEndTime();
+            // newStartTime must be <= endTime
+            if(distributionStartTime > endTime) revert Errors.InvalidStartTime();
+        }
 
         // rebase check: smallest tick rebased must be > 0. sanity checks _calculateDistributionIndex 
         uint256 emissionPerSecondRebased = (emissionPerSecond * 1E18) / tokenPrecision;
@@ -788,6 +797,14 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * @param newEmissionPerSecond New emission rate per second. Must be > 0 if modified
      */
     function updateDistribution(uint256 distributionId, uint256 newStartTime, uint256 newEndTime, uint256 newEmissionPerSecond) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
+
+        // contract endTime set
+        if(endTime > 0){
+            // newEndTime must be <= endTime
+            if(newEndTime > endTime) revert Errors.InvalidEndTime();
+            // newStartTime must be <= endTime
+            if(newStartTime > endTime) revert Errors.InvalidStartTime();
+        }
 
         if(newStartTime == 0 && newEndTime == 0 && newEmissionPerSecond == 0) revert Errors.InvalidDistributionParameters(); 
 
