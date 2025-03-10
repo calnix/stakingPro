@@ -457,8 +457,7 @@ library PoolLogic {
         // cache vault and user data, reverts if vault does not exist
         (DataTypes.User memory userVaultAssets, DataTypes.Vault memory vault) = _cache(params.vaultId, params.user, vaults, users);
         
-        // note: allow refresh of vault endTime, should VAULT_COOLDOWN_DURATION be updated
-        //if(vault.endTime > 0) revert Errors.VaultEndTimeSet(params.vaultId);
+        if(vault.endTime > 0) revert Errors.VaultEndTimeSet(params.vaultId);
 
         // vault has been removed
         if(vault.removed == 1) revert Errors.VaultAlreadyRemoved();
