@@ -7,7 +7,7 @@
 Local distribution: all on same chain. Will not involve EVMVault.sol
 Use of RewardsVaultV1.sol.
 
-## Unit Testing flow
+## Unit Testing flow: Main timeline
 
 1. T0: Deployment 
    - Deploy contracts + configuration
@@ -119,37 +119,15 @@ Use of RewardsVaultV1.sol.
     - on transition, check other fns's endTime checks
     - check claimRewards
 
-## Risk testing
+## Risk testing: parallel timeline
 
-PoolT56p_Risk.t.sol
+- test risk-related fns: pause, unpause, freeze, emergencyExit
+- PoolT56p_Risk.t.sol
 
-- pause
-- unpause
-- freeze
-- emergencyExit
+## Pool Management fns: parallel timeline
 
+### `stakeOnBehalfOf`
 
-
-- lz: refund
-- https://docs.layerzero.network/v2/developers/evm/technical-reference/api#send
-
-X-Chain
-- will involve EVMVault.sol
-
-# Future
-
-## Integration testing
-
-## Migration
-
-- v1 to v2: rewardsVault
-
-
-
----
-## Pool Management fns: split timeline fork
-
-`stakeOnBehalfOf`
 - split on vault2 creation
 - user2 restakes nfts and migrates RP to vault2
 - user2 unstakes from tokens from vault1; but does not restake tokens
@@ -220,6 +198,21 @@ startTime, endTime, emissionPerSecond
 
 - partial deposits for distributions
 
-# TO-DO
 
-## 
+
+# TODO
+
+## Integration testing
+
+## Migration
+
+- v1 to v2: rewardsVault
+
+
+# Future
+
+## X-Chain
+
+- will involve EVMVault.sol
+- lz: refund
+- https://docs.layerzero.network/v2/developers/evm/technical-reference/api#send
