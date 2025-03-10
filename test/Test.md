@@ -4,6 +4,9 @@
 - 2 vaults
 - 2 users
 
+Local distribution: all on same chain. Will not involve EVMVault.sol
+Use of RewardsVaultV1.sol.
+
 ## Unit Testing flow
 
 1. T0: Deployment 
@@ -116,27 +119,6 @@
     - on transition, check other fns's endTime checks
     - check claimRewards
 
-16. Vault closure (t=76)
-    - Cooldown period ends
-    - User1 unstakes creation NFTs
-    - Verify vault1 permanently closed
-    - Check final reward distributions
-
-17. Final claims (t=81)
-    - Users claim remaining rewards
-    - Verify fee distributions
-    - Check final balances
-
-
-# Local distribution: all on same chain
-
-- will not involve EVMVault.sol
-
-[#1]
-- setup 3 distributions: stakingPower:0, someToken:1
-- setup 2 vaults: vault1, vault2
-- 3 users: user1, user2, user3
-
 ## Risk testing
 
 PoolT56p_Risk.t.sol
@@ -237,3 +219,7 @@ startTime, endTime, emissionPerSecond
 ## others
 
 - partial deposits for distributions
+
+# TO-DO
+
+## 
