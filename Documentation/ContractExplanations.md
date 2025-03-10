@@ -421,14 +421,14 @@ On deployment, the following must be defined:
 1. address of nft registry 
 2. address of staked token [MOCA]
 3. startTime:
-    - user are only able to call staking functions after startTime. 
+    - user are only able to call staking functions after startTime.
     - Must be greater than current block timestamp.
 4. nftMultiplier: multiplier factor per nft.
     - Must be greater than 0. Used to calculate rewards boost from staked NFTs
 5. creationNftsRequired
 6. vaultCoolDownDuration
-7. owner: address that will be granted `DEFAULT_ADMIN_ROLE`, `OPERATOR_ROLE` and `MONITOR_ROLE`. 
-8. monitor: address that will be granted `MONITOR_ROLE` for calling `pause()`. 
+7. owner: address that will be granted `DEFAULT_ADMIN_ROLE`, `OPERATOR_ROLE` and `MONITOR_ROLE`.
+8. monitor: address that will be granted `MONITOR_ROLE` for calling `pause()`.
 9. operator: address that will be granted `OPERATOR_ROLE` for parameter updates.
 10. storedSigner: address used for signature verification.
 11. name: name string used for EIP712 domain separator
