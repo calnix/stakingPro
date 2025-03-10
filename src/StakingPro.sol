@@ -276,14 +276,14 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     /**
-     * @notice Stakes realm points into a vault
+     * @notice Stakes realm points into a vault. 
      * @dev Requires a valid signature from the stored signer to authorize the staking
      * @param vaultId The ID of the vault to stake realm points into
      * @param amount The amount of realm points to stake
      * @param expiry The expiry timestamp of the signature
      * @param signature The signature to verify
      * @custom:requirements
-     * - Amount must be greater than MINIMUM_REALMPOINTS_REQUIRED
+     * - Amount must be at least MINIMUM_REALMPOINTS_REQUIRED
      * - Signature must not be expired or already executed
      * - Signature must be valid and from the stored signer
      * - Contract must not be paused and staking must have started
@@ -320,7 +320,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     /**
-     * @notice Moves realm points from one vault to another
+     * @notice Moves realm points from one vault to another. No minimum amount constraints.
      * @dev Updates accounting for both vaults and recalculates boosted amounts
      * @param oldVaultId The ID of the vault to move realm points from
      * @param newVaultId The ID of the vault to move realm points to
