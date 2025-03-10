@@ -425,22 +425,22 @@ On deployment, the following must be defined:
     - Must be greater than current block timestamp.
 4. nftMultiplier: multiplier factor per nft.
     - Must be greater than 0. Used to calculate rewards boost from staked NFTs
-5. creationNftsRequired: number of nfts required to create a vault.
-6. vaultCoolDownDuration: cooldown period of vault before ending permanently. Duration in seconds that must pass after vault is marked for closure
-7. owner: address that will be granted admin, operator and monitor roles. Cannot be zero address
-8. monitor: address that will be granted monitor role for calling pause()
-9. operator: address that will be granted operator role for parameter updates
-10. storedSigner: address used for signature verification
+5. creationNftsRequired
+6. vaultCoolDownDuration
+7. owner: address that will be granted `DEFAULT_ADMIN_ROLE`, `OPERATOR_ROLE` and `MONITOR_ROLE`. 
+8. monitor: address that will be granted `MONITOR_ROLE` for calling `pause()`. 
+9. operator: address that will be granted `OPERATOR_ROLE` for parameter updates.
+10. storedSigner: address used for signature verification.
 11. name: name string used for EIP712 domain separator
 12. version: version string used for EIP712 domain separator
 
 This expects that the nft registry contract should be deployed in advance.
 
-We need to then deploy the following contracts:
-- RewardsVault
+After deployment, we need to:
 
-We need to then set the following, on the stakingPro contract:
-- RewardsVault address
+1. Deploy RewardsVault contract
+2. Set RewardsVault address on stakingPro contract
+3. Call `setPool` on NftRegistry contract
 
 ## Roles & Addresses
 
