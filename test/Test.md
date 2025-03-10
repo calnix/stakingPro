@@ -128,15 +128,19 @@ Use of RewardsVaultV1.sol.
 
 ### `stakeOnBehalfOf`
 
-- split on vault2 creation
-- user2 restakes nfts and migrates RP to vault2
-- user2 unstakes from tokens from vault1; but does not restake tokens
-- instead OPERATOR restakes on behalf of user2
-- vault2 checks and user2 accounts should tally as per main timeline's values
+- PoolT41p_StakeOnBehalf.t.sol
+- Splits off on vault2 creation
+- User2 restakes nfts and migrates RP to vault2
+- User2 unstakes from tokens from vault1; but does not restake tokens
+- Instead OPERATOR restakes on behalf of user2.
+- User2 should be credited with the same rewards as main timeline.
+- Vault2 checks and user2 accounts should tally as per main timeline's values
 
-`updateActiveDistributions`
-- split at T16. [D1 created at T11]
-- update active distributions and check new limit
+### `updateActiveDistributions`
+
+- PoolT16p_UpdateActiveDistributions.t.sol
+- Split at T16. [D1 created at T11]
+- Update active distributions and check new limit
 
 ### `updateMaximumFeeFactor`
 
@@ -152,6 +156,7 @@ Use of RewardsVaultV1.sol.
 - split on T46; both users update fees on both vaults
 
 Others
+
 - totalFeeFactor cannot exceed maximumFeeFactor.
 - if maximumFeeFactor is lowered: amount of rewards taken as fees is lowered.
 - if maximumFeeFactor is raised: amount of rewards taken as fees is increased.
@@ -159,11 +164,13 @@ Others
 
 > PoolT46p_MaintenanceMode.t.sol
 
-`updateMinimumRealmPoints`
+### `updateMinimumRealmPoints`
+
+- PoolT6p_UpdateMinimumRealmPoints.t.sol
 - t1: user1 staked half their rp
 - t6: user2 staked half their rp
- transition fn on T1: updateMinimumRealmPoints
- split on T6: user2 stakes lower amount of rp
+- transition fn on T1: updateMinimumRealmPoints
+- split on T6: user2 stakes lower amount of rp
 
 `updateCreationNfts`
 - transition fn: T16
@@ -190,15 +197,13 @@ startTime, endTime, emissionPerSecond
 `setRewardsVault`
 - continue on the same split
 
-## update NFT multiplier process
+## Update NFT_MULTIPLIER process
 
 - PoolT46p_MaintenanceMode.t.sol
 
-## others
+## Others
 
 - partial deposits for distributions
-
-
 
 # TODO
 
@@ -207,7 +212,6 @@ startTime, endTime, emissionPerSecond
 ## Migration
 
 - v1 to v2: rewardsVault
-
 
 # Future
 
