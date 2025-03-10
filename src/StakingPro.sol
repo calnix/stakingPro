@@ -417,10 +417,12 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             }
 
         } else{
-
-            // vault has been removed from circulation: return MOCA
+            
+            // vault.removed == 1: assets removed from circulation 
+            
+            // no need to update global state: only return staking assets
             if(amount > 0) STAKED_TOKEN.safeTransfer(msg.sender, amount);
-            // nftRegistry update is handled by endVaults
+            if(tokenIds.length > 0) NFT_REGISTRY.recordUnstake(msg.sender, tokenIds, vaultId);
         }
     }
 
