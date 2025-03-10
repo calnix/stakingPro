@@ -678,7 +678,8 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     }
 
     /**
-     * @notice Updates the cooldown duration for vaults
+     * @notice Updates the cooldown duration for vaults.
+     * @notice Changes are meant to be forward-looking; i.e. they will only affect future vaults.
      * @dev Zero values are accepted. New duration can be less or more than current value
      * @param newDuration The new cooldown duration to set
      */

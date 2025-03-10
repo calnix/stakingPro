@@ -125,9 +125,9 @@ This is because each vault is a unique grouping of boosting effects, fees and th
 >By this point, it should be clear that while for each distribution, a vault has a unique vaultAccount, a user has a unique userAccount for each vault.
 >Implying, that if a user has staked into multiple vaults, they will have multiple userAccounts, for the same distribution.
 
-## Process of updating each vaultAccount and userAccount for a specific vault & distribution
+## Update process for vaultAccount and userAccount, for a specific vault & distribution
 
-Before enacting a state change upon a vault (i.e. stake/unstake, etc), it must be updated first.
+Before enacting a state change upon a vault (e.g. stake/unstake, etc), the vault account must be updated first.
 Consider the example where we want to stake to a vault. The process is as follows:
 
 1. update all active distributions
