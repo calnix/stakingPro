@@ -452,9 +452,9 @@ Addresses:
 
 Roles:
 
-1. MONITOR_ROLE: can only call pause(); for risk monitoring scripts
-2. OPERATOR_ROLE: for update various pool parameters and stakeOnBehalfOf()
-3. DEFAULT_ADMIN_ROLE: Owner multiSig; can assign/revoke roles to other addresses
+1. `MONITOR_ROLE`: can only call `pause();` for risk monitoring scripts
+2. `OPERATOR_ROLE`: for update various pool parameters and `stakeOnBehalfOf()`
+3. `DEFAULT_ADMIN_ROLE`: Owner multiSig; can assign/revoke roles to other addresses
 
 > Roles are referred to by their `bytes32` identifier
 
@@ -472,23 +472,23 @@ it can only set/revoke roles to addresses. if we want it to be able to call thes
 
 ### Owner multiSig address is assigned:
 
-1. MONITOR_ROLE
-2. OPERATOR_ROLE
-3. DEFAULT_ADMIN_ROLE
+1. `MONITOR_ROLE`
+2. `OPERATOR_ROLE`
+3. `DEFAULT_ADMIN_ROLE`
 
 With the default admin role, it can assign/revoke roles to other addresses.
-With the monitor role, it can call pause(); to pause the contract.
-With the operator role, it can call update various pool parameters and stakeOnBehalfOf().
+With the monitor role, it can call `pause();` to pause the contract.
+With the operator role, it can call update various pool parameters and `stakeOnBehalfOf()`.
 
 ### Risk monitoring script address is assigned:
 
-1. MONITOR_ROLE
+1. `MONITOR_ROLE`
 
-With the monitor role, it can call pause(); to pause the contract.
+With the monitor role, it can call `pause();` to pause the contract.
 
 ### Operator address is assigned:
 
-1. OPERATOR_ROLE
+1. `OPERATOR_ROLE`
 
 With the operator role, it can call update various pool parameters.
 On deployment, no operator address is assigned. When required, the DAT team is to call `grantRole(bytes32 role, address account)` to assign the operator role to the supplied address.
@@ -506,7 +506,7 @@ This is to ensure that the operator role is kept unassigned, unless it is requir
 1. ended: contract is ended, as dictated by its endTime. Users can only claim rewards and unstake.
 2. paused: contract is paused, all user functions revert.
 3. frozen: contract is frozen, all user functions revert except for emergencyExit().
-4. underMaintenance: contract is under maintenance, all user functions revert.
+4. underMaintenance: contract is under maintenance, all user functions revert. Other privileged functions are also blocked.
 
 ### Pause/Unpause
 
@@ -562,12 +562,13 @@ createVault(
 
 Creates a new vault for staking with specified fee parameters:
 
-- nftMultiplier: multiplier factor per nft
-- creationNftsRequired: number of nfts required to create a vault
-- vaultCoolDownDuration: cooldown period of vault before ending permanently
+- `nftFeeFactor`: fee factor per nft
+- `creatorFeeFactor`: fee factor for creator
+- `realmPointsFeeFactor`: fee factor for realm points
 
-Requires the creator to have the required number of nfts.
-These nfts are locked, and do not count towards rewards calculations.
+Requires the creator to have the required number of creation NFTs.
+These NFTs are registered on the NFT_REGISTRY contract, and are locked.
+They do not count towards rewards calculations.
 
 ## stakeTokens
 
@@ -579,8 +580,6 @@ Allows users to stake tokens into a specified vault:
 
 - Checks that the vault exists and is not ended
 - Transfers tokens from user to contract
-
-Note that staking tokens does not automatically stake NFTs or Realm Points - these must be staked separately via their respective functions.
 
 ## stakeNfts
 
