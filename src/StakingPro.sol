@@ -150,7 +150,8 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      * - Contract must not be paused and staking must have started
      */
     function createVault(uint256[] calldata tokenIds, uint256 nftFeeFactor, uint256 creatorFeeFactor, uint256 realmPointsFeeFactor) external whenStartedAndNotEnded whenNotPaused whenNotUnderMaintenance {
-        
+        if(activeDistributions.length == 0) revert Errors.NoActiveDistributions();
+
         // must commit unstaked NFTs to create vaults: these do not count towards stakedNFTs
         uint256 incomingNfts = tokenIds.length;
         if(incomingNfts != CREATION_NFTS_REQUIRED) revert Errors.InvalidCreationNfts();

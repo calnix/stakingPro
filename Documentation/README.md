@@ -1,5 +1,15 @@
 # Staking Pro
 
+StakingPro is a contract that allows users to stake tokens, nfts and earn rewards.
+
+- Users stake MOCA tokens, MocaNFTs, and Realm Points (RP) into vaults to earn rewards.
+- Each vault is created by a MocaNFT holder who locks 5 NFTs and sets the fee structure.
+- Vaults have no expiry date unless deactivated by the creator.
+- Vault levy fees on the rewards it accrues.
+- Rewards come in the form of ERC20 tokens and Staking Power (an off-chain resource).
+- There are no limits on the amount of assets that can be staked.
+- The contract does not issue receipt tokens (e.g. stkMOCA) for staked assets.
+
 Chain: Base
 
 ## Staking assets

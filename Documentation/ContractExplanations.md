@@ -1,3 +1,15 @@
+# Overview
+
+StakingPro is a contract that allows users to stake tokens, nfts and earn rewards.
+
+- Users stake MOCA tokens, MocaNFTs, and Realm Points (RP) into vaults to earn rewards.
+- Each vault is created by a MocaNFT holder who locks 5 NFTs and sets the fee structure.
+- Vaults have no expiry date unless deactivated by the creator.
+- Vault levy fees on the rewards it accrues.
+- Rewards come in the form of ERC20 tokens and Staking Power (an off-chain resource).
+- There are no limits on the amount of assets that can be staked.
+- The contract does not issue receipt tokens (e.g. stkMOCA) for staked assets.
+
 # Distributions, Vaults and Accounts
 
 ## Distributions
@@ -51,25 +63,67 @@ Staking power is an off-chain resource - the contract only serves to record the 
 
 A vault is a collection of staked assets by users:
 
--  users stake into vaults.
--  users create vaults for staking.
+- users create vaults for staking.
+- users stake into vaults.
+- users unstake from vaults.
 
 Each vault has a unique id, that is generated randomly. See `_generateVaultId()`.
 
+A vault can levy fees on the rewards it accrues.
+
+- creatorFee: levied to pay for the creation of the vault
+- nftStakingFee: levied to pay for the staking of NFTs
+- rpStakingFee: levied to pay for the staking of Realm Points
+
+The vault creator determines these fees on vault creation and is free to update them, at any point in time.
+
+The only condition is that the total fee factor cannot exceed `MAXIMUM_FEE_FACTOR`.
+
+- maximumFeeFactor determines how much of the rewards are taken as fees.
+- `(10_000 - maximumFeeFactor)` = amount of rewards given to Moca stakers.
+
 ## Accounts [user, vault]
 
-### Vault Accounts
+There are two types of accounts:
 
-- A vault has a separate account for each distribution.
-- Each vault account records the vault's accrued and claimed rewards for that specific distribution.
+1. User accounts
+2. Vault accounts
 
-### User Accounts
+Since there could be multiple distributions, each with their own token rewards, there will be a unique vault account for each distribution.
 
-- A user has a separate account for each distribution, specific to a vault they have staked into.
-- Each user account records the user's accrued and claimed rewards for that specific vault and distribution.
+- Vault account will record the vault's accrued and claimed rewards for that specific distribution.
+- Will track the total rewards earned by the vault before fees are deducted.
 
-By this point, it should be clear that while for each distribution, a vault has a unique vaultAccount, a user has a unique userAccount for each vault.
-Implying, that if a user has staked into multiple vaults, they will have multiple userAccounts, for the same distribution.
+Similarly, each user who stakes in a vault will have a user account per distribution that tracks:
+
+- Their share of the vault's rewards after fees
+- Their claimed rewards from that distribution
+- The index used to calculate their rewards, which helps determine unclaimed rewards
+
+This dual account system allows precise tracking of rewards at both the vault and individual user level across multiple reward distributions.
+
+### User accounts: pairwise combination of vault and distribution
+
+**Each user account records the user's accrued and claimed rewards for that specific vault and distribution.**
+
+Example:
+
+- 2 distributions: d0, d1
+- 2 vaults: vA, vB
+
+User 1 has staked into both vaults. User 1 has the following accounts:
+
+- vA_d0: User 1's account for vault vA and distribution d0
+- vA_d1: User 1's account for vault vA and distribution d1
+- vB_d0: User 1's account for vault vB and distribution d0
+- vB_d1: User 1's account for vault vB and distribution d1
+
+A user will have a unique user account for each pair-wise combination of vault and distribution.
+
+This is because each vault is a unique grouping of boosting effects, fees and therefore rewards accrued. Hence this approach.
+
+>By this point, it should be clear that while for each distribution, a vault has a unique vaultAccount, a user has a unique userAccount for each vault.
+>Implying, that if a user has staked into multiple vaults, they will have multiple userAccounts, for the same distribution.
 
 ## Process of updating each vaultAccount and userAccount for a specific vault & distribution
 
