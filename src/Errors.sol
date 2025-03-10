@@ -60,6 +60,7 @@ library Errors {
     error InvalidDstEid();
     error InvalidTokenAddress();
     error DistributionAlreadySetup();
+    error RebasedEmissionRateIsZero();
     // updateDistribution
     error InvalidDistributionParameters();
     error NonExistentDistribution();

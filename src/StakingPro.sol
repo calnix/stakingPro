@@ -720,6 +720,10 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         if(distributionStartTime < startTime) revert Errors.InvalidDistributionStartTime();
         if(distributionStartTime < block.timestamp) revert Errors.InvalidDistributionStartTime();
 
+        // rebase check: smallest tick rebased must be > 0. sanity checks _calculateDistributionIndex 
+        uint256 emissionPerSecondRebased = (emissionPerSecond * 1E18) / tokenPrecision;
+        if(emissionPerSecondRebased == 0) revert Errors.RebasedEmissionRateIsZero();
+
         if(distributionId > 0){
             
             // token distributions must have valid endTime
