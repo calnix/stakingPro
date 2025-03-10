@@ -6,7 +6,7 @@ import {NftRegistry} from "../../lib/NftLocker/src/NftRegistry.sol";
 contract MockRegistry is NftRegistry {
 
 
-    constructor(address endpoint, address owner, address pool, uint32 dstEid) NftRegistry(endpoint, owner, pool, dstEid) {
+    constructor(address endpoint, address owner, uint32 dstEid) NftRegistry(endpoint, owner, dstEid) {
     }
     
     function register(address user, uint256[] memory tokenIds) public {

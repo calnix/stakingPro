@@ -49,8 +49,8 @@ contract DeployContracts is Contracts {
         
             uint16 baseSepoliaID = 40245;
             address baseSepoliaEP = 0x6EDCE65403992e310A62460808c4b910D972f10f;
-        mockRegistry = new MockRegistry(address(baseSepoliaEP), deployer, address(pool), baseSepoliaID);
-
+        mockRegistry = new MockRegistry(address(baseSepoliaEP), deployer, baseSepoliaID);
+        
         // constructor params
         address stakedToken = address(mockMoca);
         address registry = address(mockRegistry);       

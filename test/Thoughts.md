@@ -7,18 +7,6 @@
 - the use of _updateVaultFees instead of claimRewards
 - on the triggering update thingy at 46[?]
 
-## 4. pool address in nft_registry
-
-nftRegistry will be deployed before pool.
-pool will require nftRegistry address in constructor
-therefore, nftRegistry cannot take in pool address as constructor.
-
-## 1. 
-
-should we prevent vaults from being created if there are no active distributions?
-i.e. do a length check on the distributions array, and if it's 0, revert?
-
-
 # Add notes
 
 ## 1. should accounts be updated on creation? how are they to be updated before 1st stake?

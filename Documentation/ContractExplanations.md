@@ -6,25 +6,46 @@ A distribution is a schedule for distributing token rewards to users for a defin
 
 Attributes of a distribution:
 
--  id
--  startTime
--  endTime
--  emissionPerSecond
--  tokenPrecision
+```solidity
+    struct Distribution {
+        uint256 distributionId;  // 0 for staking power
+        uint256 TOKEN_PRECISION; // cannot be 0. min 1e0
+
+        uint256 endTime;
+        uint256 startTime;
+        uint256 emissionPerSecond;        
+
+        uint256 index;
+        uint256 totalEmitted;
+        uint256 lastUpdateTimeStamp;  
+
+        // state
+        uint256 manuallyEnded;
+    }
+```
 
 Each distribution has an id. This allows for two different distributions to have the same token, but different distribution schedules.
-Additionally, tokens could be distributed x-chain - that would be identified and handled by the rewards vault contract.
+
+StakingPro, allows for tokens to be distributed x-chain - that would be identified and handled by the rewards vault contract. Specifically RewardsVaultV2.sol.
+RewardsVaultV1.sol only support local chain distribution.
 
 >Distribution ids are expected to be sequential, starting from 0.
 
 Note that since each distribution could have a different token precision, it is important to ensure that the token precision is correctly set and handled for each distribution. We elaborate on this in the section on handling varying decimal precisions of reward tokens.
+
+Note that distributionId:0 is reserved for staking power.
 
 ### Staking Power
 
 Staking power is distributionId:0.
 
 - only distribution allowed to have an indefinite endTime
-- only distribution that does not require to emit token rewards
+- only distribution that does not emit token rewards
+
+Staking power is an off-chain resource - the contract only serves to record the allocation and distributions to users.
+
+- not meant to be claimed by users.
+- not represented as an ERC20 token.
 
 ## Vaults
 

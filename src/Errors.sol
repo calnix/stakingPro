@@ -20,6 +20,7 @@ library Errors {
     error InvalidCreationNfts();
     error InvalidNfts();
     error MaximumFeeFactorExceeded();
+    error NoActiveDistributions();
 
     // stakeRealmPoints
     error SignatureExpired();
