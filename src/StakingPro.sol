@@ -633,8 +633,11 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             uint256 distributionId = activeDistributions[i];
                 
             if(distributions[distributionId].endTime > endTime_) {
+                
                 // endTime_ is in the future, so newTotalRequired is +ve (and > totalEmitted)
-                uint256 newTotalRequired = (endTime_ - distributions[distributionId].startTime) * distributions[distributionId].emissionPerSecond;
+                uint256 newTimeLeft = endTime_ - distributions[distributionId].lastUpdateTimeStamp;
+                uint256 newTotalRequired = (newTimeLeft * distributions[distributionId].emissionPerSecond) + distributions[distributionId].totalEmitted;
+                
                 // update storage
                 distributions[distributionId].endTime = endTime_;
                 // update rewards vault
