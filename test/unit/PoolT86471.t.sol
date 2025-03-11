@@ -76,20 +76,35 @@ contract StateT86471_ContractEndedTest is StateT86471_ContractEnded {
         vm.stopPrank();
     }
 
-    function testCannotActivateCooldownAfterContractEnded() public {
+    function testCanActivateCooldownAfterContractEnded() public {
+        // get initial vault state
+        DataTypes.Vault memory vaultBefore = pool.getVault(vaultId1);
+
         vm.startPrank(user1);
-            vm.expectRevert(Errors.StakingEnded.selector);
             pool.activateCooldown(vaultId1);
         vm.stopPrank();
+
+        // check that vault state has changed
+        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId1);
+        assertEq(vaultAfter.endTime, pool.endTime(), "Vault end time not set correctly");
+        assertLe(vaultAfter.endTime, block.timestamp + pool.VAULT_COOLDOWN_DURATION(), "Vault end time should not exceed contract end time");
     }
 
-    function testCannotEndVaultsAfterContractEnded() public {
+    function testCanEndVaultsAfterContractEnded() public {
+        // get initial vault state
+        DataTypes.Vault memory vaultBefore = pool.getVault(vaultId1);
+
         vm.startPrank(user1);
-            vm.expectRevert(Errors.StakingEnded.selector);
+            pool.activateCooldown(vaultId1);
+
             bytes32[] memory vaultIds = new bytes32[](1);
             vaultIds[0] = vaultId1;
             pool.endVaults(vaultIds);
         vm.stopPrank();
+
+        // check that vault state has changed
+        DataTypes.Vault memory vaultAfter = pool.getVault(vaultId1);
+        assertEq(vaultAfter.removed, 1, "Vault is not removed");
     }
 
     function testCanUnstakeAfterContractEnded() public {
