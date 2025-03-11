@@ -566,9 +566,12 @@ Creates a new vault for staking with specified fee parameters:
 - `creatorFeeFactor`: fee factor for creator
 - `realmPointsFeeFactor`: fee factor for realm points
 
-Requires the creator to have the required number of creation NFTs.
-These NFTs are registered on the NFT_REGISTRY contract, and are locked.
-They do not count towards rewards calculations.
+Requires the creator to have the required number of creation NFTs
+
+- creation NFTs are registered on the NFT_REGISTRY contract, and are locked.
+- creation NFTs do not count towards rewards calculations.
+
+**Known and accepted behaviour: Vault can be created, and immediately, creator can call activateCooldown() to make it cooldown.**
 
 ## stakeTokens
 
