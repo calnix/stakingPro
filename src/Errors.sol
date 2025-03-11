@@ -85,10 +85,10 @@ library Errors {
 // -------------------------------------- RewardsVault --------------------------------------------------------------------
     
     error InvalidDistributionId();
-    error InsufficientDeposits();
+    error InsufficientDeposit();
     error DistributionNotSetup();
     error ExcessiveDeposit();
-    error BalanceRequiredExceeded();
+    error InsufficientBalance();
     // payRewards::V2
     error InsufficientGas();
     error PayableBlocked();

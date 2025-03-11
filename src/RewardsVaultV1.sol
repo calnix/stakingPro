@@ -145,8 +145,8 @@ contract RewardsVaultV1 is Pausable, AccessControl {
         UserAddresses memory user = users[to];
 
         // check balance
-        uint256 available = distribution.totalDeposited - distribution.totalClaimed;
-        if(available < amount) revert Errors.InsufficientDeposits();
+        uint256 balance = distribution.totalDeposited - distribution.totalClaimed;
+        if(balance < amount) revert Errors.InsufficientBalance();
 
         // update claimed
         distribution.totalClaimed += amount;
@@ -206,6 +206,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
     /**
      * @notice Withdraws rewards from the vault for a specific distribution
      * @dev Only callable by accounts with MONEY_MANAGER_ROLE. Distribution ID 0 is reserved for staking power.
+     * @dev Withdrawal allowed based on balance; onus on caller to check and maintain sufficient balances.
      * @param distributionId The ID of the distribution to withdraw rewards from
      * @param withdrawAmount Amount of rewards to withdraw (in wei)
      * @param to Address to which rewards will be sent
@@ -215,16 +216,16 @@ contract RewardsVaultV1 is Pausable, AccessControl {
         if(to == address(0)) revert Errors.InvalidAddress();
         if(withdrawAmount == 0) revert Errors.InvalidAmount();
 
-        // check
+        // check 
         Distribution memory distribution = distributions[distributionId];
         if(distribution.tokenAddress == bytes32(0)) revert Errors.DistributionNotSetup();
         
-        // check if enough
-        uint256 availableToWithdraw = distribution.totalDeposited - distribution.totalClaimed;
-        if(availableToWithdraw < withdrawAmount) revert Errors.InsufficientDeposits();
+        // sanity check: totalDeposited must be >= totalRequired
+        if(distribution.totalDeposited < distribution.totalRequired) revert Errors.InsufficientDeposit();
 
-        uint256 balanceRequired = distribution.totalRequired - distribution.totalClaimed;
-        if(balanceRequired < withdrawAmount) revert Errors.BalanceRequiredExceeded();
+        // check if sufficient balance
+        uint256 balance = distribution.totalDeposited - distribution.totalClaimed;
+        if(balance < withdrawAmount) revert Errors.InsufficientBalance();
         
         // update + storage
         distribution.totalDeposited -= withdrawAmount;

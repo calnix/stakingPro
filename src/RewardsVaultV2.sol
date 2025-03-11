@@ -38,8 +38,8 @@ contract RewardsVaultV2 is RewardsVaultV1, OApp, Ownable2Step {
         UserAddresses memory user = users[to];
         
         // check balance
-        uint256 available = distribution.totalDeposited - distribution.totalClaimed;
-        if(available < amount) revert Errors.InsufficientDeposits();
+        uint256 balance = distribution.totalDeposited - distribution.totalClaimed;
+        if(balance < amount) revert Errors.InsufficientBalance();
 
         // update claimed
         distribution.totalClaimed += amount;
