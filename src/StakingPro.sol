@@ -921,29 +921,43 @@ contract StakingPro is EIP712, Pausable, AccessControl {
      */
     function updateDistributions() external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE) {
 
-        // at least staking power should have been setup on deployment
+        // cache active distributions to avoid incorrect processing of distributions due to .pop() [in _updateDistributionIndex]
         uint256 numOfDistributions = activeDistributions.length;
+        uint256[] memory distributionsToProcess = new uint256[](numOfDistributions);
+        for(uint256 i; i < numOfDistributions; ++i) {
+            distributionsToProcess[i] = activeDistributions[i];
+        }
 
         if(numOfDistributions > 0){           
             
             for(uint256 i; i < numOfDistributions; ++i) {
-                // update distribution index
-                distributions[activeDistributions[i]] 
-                        = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distributions[activeDistributions[i]], totalBoostedRealmPoints, totalBoostedStakedTokens, paused());
-            }
-        }
+                
+                bool isPaused = paused();
+                uint256 distributionId = distributionsToProcess[i];
 
-        emit DistributionsUpdated(activeDistributions);
+                // update distribution index
+                distributions[distributionId] 
+                        = PoolLogic.executeUpdateDistributionIndex(activeDistributions, distributions[distributionId], totalBoostedRealmPoints, totalBoostedStakedTokens, isPaused);
+            }
+
+            emit DistributionsUpdated(activeDistributions);
+        }
     }
 
     /**
-     * @notice Updates all vault accounts for the given vault IDs across all active distributions
-     * @dev Updates distribution indexes and vault account states for each vault across all active distributions
+     * @notice Updates each vault's vault account, for specified distribution
+     * @dev distribution.lastUpdateTimeStamp is not checked, we expect distributions to be updated in updateDistributions()
      * @param vaultIds Array of vault IDs to update
      */
-    function updateAllVaultAccounts(bytes32[] calldata vaultIds) external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE) {
+    function updateAllVaultAccounts(bytes32[] calldata vaultIds, uint256 distributionId) external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE) {
         uint256 numOfVaults = vaultIds.length;
         if(numOfVaults == 0) revert Errors.InvalidArray();
+
+        DataTypes.Distribution memory distribution = distributions[distributionId];
+        // distribution must have started: else no emissions, nothing pending to book
+        if(distribution.startTime > block.timestamp) revert Errors.DistributionNotStarted();        
+        // do not enforce this check: update process could be long, and result in time drift
+        //if(distribution.lastUpdateTimeStamp < block.timestamp) revert Error.NotUpdated;
 
         DataTypes.UpdateAccountsIndexesParams memory params;
             //params.user = msg.sender; -> NOT USED
@@ -951,7 +965,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
             params.totalBoostedRealmPoints = totalBoostedRealmPoints;
             params.totalBoostedStakedTokens = totalBoostedStakedTokens;
 
-        PoolLogic.executeUpdateVaultsAndAccounts(activeDistributions, distributions, vaults, vaultAccounts, params, vaultIds, numOfVaults);
+        PoolLogic.executeUpdateVaultsAndAccounts(vaults, vaultAccounts, distribution, params, vaultIds, numOfVaults);
 
         emit VaultAccountsUpdated(vaultIds);
     }    
@@ -1281,7 +1295,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         // latest value, storage not updated
         return totalUnclaimedRewards;
     }
-
+/*
     //note: remove after testing
     function getViewVaultAccount(bytes32 vaultId, uint256 distributionId) external view returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory)  {
         DataTypes.UpdateAccountsIndexesParams memory params;

@@ -880,6 +880,14 @@ This provides an emergency mechanism to halt reward distributions if needed, whi
 
 # Maintenance Mode functions [To update: NFT_Multiplier]
 
+    /**    
+        1. enableMaintenance
+        2. updateAllVaultAccounts
+        3. updateNftMultiplier
+        4. updateBoostedBalances
+        5. disableMaintenance
+     */
+
 ## enableMaintenance
 
 ```solidity
@@ -898,16 +906,6 @@ disableMaintenance() external whenNotPaused whenUnderMaintenance onlyRole(OPERAT
 - Disables maintenance mode, which re-enables all user functions.
 - Only callable when contract is not paused.
 
-## updateDistributions
-
-```solidity
-updateDistributions() external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE)
-```
-
-- Updates all active distribution indexes to current timestamp
-- This ensures all rewards are properly calculated and booked
-- Only callable when contract is under maintenance.
-
 ## updateAllVaultAccounts
 
 ```solidity
@@ -917,6 +915,20 @@ updateAllVaultAccounts(bytes32[] calldata vaultIds) external whenNotEnded whenNo
 - Updates all vault accounts for all active distributions
 - This ensures all rewards are properly calculated and booked
 - Only callable when contract is under maintenance.
+
+Nested call to updateDistributionIndexes:
+
+- Updates all active distribution indexes to current timestamp
+- This ensures all rewards are properly calculated and booked
+
+### Note on drift
+
+- if we are updating a long list of vaults, there would be drift from the timestamp at which the distribution indexes were first updated, till some subsequent update of vaults.
+- this would trigger a repeat update of distribution indexes to the current timestamp.
+- distributions could be updated for repeatedly, as we continue on with repeated calls of updateAllVaultAccounts.
+- subsequent updates to distribuiton indexes would create a discrepancy in rewards calculations vs boosted balances updates, resulting from changing the NFT_MULTIPLIER.
+- this would result in some vaults having a discrepancy in rewards calculations.
+- this is acceptable as part of having an update process to begin with.
 
 ## updateNftMultiplier
 

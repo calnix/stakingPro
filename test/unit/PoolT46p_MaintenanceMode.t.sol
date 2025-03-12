@@ -81,7 +81,8 @@ contract StateT46p_MaintenanceMode_UpdateDistributionsTest is StateT46p_Maintena
         vm.startPrank(operator);
             vm.expectEmit(true, true, true, true);
             emit VaultAccountsUpdated(vaultIds);
-            pool.updateAllVaultAccounts(vaultIds);
+            pool.updateAllVaultAccounts(vaultIds, 0);
+            pool.updateAllVaultAccounts(vaultIds, 1);
         vm.stopPrank();
 
         // check vaults after
@@ -129,7 +130,8 @@ abstract contract StateT46p_MaintenanceMode_VaultAccountsUpdated is StateT46p_Ma
             bytes32[] memory vaultIds = new bytes32[](2);
             vaultIds[0] = vaultId1;
             vaultIds[1] = vaultId2;
-            pool.updateAllVaultAccounts(vaultIds);
+            pool.updateAllVaultAccounts(vaultIds, 0);
+            pool.updateAllVaultAccounts(vaultIds, 1);
         vm.stopPrank();
 
         // save state

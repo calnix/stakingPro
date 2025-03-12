@@ -694,52 +694,87 @@ library PoolLogic {
     }
 
     function executeUpdateVaultsAndAccounts(
-        uint256[] storage activeDistributions,
-        mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
         mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
-        
+        DataTypes.Distribution memory distribution,
         DataTypes.UpdateAccountsIndexesParams memory params,
         bytes32[] calldata vaultIds,
         uint256 numOfVaults
     ) external {
 
-        // cache active distributions to avoid incorrect processing of distributions due to .pop() [in _updateDistributionIndex]
-        uint256 numOfDistributions = activeDistributions.length;
-        uint256[] memory distributionsToProcess = new uint256[](numOfDistributions);
-        for(uint256 i; i < numOfDistributions; ++i) {
-            distributionsToProcess[i] = activeDistributions[i];
-        }
 
-        // process each distribution from our cached array
-        for (uint256 i; i < numOfDistributions; ++i) {
-            uint256 distributionId = distributionsToProcess[i];   
-            
-            DataTypes.Distribution memory distribution_ = distributions[distributionId];
+        // Then update all vault accounts for this distribution
+        for(uint256 j; j < numOfVaults; ++j) {
 
-            // Update distribution first
-            DataTypes.Distribution memory distribution = _updateDistributionIndex(distribution_, activeDistributions, params.totalBoostedRealmPoints, params.totalBoostedStakedTokens, params.isPaused);
-
-            // Then update all vault accounts for this distribution
-            for(uint256 j; j < numOfVaults; ++j) {
-
-                // get vault and vault account from storage
-                bytes32 vaultId = vaultIds[j];
-                DataTypes.Vault memory vault = vaults[vaultId];
-                DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distributionId];
+            // get vault + vault account from storage
+            bytes32 vaultId = vaultIds[j];
+            DataTypes.Vault memory vault = vaults[vaultId];
+            DataTypes.VaultAccount memory vaultAccount = vaultAccounts[vaultId][distribution.distributionId];
                 
-                // vault has been removed from circulation: skip
-                if(vault.removed == 1) continue;
+            // if vault account has already been updated, skip
+            if(distribution.index == vaultAccount.index) continue;
 
-                // Update storage: vault account 
-                (DataTypes.VaultAccount memory vaultAccount,) = _updateVaultAccount(vault, vaultAccount_, distribution, activeDistributions, params);
-                vaultAccounts[vaultId][distributionId] = vaultAccount;
+            // vault has been removed from circulation: skip
+            if(vault.removed == 1) continue;
 
-                // Update distribution storage if changed
-                if(distribution.lastUpdateTimeStamp > distribution_.lastUpdateTimeStamp) {
-                    distributions[distributionId] = distribution;
+            // STAKING POWER: staked realm points | TOKENS: staked moca tokens
+            uint256 boostedBalance = distribution.distributionId == 0 ? vault.boostedRealmPoints : vault.boostedStakedTokens;
+            // nothing staked, vault account did not need updating: continue
+            // no need to set vaultAccount.index = distribution.index, since that would be done on first stake in _updateVaultAccount()
+            if(boostedBalance == 0) continue;
+
+            // note: totalAccRewards expressed in 1E18 precision 
+            uint256 totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index);
+
+            // update vault rewards + fees
+            uint256 accCreatorFee; 
+            uint256 accTotalNftFee;
+            uint256 accRealmPointsFee;
+
+            // calc. creator fees
+            if(vault.creatorFeeFactor > 0) {
+                // fees are kept in 1E18 during intermediate calculations
+                accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / params.PRECISION_BASE;
+            }
+
+            // nft fees accrued only if there were staked NFTs
+            if(vault.stakedNfts > 0) {
+                if(vault.nftFeeFactor > 0) {
+
+                    // indexes are denominated in 1E18 | fees are kept in 1E18 during intermediate calculations
+                    accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / params.PRECISION_BASE;
+                    vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);      // nftIndex: rewardsAccPerNFT            
                 }
             }
+
+            // rp fees accrued only if there were staked RP 
+            if(vault.stakedRealmPoints > 0) {
+                if(vault.realmPointsFeeFactor > 0) {
+
+                    // indexes are denominated in 1E18 | fees are kept in 1E18 during intermediate calculations | realmPoints are denominated in 1E18
+                    accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / params.PRECISION_BASE;
+                    vaultAccount.rpIndex += (accRealmPointsFee * 1E18) / vault.stakedRealmPoints;      // rpIndex: rewardsAccPerRP
+                }
+            } 
+                
+            // book rewards: total, creator, nft, rp | expressed in 1E18 precision
+            vaultAccount.totalAccRewards += totalAccRewards;
+            vaultAccount.accCreatorRewards += accCreatorFee;
+            vaultAccount.accNftStakingRewards += accTotalNftFee;
+            vaultAccount.accRealmPointsRewards += accRealmPointsFee;
+
+            // reference for moca stakers to calc. rewards less of fees | rewardsAccPerUnitStaked expressed in 1E18 precision
+            if(vault.stakedTokens > 0) {    
+                vaultAccount.rewardsAccPerUnitStaked += ((totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) * 1E18) / vault.stakedTokens;
+            }
+
+            // update vaultIndex
+            vaultAccount.index = distribution.index;
+
+            emit VaultAccountUpdated(params.vaultId, distribution.distributionId, totalAccRewards, accCreatorFee, accTotalNftFee, accRealmPointsFee);
+
+            // update storage
+            vaultAccounts[vaultId][distribution.distributionId] = vaultAccount;
         }
     }
 
@@ -838,7 +873,6 @@ library PoolLogic {
 
         // distribution has not started
         if(block.timestamp < distribution.startTime) return distribution;
-
 
         // ..... Distribution has ended: does not apply to distributionId == 0 .....
         if (distribution.endTime > 0 && block.timestamp >= distribution.endTime) {

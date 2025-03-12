@@ -71,6 +71,8 @@ library Errors {
     // endDistributionImmediately
     error DistributionManuallyEnded();
 
+    // updateAllVaultAccounts
+    error DistributionNotStarted();
     // updateNftMultiplier
     error InvalidMultiplier();
 
