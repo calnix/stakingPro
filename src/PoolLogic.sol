@@ -485,8 +485,8 @@ library PoolLogic {
     ) external returns (uint256, uint256, uint256, uint256, uint256, uint256) {
 
         // Track total assets to remove from global state
-        uint256 totalStakedNfts;
-        uint256 totalCreationNfts;
+        uint256 totalStakedNftsToRemove;
+        uint256 totalCreationNftsToRemove;
         uint256 totalTokensToRemove; 
         uint256 totalRealmPointsToRemove;
         uint256 totalBoostedTokensToRemove;
@@ -537,8 +537,8 @@ library PoolLogic {
                 // Track assets to remove on last distribution (only need to do this once per vault)
                 if(i == numOfDistributions - 1) {
  
-                    totalStakedNfts += vault.stakedNfts;
-                    totalCreationNfts += vault.creationTokenIds.length;
+                    totalStakedNftsToRemove += vault.stakedNfts;
+                    totalCreationNftsToRemove += vault.creationTokenIds.length;
                     totalTokensToRemove += vault.stakedTokens;
                     totalRealmPointsToRemove += vault.stakedRealmPoints;
                     totalBoostedTokensToRemove += vault.boostedStakedTokens;
@@ -559,7 +559,7 @@ library PoolLogic {
         uint256 vaultsSkipped = numOfVaults - vaultsEnded; 
         emit VaultsEnded(vaultIds, vaultsSkipped);
 
-        return (totalStakedNfts, totalCreationNfts, totalTokensToRemove, totalRealmPointsToRemove, totalBoostedTokensToRemove, totalBoostedRealmPointsToRemove);
+        return (totalStakedNftsToRemove, totalCreationNftsToRemove, totalTokensToRemove, totalRealmPointsToRemove, totalBoostedTokensToRemove, totalBoostedRealmPointsToRemove);
     }
 
     function executeStakeOnBehalfOf(
@@ -974,7 +974,7 @@ library PoolLogic {
         }
 
         // note: totalAccRewards expressed in 1E18 precision 
-        uint256 totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index, 1E18);
+        uint256 totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index);
 
         // update vault rewards + fees
         uint256 accCreatorFee; 
@@ -1050,7 +1050,7 @@ library PoolLogic {
         // users whom staked tokens are eligible for rewards less of fees
         if(user.stakedTokens > 0) {
             if(newUserIndex > userAccount.index) { 
-                accruedStakingRewards = _calculateRewards(user.stakedTokens, newUserIndex, userAccount.index, 1E18);
+                accruedStakingRewards = _calculateRewards(user.stakedTokens, newUserIndex, userAccount.index);
                 userAccount.accStakingRewards += accruedStakingRewards;
             }
         }
@@ -1070,7 +1070,7 @@ library PoolLogic {
             if(vaultAccount.rpIndex > userAccount.rpIndex) {    
             
                 // users whom staked RP are eligible for a portion of RP fees 
-                accRealmPointsRewards = _calculateRewards(user.stakedRealmPoints, vaultAccount.rpIndex, userAccount.rpIndex, 1E18);
+                accRealmPointsRewards = _calculateRewards(user.stakedRealmPoints, vaultAccount.rpIndex, userAccount.rpIndex);
                 userAccount.accRealmPointsRewards += accRealmPointsRewards;
             }
         }
@@ -1137,8 +1137,8 @@ library PoolLogic {
     }
 
     // for calc. rewards from index deltas. assumes tt indexes are expressed in the same precision.
-    function _calculateRewards(uint256 balance, uint256 currentIndex, uint256 priorIndex, uint256 PRECISION) internal pure returns (uint256) {
-        return (balance * (currentIndex - priorIndex)) / PRECISION;
+    function _calculateRewards(uint256 balance, uint256 currentIndex, uint256 priorIndex) internal pure returns (uint256) {
+        return (balance * (currentIndex - priorIndex)) / 1E18;
     }
 
 
@@ -1242,7 +1242,7 @@ library PoolLogic {
         // users whom staked tokens are eligible for rewards less of fees 
         if(newUserIndex > userAccount.index) { 
             if(user.stakedTokens > 0) {
-                uint256 accruedStakingRewards = _calculateRewards(user.stakedTokens, newUserIndex, userAccount.index, 1E18);
+                uint256 accruedStakingRewards = _calculateRewards(user.stakedTokens, newUserIndex, userAccount.index);
                 userAccount.accStakingRewards += accruedStakingRewards;
             }
         }
@@ -1262,7 +1262,7 @@ library PoolLogic {
             if(vaultAccount.rpIndex > userAccount.rpIndex) {    
 
                 // users whom staked RP are eligible for a portion of RP fees 
-                uint256 accRealmPointsRewards = _calculateRewards(user.stakedRealmPoints, vaultAccount.rpIndex, userAccount.rpIndex, 1E18);
+                uint256 accRealmPointsRewards = _calculateRewards(user.stakedRealmPoints, vaultAccount.rpIndex, userAccount.rpIndex);
                 userAccount.accRealmPointsRewards += accRealmPointsRewards;
             }
         }
@@ -1314,7 +1314,7 @@ library PoolLogic {
         }
 
         // Calculate rewards using the balance at the time they were accrued
-        uint256 totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index, 1E18);
+        uint256 totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index);
 
         // update vault rewards + fees
         uint256 accCreatorFee; 

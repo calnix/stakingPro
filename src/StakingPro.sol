@@ -677,11 +677,12 @@ contract StakingPro is EIP712, Pausable, AccessControl {
 
     /**
      * @notice Updates the maximum fee factor; dictates the amount of rewards that go to moca stakers
-     * @dev Fee factor must be non-zero
+     * @dev Fee factor can be 0, in which case all rewards go to moca stakers
+     * @dev Fee factor cannot exceed PRECISION_BASE; else fees would exceed 100%
      * @param newFactor The new maximum fee factor to set
      */
     function updateMaximumFeeFactor(uint256 newFactor) external whenNotEnded whenNotPaused onlyRole(OPERATOR_ROLE) {
-        //if(newFactor == 0) revert Errors.InvalidMaxFeeFactor();
+        if(newFactor > PRECISION_BASE) revert Errors.InvalidMaxFeeFactor();
 
         uint256 oldFactor = MAXIMUM_FEE_FACTOR;
         MAXIMUM_FEE_FACTOR = newFactor;
