@@ -927,12 +927,12 @@ contract StakingPro is EIP712, Pausable, AccessControl {
         for(uint256 i; i < numOfDistributions; ++i) {
             distributionsToProcess[i] = activeDistributions[i];
         }
-
+        
+        bool isPaused = paused();
         if(numOfDistributions > 0){           
             
             for(uint256 i; i < numOfDistributions; ++i) {
                 
-                bool isPaused = paused();
                 uint256 distributionId = distributionsToProcess[i];
 
                 // update distribution index
