@@ -882,11 +882,30 @@ This provides an emergency mechanism to halt reward distributions if needed, whi
 
     /**    
         1. enableMaintenance
-        2. updateAllVaultAccounts
-        3. updateNftMultiplier
-        4. updateBoostedBalances
-        5. disableMaintenance
+        2. updateActiveDistributions
+        3. updateAllVaultAccounts
+        4. updateNftMultiplier
+        5. updateBoostedBalances
+        6. disableMaintenance
      */
+
+- First we update all active distributions to current timestamp.
+- Relative to the snapshot, we update each vault's account, for each distribution.
+- Regardless how long the updateAllVaultAccounts takes, we will not update the distribution data again.
+- Since vault accounts accruals are calculated relative to the distribution indexes (i.e. delta btw v.Index and d.Index), there will not be any drift, due to time passing.
+- Essentially, we are taking a snapshot of the distribution data at the start of the maintenance mode, and updating the vault accounts relative to this snapshot.
+- Regardless how long updating all the vault accounts takes, the snapshot remains constant, so effectively we are updating everything to the same timestamp.
+- Whatever time the update process takes, distributions will be next updated to book this period and its rewards, under the updated boosted balances.
+
+**This is important to note that if `updateActiveDistributions` is called again, we must restarted the entire process with updating all vault accounts, as our reference point has changed.**
+
+## Risk Management
+
+- The expectation is that there OPERATOR_ROLE is only assigned to the owner multiSig at rest.
+- When there is requirement to call these functions, the owner multiSig will assign and EOA address to the OPERATOR_ROLE.
+- This EOA address is expected to be a trusted address, and will be used to power a script that will call these functions.
+- Once the update process is complete, the EOA will renounce the OPERATOR_ROLE.
+- Owner multiSig will continue to hold the MONITOR_ROLE.
 
 ## enableMaintenance
 
@@ -906,29 +925,27 @@ disableMaintenance() external whenNotPaused whenUnderMaintenance onlyRole(OPERAT
 - Disables maintenance mode, which re-enables all user functions.
 - Only callable when contract is not paused.
 
+## updateActiveDistributions
+
+```solidity
+updateActiveDistributions() external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE)
+```
+
+- Updates all active distributions to current timestamp
+- This ensures all rewards are properly calculated and booked
+
+**Note that an active distribution may be popped as part of this update process. This is why we we specify the distributionIds when calling updateAllVaultAccounts.**
+
 ## updateAllVaultAccounts
 
 ```solidity
-updateAllVaultAccounts(bytes32[] calldata vaultIds) external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE)
+updateAllVaultAccounts(bytes32[] calldata vaultIds, uint256 distributionId) external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE)
 ```
 
-- Updates all vault accounts for all active distributions
+- Updates all vault accounts for a specified distribution
+- Operator must be careful to ensure that distributionIds are specified comprehensively, covering both active and recently popped distributions.
 - This ensures all rewards are properly calculated and booked
 - Only callable when contract is under maintenance.
-
-Nested call to updateDistributionIndexes:
-
-- Updates all active distribution indexes to current timestamp
-- This ensures all rewards are properly calculated and booked
-
-### Note on drift
-
-- if we are updating a long list of vaults, there would be drift from the timestamp at which the distribution indexes were first updated, till some subsequent update of vaults.
-- this would trigger a repeat update of distribution indexes to the current timestamp.
-- distributions could be updated for repeatedly, as we continue on with repeated calls of updateAllVaultAccounts.
-- subsequent updates to distribuiton indexes would create a discrepancy in rewards calculations vs boosted balances updates, resulting from changing the NFT_MULTIPLIER.
-- this would result in some vaults having a discrepancy in rewards calculations.
-- this is acceptable as part of having an update process to begin with.
 
 ## updateNftMultiplier
 

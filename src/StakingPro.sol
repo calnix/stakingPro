@@ -878,7 +878,7 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     
     /**    
         1. enableMaintenance
-        2. updateDistributions
+        2. updateActiveDistributions
         3. updateAllVaultAccounts
         4. updateNftMultiplier
         5. updateBoostedBalances
@@ -915,11 +915,11 @@ contract StakingPro is EIP712, Pausable, AccessControl {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Updates distribution indexes
+     * @notice Updates active distribution indexes
      * @dev Updates all active distribution indexes to current timestamp 
      * @dev This ensures all rewards are properly calculated and booked
      */
-    function updateDistributions() external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE) {
+    function updateActiveDistributions() external whenNotEnded whenNotPaused whenUnderMaintenance onlyRole(OPERATOR_ROLE) {
 
         // cache active distributions to avoid incorrect processing of distributions due to .pop() [in _updateDistributionIndex]
         uint256 numOfDistributions = activeDistributions.length;
