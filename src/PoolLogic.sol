@@ -21,7 +21,7 @@ library PoolLogic {
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
-        DataTypes.UpdateAccountsIndexesParams memory params,
+        DataTypes.UpdateAccountsIndexesParams calldata params,
         uint256 amount
     ) external returns (uint256) {
 
@@ -59,7 +59,7 @@ library PoolLogic {
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
-        DataTypes.UpdateAccountsIndexesParams memory params,
+        DataTypes.UpdateAccountsIndexesParams calldata params,
         uint256[] calldata tokenIds,
         uint256 incomingNfts,
         uint256 nftMultiplier
@@ -108,7 +108,7 @@ library PoolLogic {
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
-        DataTypes.UpdateAccountsIndexesParams memory params,
+        DataTypes.UpdateAccountsIndexesParams calldata params,
         uint256 amount
     ) external returns (uint256) {
 
@@ -222,8 +222,8 @@ library PoolLogic {
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
-        DataTypes.UpdateAccountsIndexesParams memory oldVaultParams,
-        DataTypes.UpdateAccountsIndexesParams memory newVaultParams,
+        DataTypes.UpdateAccountsIndexesParams calldata oldVaultParams,
+        DataTypes.UpdateAccountsIndexesParams calldata newVaultParams,
         uint256 amount
     ) external returns (uint256, uint256) {
 
@@ -299,7 +299,7 @@ library PoolLogic {
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
-        DataTypes.UpdateAccountsIndexesParams memory params,
+        DataTypes.UpdateAccountsIndexesParams calldata params,
         uint256 distributionId
     ) external returns (uint256) {
         
@@ -384,7 +384,7 @@ library PoolLogic {
 
         // rebase totalUnclaimedRewards to native precision
         uint256 totalUnclaimedRewardsInNative = totalUnclaimedRewards * distribution.TOKEN_PRECISION / 1E18;
-        emit RewardsClaimed(params.vaultId, params.user, totalUnclaimedRewardsInNative);
+        emit RewardsClaimed(distributionId, params.vaultId, params.user, totalUnclaimedRewardsInNative);
 
         return totalUnclaimedRewardsInNative;
     }
@@ -397,7 +397,7 @@ library PoolLogic {
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
         
-        DataTypes.UpdateAccountsIndexesParams memory params,
+        DataTypes.UpdateAccountsIndexesParams calldata params,
         uint256 nftFeeFactor,
         uint256 creatorFeeFactor,
         uint256 realmPointsFeeFactor
@@ -451,7 +451,7 @@ library PoolLogic {
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
-        DataTypes.UpdateAccountsIndexesParams memory params
+        DataTypes.UpdateAccountsIndexesParams calldata params
     ) external returns (DataTypes.Vault memory) {
 
         // cache vault and user data, reverts if vault does not exist
@@ -478,7 +478,7 @@ library PoolLogic {
         mapping(uint256 distributionId => DataTypes.Distribution distribution) storage distributions,
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
 
-        DataTypes.UpdateAccountsIndexesParams memory params,
+        DataTypes.UpdateAccountsIndexesParams calldata params,
         bytes32[] calldata vaultIds,
         uint256 numOfVaults,
         INftRegistry NFT_REGISTRY
@@ -570,7 +570,7 @@ library PoolLogic {
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
-        DataTypes.UpdateAccountsIndexesParams memory params,
+        DataTypes.UpdateAccountsIndexesParams calldata params,
         bytes32[] calldata vaultIds,
         address[] calldata onBehalfOfs,
         uint256[] calldata amounts
@@ -697,11 +697,10 @@ library PoolLogic {
         mapping(bytes32 vaultId => DataTypes.Vault vault) storage vaults,
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         DataTypes.Distribution memory distribution,
-        DataTypes.UpdateAccountsIndexesParams memory params,
+        DataTypes.UpdateAccountsIndexesParams calldata params,
         bytes32[] calldata vaultIds,
         uint256 numOfVaults
     ) external {
-
 
         // Then update all vault accounts for this distribution
         for(uint256 j; j < numOfVaults; ++j) {
@@ -709,10 +708,10 @@ library PoolLogic {
             // get vault + vault account from storage
             bytes32 vaultId = vaultIds[j];
             DataTypes.Vault memory vault = vaults[vaultId];
-            DataTypes.VaultAccount memory vaultAccount = vaultAccounts[vaultId][distribution.distributionId];
+            DataTypes.VaultAccount memory vaultAccount_ = vaultAccounts[vaultId][distribution.distributionId];
                 
             // if vault account has already been updated, skip
-            if(distribution.index == vaultAccount.index) continue;
+            if(distribution.index == vaultAccount_.index) continue;
 
             // vault has been removed from circulation: skip
             if(vault.removed == 1) continue;
@@ -724,53 +723,18 @@ library PoolLogic {
             if(boostedBalance == 0) continue;
 
             // note: totalAccRewards expressed in 1E18 precision 
-            uint256 totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index);
+            uint256 totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount_.index);
 
-            // update vault rewards + fees
-            uint256 accCreatorFee; 
-            uint256 accTotalNftFee;
-            uint256 accRealmPointsFee;
-
-            // calc. creator fees
-            if(vault.creatorFeeFactor > 0) {
-                // fees are kept in 1E18 during intermediate calculations
-                accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / params.PRECISION_BASE;
-            }
-
-            // nft fees accrued only if there were staked NFTs
-            if(vault.stakedNfts > 0) {
-                if(vault.nftFeeFactor > 0) {
-
-                    // indexes are denominated in 1E18 | fees are kept in 1E18 during intermediate calculations
-                    accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / params.PRECISION_BASE;
-                    vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);      // nftIndex: rewardsAccPerNFT            
-                }
-            }
-
-            // rp fees accrued only if there were staked RP 
-            if(vault.stakedRealmPoints > 0) {
-                if(vault.realmPointsFeeFactor > 0) {
-
-                    // indexes are denominated in 1E18 | fees are kept in 1E18 during intermediate calculations | realmPoints are denominated in 1E18
-                    accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / params.PRECISION_BASE;
-                    vaultAccount.rpIndex += (accRealmPointsFee * 1E18) / vault.stakedRealmPoints;      // rpIndex: rewardsAccPerRP
-                }
-            } 
-                
-            // book rewards: total, creator, nft, rp | expressed in 1E18 precision
-            vaultAccount.totalAccRewards += totalAccRewards;
-            vaultAccount.accCreatorRewards += accCreatorFee;
-            vaultAccount.accNftStakingRewards += accTotalNftFee;
-            vaultAccount.accRealmPointsRewards += accRealmPointsFee;
-
-            // reference for moca stakers to calc. rewards less of fees | rewardsAccPerUnitStaked expressed in 1E18 precision
-            if(vault.stakedTokens > 0) {    
-                vaultAccount.rewardsAccPerUnitStaked += ((totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) * 1E18) / vault.stakedTokens;
-            }
+            // calculate vault accruals: rewards + fees
+            (
+                DataTypes.VaultAccount memory vaultAccount, 
+                uint256 accCreatorFee, 
+                uint256 accTotalNftFee,
+                uint256 accRealmPointsFee
+            ) = _calculateVaultAccountAccruals(params.PRECISION_BASE, totalAccRewards, vault, vaultAccount_, distribution);
 
             // update vaultIndex
             vaultAccount.index = distribution.index;
-
             emit VaultAccountUpdated(params.vaultId, distribution.distributionId, totalAccRewards, accCreatorFee, accTotalNftFee, accRealmPointsFee);
 
             // update storage
@@ -799,7 +763,7 @@ library PoolLogic {
         mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.VaultAccount vaultAccount)) storage vaultAccounts,
         mapping(address user => mapping(bytes32 vaultId => mapping(uint256 distributionId => DataTypes.UserAccount userAccount))) storage userAccounts,
 
-        DataTypes.UpdateAccountsIndexesParams memory params,
+        DataTypes.UpdateAccountsIndexesParams calldata params,
         uint256 distributionId
     ) external view returns (uint256) {
         
@@ -967,14 +931,14 @@ library PoolLogic {
     function _updateVaultAccount(
         DataTypes.Vault memory vault, 
         DataTypes.VaultAccount memory vaultAccount, 
-        DataTypes.Distribution memory distribution_,
+        DataTypes.Distribution memory distribution,
         uint256[] storage activeDistributions,
         DataTypes.UpdateAccountsIndexesParams memory params
     ) internal returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
 
         // get latest distributionIndex, if not already updated
-        DataTypes.Distribution memory distribution = _updateDistributionIndex(
-            distribution_, 
+        distribution = _updateDistributionIndex(
+            distribution, 
             activeDistributions, 
             params.totalBoostedRealmPoints, 
             params.totalBoostedStakedTokens,
@@ -1010,6 +974,29 @@ library PoolLogic {
         // note: totalAccRewards expressed in 1E18 precision 
         uint256 totalAccRewards = _calculateRewards(boostedBalance, distribution.index, vaultAccount.index);
 
+        // calculate vault accruals: rewards + fees
+        (
+            DataTypes.VaultAccount memory vaultAccount, 
+            uint256 accCreatorFee, 
+            uint256 accTotalNftFee,
+            uint256 accRealmPointsFee
+        ) = _calculateVaultAccountAccruals(params.PRECISION_BASE, totalAccRewards, vault, vaultAccount, distribution);
+
+        // update vaultIndex
+        vaultAccount.index = distribution.index;
+        emit VaultAccountUpdated(params.vaultId, distribution.distributionId, totalAccRewards, accCreatorFee, accTotalNftFee, accRealmPointsFee);
+
+        return (vaultAccount, distribution);
+    }
+
+    function _calculateVaultAccountAccruals(
+        uint256 PRECISION_BASE,
+        uint256 totalAccRewards,
+        DataTypes.Vault memory vault, 
+        DataTypes.VaultAccount memory vaultAccount, 
+        DataTypes.Distribution memory distribution
+    ) internal pure returns (DataTypes.VaultAccount memory, uint256, uint256, uint256) {
+
         // update vault rewards + fees
         uint256 accCreatorFee; 
         uint256 accTotalNftFee;
@@ -1018,7 +1005,7 @@ library PoolLogic {
         // calc. creator fees
         if(vault.creatorFeeFactor > 0) {
             // fees are kept in 1E18 during intermediate calculations
-            accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / params.PRECISION_BASE;
+            accCreatorFee = (totalAccRewards * vault.creatorFeeFactor) / PRECISION_BASE;
         }
 
         // nft fees accrued only if there were staked NFTs
@@ -1026,7 +1013,7 @@ library PoolLogic {
             if(vault.nftFeeFactor > 0) {
 
                 // indexes are denominated in 1E18 | fees are kept in 1E18 during intermediate calculations
-                accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / params.PRECISION_BASE;
+                accTotalNftFee = (totalAccRewards * vault.nftFeeFactor) / PRECISION_BASE;
                 vaultAccount.nftIndex += (accTotalNftFee / vault.stakedNfts);      // nftIndex: rewardsAccPerNFT            
             }
         }
@@ -1036,7 +1023,7 @@ library PoolLogic {
             if(vault.realmPointsFeeFactor > 0) {
 
                 // indexes are denominated in 1E18 | fees are kept in 1E18 during intermediate calculations | realmPoints are denominated in 1E18
-                accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / params.PRECISION_BASE;
+                accRealmPointsFee = (totalAccRewards * vault.realmPointsFeeFactor) / PRECISION_BASE;
                 vaultAccount.rpIndex += (accRealmPointsFee * 1E18) / vault.stakedRealmPoints;      // rpIndex: rewardsAccPerRP
             }
         } 
@@ -1052,12 +1039,7 @@ library PoolLogic {
             vaultAccount.rewardsAccPerUnitStaked += ((totalAccRewards - accCreatorFee - accTotalNftFee - accRealmPointsFee) * 1E18) / vault.stakedTokens;
         }
 
-        // update vaultIndex
-        vaultAccount.index = distribution.index;
-
-        emit VaultAccountUpdated(params.vaultId, distribution.distributionId, totalAccRewards, accCreatorFee, accTotalNftFee, accRealmPointsFee);
-
-        return (vaultAccount, distribution);
+        return (vaultAccount, accCreatorFee, accTotalNftFee, accRealmPointsFee);
     }
 
     function _updateUserAccount(
@@ -1065,13 +1047,13 @@ library PoolLogic {
         DataTypes.User memory user, 
         DataTypes.UserAccount memory userAccount,
         DataTypes.Vault memory vault, 
-        DataTypes.VaultAccount memory vaultAccount_, 
-        DataTypes.Distribution memory distribution_,
+        DataTypes.VaultAccount memory vaultAccount, 
+        DataTypes.Distribution memory distribution,
         DataTypes.UpdateAccountsIndexesParams memory params
     ) internal returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
         
         // get updated vaultAccount and distribution
-        (DataTypes.VaultAccount memory vaultAccount, DataTypes.Distribution memory distribution) = _updateVaultAccount(vault, vaultAccount_, distribution_, activeDistributions, params);
+        (vaultAccount, distribution) = _updateVaultAccount(vault, vaultAccount, distribution, activeDistributions, params);
         
         // index in 1E18 precision
         uint256 newUserIndex = vaultAccount.rewardsAccPerUnitStaked;
@@ -1253,7 +1235,7 @@ library PoolLogic {
         DataTypes.Vault memory vault, 
         DataTypes.VaultAccount memory vaultAccount_, 
         DataTypes.Distribution memory distribution_,
-        DataTypes.UpdateAccountsIndexesParams memory params
+        DataTypes.UpdateAccountsIndexesParams calldata params
     ) external view returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
         return _viewUserAccount(user, userAccount, vault, vaultAccount_, distribution_, params);
     }
@@ -1264,7 +1246,7 @@ library PoolLogic {
         DataTypes.Vault memory vault, 
         DataTypes.VaultAccount memory vaultAccount_, 
         DataTypes.Distribution memory distribution_,
-        DataTypes.UpdateAccountsIndexesParams memory params
+        DataTypes.UpdateAccountsIndexesParams calldata params
     ) internal view returns (DataTypes.UserAccount memory, DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
         
         // get updated vaultAccount and distribution
@@ -1313,7 +1295,7 @@ library PoolLogic {
         DataTypes.Vault memory vault, 
         DataTypes.VaultAccount memory vaultAccount, 
         DataTypes.Distribution memory distribution_,
-        DataTypes.UpdateAccountsIndexesParams memory params
+        DataTypes.UpdateAccountsIndexesParams calldata params
     ) external view returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
         return _viewVaultAccount(vault, vaultAccount, distribution_, params);
     }
@@ -1322,7 +1304,7 @@ library PoolLogic {
         DataTypes.Vault memory vault, 
         DataTypes.VaultAccount memory vaultAccount, 
         DataTypes.Distribution memory distribution_,
-        DataTypes.UpdateAccountsIndexesParams memory params
+        DataTypes.UpdateAccountsIndexesParams calldata params
     ) internal view returns (DataTypes.VaultAccount memory, DataTypes.Distribution memory) {
 
         // get latest distributionIndex, if not already updated

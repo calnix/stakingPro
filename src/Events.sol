@@ -31,7 +31,7 @@ event UnstakedTokens(address indexed user, bytes32 indexed vaultId, uint256 amou
 event UnstakedNfts(address indexed user, bytes32 indexed vaultId, uint256[] tokenIds, uint256 deltaVaultBoostedStakedTokens, uint256 deltaVaultBoostedRealmPoints);
 
 // claimRewards
-event RewardsClaimed(bytes32 indexed vaultId, address indexed user, uint256 amount);
+event RewardsClaimed(uint256 indexed distributionId, bytes32 indexed vaultId, address indexed user, uint256 amount);
 
 // updateFees
 event CreatorFeeFactorUpdated(bytes32 indexed vaultId, uint256 oldFactor, uint256 newFactor);

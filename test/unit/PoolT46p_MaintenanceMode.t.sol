@@ -5,7 +5,6 @@ import "./PoolT41.t.sol";
 
 abstract contract StateT46p_MaintenanceMode is StateT41_User2StakesToVault2 {
 
-
     function setUp() public virtual override {
         super.setUp();
 
@@ -18,7 +17,6 @@ abstract contract StateT46p_MaintenanceMode is StateT41_User2StakesToVault2 {
         vm.startPrank(operator);
             pool.enableMaintenance();
         vm.stopPrank();
-
     }
 }
 
@@ -287,6 +285,45 @@ contract StateT46p_MaintenanceMode_VaultAccountsUpdatedTest is StateT46p_Mainten
 
         // Check totalClaimedRewards
         assertEq(vaultAccount.totalClaimedRewards, 0, "totalClaimedRewards mismatch");
+    }
+    
+    // repeated call of updateAllVaultAccounts is immaterial; as long as distributions remain unchanged
+    function testRepeatedCallOfUpdateAllVaultAccountsIsImmaterial() public {
+        // check vaults before
+        DataTypes.VaultAccount memory vault1Account0Before = getVaultAccount(vaultId1, 0);
+        DataTypes.VaultAccount memory vault2Account0Before = getVaultAccount(vaultId2, 0);
+        DataTypes.VaultAccount memory vault1Account1Before = getVaultAccount(vaultId1, 1);
+        DataTypes.VaultAccount memory vault2Account1Before = getVaultAccount(vaultId2, 1);
+        
+        bytes32[] memory vaultIds = new bytes32[](2);
+        vaultIds[0] = vaultId1;
+        vaultIds[1] = vaultId2;
+
+        // advance time
+        vm.warp(block.timestamp + 100);
+
+        // repeat call
+        vm.startPrank(operator);
+            pool.updateAllVaultAccounts(vaultIds, 0);
+            pool.updateAllVaultAccounts(vaultIds, 1);
+        vm.stopPrank();
+
+        // check vaults after
+        DataTypes.VaultAccount memory vault1Account0After = getVaultAccount(vaultId1, 0);
+        DataTypes.VaultAccount memory vault2Account0After = getVaultAccount(vaultId2, 0);
+        DataTypes.VaultAccount memory vault1Account1After = getVaultAccount(vaultId1, 1);
+        DataTypes.VaultAccount memory vault2Account1After = getVaultAccount(vaultId2, 1);
+        
+        // verify vaults are unchanged
+        assertEq(vault1Account0After.index, vault1Account0Before.index, "vault1Account0 index mismatch");
+        assertEq(vault2Account0After.index, vault2Account0Before.index, "vault2Account0 index mismatch");
+        assertEq(vault1Account1After.index, vault1Account1Before.index, "vault1Account1 index mismatch");
+        assertEq(vault2Account1After.index, vault2Account1Before.index, "vault2Account1 index mismatch");
+        // sanity check: totalAccRewards
+        assertEq(vault1Account0After.totalAccRewards, vault1Account0Before.totalAccRewards, "vault1Account0 totalAccRewards mismatch");
+        assertEq(vault2Account0After.totalAccRewards, vault2Account0Before.totalAccRewards, "vault2Account0 totalAccRewards mismatch");
+        assertEq(vault1Account1After.totalAccRewards, vault1Account1Before.totalAccRewards, "vault1Account1 totalAccRewards mismatch");
+        assertEq(vault2Account1After.totalAccRewards, vault2Account1Before.totalAccRewards, "vault2Account1 totalAccRewards mismatch");
     }
 
     function testUserCannotUpdateNftMultiplier() public {
