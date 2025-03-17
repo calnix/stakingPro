@@ -1246,4 +1246,4 @@ Hence RewardsVaultV2 will have updated values wrt to deposit actions.
 
 EvmVault has a privileged function `payRewards`, as a backup in case LZ x-chain communications fail.
 
-![Claiming Remote Rewards Flow](claiming-remote.png)
+![Claiming Remote Rewards Flow](claimingRemote.png)
