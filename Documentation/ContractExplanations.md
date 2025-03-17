@@ -1100,8 +1100,6 @@ Nested call within stakingPro so that we do not have to make 2 independent txns 
 
 Note that the rewardsVault only supports local, other remote evm chains and solana.
 
-![alt text](image.png)
-
 ## 5. Cooldown & Ending vaults: activateCooldown() and endVaults()
 
 Process:
@@ -1191,7 +1189,7 @@ These values will not be migrated over from V1 - so we must be mindful of this w
 
 # V2: How does RewardsVaultV2 work w/ EVMVault
 
-![Rewards-EVMVault Flow](./images/rewards-evmvault.png)
+![alt text](image.png)
 
 When claiming rewards for a remote distribution:
 
@@ -1248,4 +1246,4 @@ Hence RewardsVaultV2 will have updated values wrt to deposit actions.
 
 EvmVault has a privileged function `payRewards`, as a backup in case LZ x-chain communications fail.
 
-![Claiming Remote Rewards Flow](./images/claiming-remote.png)
+![Claiming Remote Rewards Flow](claiming-remote.png)
