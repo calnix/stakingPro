@@ -167,7 +167,7 @@ contract EVMVault is OApp, Pausable, Ownable2Step {
         emit PayRewards(token, receiver, amount);
     }
 
-    //------------------------------- OWNABLE2STEP ---------------------------------
+//------------------------------- OWNABLE2STEP ---------------------------------
 
     /*//////////////////////////////////////////////////////////////
                               OWNABLE2STEP

@@ -96,7 +96,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
             distribution.totalRequired = totalRequired;
 
         // sanity check: will revert if address is not a token contract
-        IERC20(bytes32ToAddress(tokenAddress)).balanceOf(address(this));
+        if(dstEid == LOCAL_EID) IERC20(bytes32ToAddress(tokenAddress)).balanceOf(address(this));
 
         // update
         distributions[distributionId] = distribution;
@@ -176,8 +176,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @param amount Amount of rewards to deposit (in wei)
      * @param from Address from which rewards will be pulled
      */
-    function deposit(uint256 distributionId, uint256 amount, address from) external payable whenNotPaused onlyRole(MONEY_MANAGER_ROLE) {
-        if(msg.value > 0) revert Errors.PayableBlocked();
+    function deposit(uint256 distributionId, uint256 amount, address from) external whenNotPaused onlyRole(MONEY_MANAGER_ROLE) {
         if(distributionId == 0) revert Errors.InvalidDistributionId();
         if(from == address(0)) revert Errors.InvalidAddress();
         if(amount == 0) revert Errors.InvalidAmount();

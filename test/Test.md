@@ -9,7 +9,7 @@ Use of RewardsVaultV1.sol.
 
 ## Unit Testing flow: Main timeline
 
-1. T0: Deployment 
+1. T0: Deployment
    - Deploy contracts + configuration
 
 2. T1: Staking starts

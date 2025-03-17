@@ -6,6 +6,7 @@ import {Test, console2, stdStorage, StdStorage} from "forge-std/Test.sol";
 import "./../../src/StakingPro.sol";
 import {RewardsVaultV1} from "./../../src/RewardsVaultV1.sol";
 import {RewardsVaultV2} from "./../../src/RewardsVaultV2.sol";
+
 // mocks
 import "../mocks/MocaToken.sol";
 import "../mocks/MockRegistry.sol";
@@ -26,6 +27,7 @@ abstract contract TestingHarness is Test {
     // contracts
     StakingPro public pool;
     RewardsVaultV1 public rewardsVault;
+    RewardsVaultV2 public rewardsVaultV2;
     EndpointV2Mock public lzMock;
 
     // staking assets
@@ -113,6 +115,9 @@ abstract contract TestingHarness is Test {
         // address moneyManager, address monitor, address owner, address pool
         rewardsVault = new RewardsVaultV1(depositor, monitor, owner, address(pool));
 
+        // V2
+        rewardsVaultV2 = new RewardsVaultV2(depositor, monitor, owner, address(pool), address(lzMock));
+        
         // rewards
         rewardsToken1 = new ERC20Mock();
         rewardsToken2 = new ERC20Mock();
@@ -268,6 +273,20 @@ abstract contract TestingHarness is Test {
 
     function calculateRewards(uint256 balance, uint256 currentIndex, uint256 priorIndex, uint256 PRECISION) public pure returns (uint256) {
         return (balance * (currentIndex - priorIndex)) / PRECISION;
+    }
+
+    function getDistributionFromRewardsVaultV2(uint256 distributionId) public view returns (RewardsVaultV1.Distribution memory) {
+
+        (uint32 dstEid_, bytes32 tokenAddress, uint256 totalRequired, uint256 totalClaimed, uint256 totalDeposited) = rewardsVaultV2.distributions(distributionId);
+        
+        // Convert tuple to struct
+        return RewardsVaultV1.Distribution({
+            dstEid: dstEid_,
+            tokenAddress: tokenAddress,
+            totalRequired: totalRequired,
+            totalClaimed: totalClaimed,
+            totalDeposited: totalDeposited
+        });
     }
 }
 

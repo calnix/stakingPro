@@ -3,12 +3,23 @@
 StakingPro is a contract that allows users to stake tokens, nfts and earn rewards.
 
 - Users stake MOCA tokens, MocaNFTs, and Realm Points (RP) into vaults to earn rewards.
-- Each vault is created by a MocaNFT holder who locks 5 NFTs and sets the fee structure.
+- Each vault is created by a MocaNFT holder who locks a certain amount of NFTs and sets the fee structure.
 - Vaults have no expiry date unless deactivated by the creator.
 - Vault levy fees on the rewards it accrues.
 - Rewards come in the form of ERC20 tokens and Staking Power (an off-chain resource).
 - There are no limits on the amount of assets that can be staked.
 - The contract does not issue receipt tokens (e.g. stkMOCA) for staked assets.
+
+MocaNfts are bridge over from Mainnet to Base via NftLocker/Registry pair of contracts.
+
+MocaTokens will be bridged over from Mainnet to Base via LayerZero.
+
+RealmPoints are and off-chain resource, that is "onboarded" to the contract via signatures.
+
+## Versioning
+
+- StakingPro will be initially deployed on Base, paired with a RewardsVaultV1.sol contract.
+- Subsequently, StakingPro will be updated with paired with a RewardsVaultV2.sol contract.
 
 # Distributions, Vaults and Accounts
 
@@ -1030,8 +1041,8 @@ emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStar
 
 ## 1. Creating a distribution
 
-- called on stakingPro
-- has nested call to rewardsVault to communicate necessary values: `totalRequired`, `dstEid`, `tokenAddress` (bytes32)
+- `setupDistribution` is called on stakingPro
+- has nested call to rewardsVault to communicate necessary values: `totalRequired`, `dstEid`, `tokenAddress`
 - `totalRequired` is the total amount of tokens required to be deposited
 - `dstEid` is the destination EID, (assuming its a remote token)
 - `tokenAddress` is the address of the token to be deposited
@@ -1040,25 +1051,27 @@ emergencyExit(bytes32[] calldata vaultIds, address onBehalfOf) external whenStar
 Nested call within stakingPro so that we do not have to make 2 independent txns to setup distribution; reducing human error.
 
 **The rewardsVault must be set before any distributions can be created**
-- If this address has not been set, distributions cannot be created, as the nested call to rewardsVault will revert.
+
+- Via `pool.setRewardsVault(address(rewardsVault));`
+- If not, distributions cannot be created, as the nested call to rewardsVault will revert.
 - Address cannot be set to a zero address.
 - If RewardsVault contract is paused, distributions cannot be created or ended, rewards cannot be claimed. [revert]
 
-## 2. Deposit tokens
+## 2. Deposit tokens [Financing a distribution]
 
 ### Local token
 
-- token exists on the same chain as the stakingPro
-- MONEY_MANAGER to call deposit() on rewardsVault
+- Token exists on the same chain as the StakingPro
+- Address with `MONEY_MANAGER` role to call `deposit()` on rewardsVault
 - `deposit(uint256 distributionId, uint256 amount, address from) onlyRole(MONEY_MANAGER_ROLE) external`
 
 ### Remote token
 
-- token exists on a different chain as the stakingPro
-- MONEY_MANAGER to call deposit() on evmVault, which exists on the remote chain
+- Token exists on a different chain as the StakingPro
+- `MONEY_MANAGER` to call `deposit()` on EvmVault, which exists on the remote chain
 - `deposit(address token, uint256 amount, address from, uint256 distributionId) external payable onlyOwner`
-- this is a LZ enabled fn, so it is payable
-- will fire off a xchain message to the home chain, to update rewardsVault
+- This is a LayerZero enabled function, so it is payable
+- Will fire off a cross-chain message to the home chain, to update rewardsVault
 - `totalDeposited` is incremented on rewardsVault
 
 ## 3. Withdraw tokens
@@ -1076,11 +1089,11 @@ Nested call within stakingPro so that we do not have to make 2 independent txns 
 - will fire off a xchain message to the home chain, to update rewardsVault
 - `totalDeposited` is decremented on rewardsVault
 
-## 4. claimRewards
+## 4. Users claiming Rewards
 
-- user to call claimRewards() on stakingPro
+- User to call `claimRewards()` on StakingPro
 - `claimRewards(bytes32 vaultId, uint256 distributionId) external`
-- after calculating rewards, will make an external call to rewardsVault to transfer rewards to user
+- After calculating rewards, will make an external call to rewardsVault to transfer rewards to user
 - if the token is local, rewardsVault will transfer the rewards to the user
 - if the token is remote, rewardsVault will fire off a xchain message to the remote chain, hitting the evmVault there and instructing it to transfer rewards to the user
 - `totalClaimed` is incremented on rewardsVault
@@ -1091,6 +1104,11 @@ Note that the rewardsVault only supports local, other remote evm chains and sola
 
 ## 5. Cooldown & Ending vaults: activateCooldown() and endVaults()
 
+Process:
+
+1. First, the vault creator must activate the cooldown by calling `activateCooldown()`. This sets the end time on a vault.
+2. Once the end time is reached, `endVaults()` must be called on the vault. This removes the vault's staked assets from the system and updates the global boosted balances.
+
 ### activateCooldown()
 
 - activateCooldown() is called when the vault creator wants to activate the cooldown period of a vault
@@ -1099,19 +1117,16 @@ Note that the rewardsVault only supports local, other remote evm chains and sola
 - once `vault.endTime` is a non-zero value, users would not be able to stake anymore
 - however user can continue to claim rewards and unstake at their leisure
 
-Upon calling activateCooldown(), the creation NFTs are unlocked, allowing the creator to create new vaults.
+### endVaults()
 
-### endVaults() [!!!]
-
-- endVaults() is called when the vault's end time is reached and the weight of its staked assets must be removed from the system; so they do not accrue rewards nor dilute the rewards of the other active vaults
-- this is necessary as there is no automated manner for this to occur without drift
+- endVaults() is called when the vault's end time is reached and the weight of its staked assets must be removed from the system
+- this prevents assets from accruing rewards and diluting the rewards of the other active vaults
+- this is necessary as there is no automated manner for this to occur
 - currently this is callable by anyone, with no access control restrictions
 - vault's staked assets are removed from the system
 - global boosted balances are also decremented
 
 The expectation is that we call endVaults() on all the vaults that have come to an end, via script.
-
-[!!!]: confirm that _udpateVaultsAndAccounts() is failing after endtime. consider a removed check?
 
 ## 6. Updating NFT_MULTIPLIER (enableMaintenance, update, disableMaintenance)
 

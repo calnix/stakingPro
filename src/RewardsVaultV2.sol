@@ -4,9 +4,17 @@ pragma solidity 0.8.26;
 import "./RewardsVaultV1.sol";
 
 // LZ imports
-import {Ownable2Step, Ownable} from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
+import { Ownable2Step, Ownable } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import { OApp, Origin, MessagingFee } from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 //import { OptionsBuilder } from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
+
+/**
+    TODO
+    - confirm if options is needed (solana vs behaviour)
+    - confirm zero address check for solana
+    - setReceiver() - what if user only wants to change 1 address, but fe is hijacked and the other address is maliciously set to something else?
+ */
+
 
 // ownable solely for LZ
 contract RewardsVaultV2 is RewardsVaultV1, OApp, Ownable2Step {
@@ -63,8 +71,11 @@ contract RewardsVaultV2 is RewardsVaultV1, OApp, Ownable2Step {
             IERC20(token).safeTransfer(receiver, amount); 
         }
 
-        // if it is solana
+        // solana
         else if (distribution.dstEid == SOLANA_EID){
+            
+            // how to do a zero address check here?
+            //if(user.solanaAddress == address(0)) revert Errors.InvalidSolanaAddress();
 
             // update storage
             paidOut[to][user.solanaAddress][distribution.tokenAddress] += amount;
@@ -72,7 +83,7 @@ contract RewardsVaultV2 is RewardsVaultV1, OApp, Ownable2Step {
 
             // ------------------------ LZ ----------------------------
 
-            // create options
+            // create options: [?]
             bytes memory options;
             //options = OptionsBuilder.newOptions().addExecutorLzReceiveOption({_gas: uint128(totalGas), _value: 0});
 
@@ -99,7 +110,7 @@ contract RewardsVaultV2 is RewardsVaultV1, OApp, Ownable2Step {
 
             // ------------------------ LZ ----------------------------
 
-            // create options
+            // create options: [?]
             bytes memory options;
             //options = OptionsBuilder.newOptions().addExecutorLzReceiveOption({_gas: uint128(totalGas), _value: 0});
 

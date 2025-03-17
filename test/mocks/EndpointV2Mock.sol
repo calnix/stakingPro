@@ -35,32 +35,10 @@ contract EndpointV2Mock is Test {
     quote calculates gas needed based on payload and options
         - options det. gas allocated for execution on dstChain
         - payload det. gas needed for the data transmission 
-    we only foucs on the gas needed for payload in this mock
+    we only focus on the gas needed for payload in this mock
      */
     function quote(MessagingParams memory messagingParams, address) public view returns (uint256, uint256) {
-        
-        string memory contractName = vm.getLabel(msg.sender);
-
-        if(keccak256(bytes (contractName)) == keccak256("registry")){
-
-            // return (nativeFee, 0);
-            if(keccak256(messagingParams.options) == keccak256(registry_oneTokenId))   return (73_000, 0);
-            if(keccak256(messagingParams.options) == keccak256(registry_twoTokenId))   return (91_403, 0);
-            if(keccak256(messagingParams.options) == keccak256(registry_threeTokenId)) return (109_806, 0);
-            if(keccak256(messagingParams.options) == keccak256(registry_fourTokenId))  return (128_209, 0);
-            if(keccak256(messagingParams.options) == keccak256(registry_fiveTokenId))  return (146_612, 0);
-        }
-
-        if(keccak256(bytes (contractName)) == keccak256("locker")){
-
-            // return (nativeFee, 0);
-            if(keccak256(messagingParams.options) == keccak256(locker_oneTokenId))   return (51_950, 0);
-            if(keccak256(messagingParams.options) == keccak256(locker_twoTokenId))   return (78_550, 0);
-            if(keccak256(messagingParams.options) == keccak256(locker_threeTokenId)) return (105_150, 0);
-            if(keccak256(messagingParams.options) == keccak256(locker_fourTokenId))  return (131_750, 0);
-            if(keccak256(messagingParams.options) == keccak256(locker_fiveTokenId))  return (158_350, 0);
-        }
-
-        else revert("No contract match");
+        // 0.1 native fee, 0 lzToken fee
+        return (0.1 ether, 0);
     }
 }

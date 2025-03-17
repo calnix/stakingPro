@@ -38,7 +38,7 @@ contract StateT46p_MaintenanceModeTest is StateT46p_MaintenanceMode {
             distributionIds[0] = 0;
             distributionIds[1] = 1;
             emit DistributionsUpdated(distributionIds);
-            pool.updateDistributions();
+            pool.updateActiveDistributions();
         vm.stopPrank();
 
         // check distributions after
@@ -60,7 +60,7 @@ abstract contract StateT46p_MaintenanceMode_UpdateDistributions is StateT46p_Mai
         super.setUp();
 
         vm.startPrank(operator);
-            pool.updateDistributions();
+            pool.updateActiveDistributions();
         vm.stopPrank();
     }
 }
