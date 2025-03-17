@@ -117,3 +117,10 @@ event DistributionEnded(uint256 indexed distributionId, uint256 finalTotalRequir
 event PayRewards(uint256 indexed distributionId, address indexed to, bytes32 indexed receiver, uint256 amount);
 event Deposit(uint256 indexed distributionId, uint32 dstEid, address indexed from, uint256 amount);
 event Withdraw(uint256 indexed distributionId, uint32 dstEid, address indexed to, uint256 amount);
+
+
+// -------------------------------------- EvmVault --------------------------------------------------------------------
+    event Deposit(address token, address from, uint256 amount, uint256 distributionId);
+    event Withdraw(address token, address to, uint256 amount, uint256 distributionId);
+    event PayRewards(address token, address to, uint256 amount);
+    event SetUpToken(address token);

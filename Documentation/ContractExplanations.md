@@ -1176,7 +1176,7 @@ If there are, we should end those distributions via `updateDistribution`.
 - This effectively stops any further rewards from being distributed while preserving all rewards earned up to that point.
 - Distribution must exist and be active (not ended).
 
-# 10. Migrating from old rewardsVault (V1) to new rewardsVault (V2)
+## 10. Migrating from old rewardsVault (V1) to new rewardsVault (V2)
 
 Process:
 
@@ -1186,5 +1186,66 @@ Process:
 
 Step 3 will require an EOA address to be granted the POOL_ROLE, to be able to call setupDistribution.
 
-Additionally, `totalClaimed` and ` totalDeposited` will start from 0 on rewardsVaultV2.
+Additionally, `totalClaimed` and `totalDeposited` will start from `0` on rewardsVaultV2.
 These values will not be migrated over from V1 - so we must be mindful of this when migrating.
+
+# V2: How does RewardsVaultV2 work w/ EVMVault
+
+![Rewards-EVMVault Flow](./images/rewards-evmvault.png)
+
+When claiming rewards for a remote distribution:
+
+1. User calls `claimRewards()` on StakingPro
+2. StakingPro calculates rewards and calls `payRewards()` on RewardsVaultV2
+3. RewardsVaultV2 initiates LayerZero message to EVMVault on remote chain
+4. EVMVault receives message and transfers tokens to user
+
+The flow requires:
+
+- EVMVault to be deployed on remote chain where reward token exists
+- EVMVault to have sufficient token balance
+- LayerZero messaging to be operational
+
+If LayerZero messaging fails:
+
+1. Owner can call `payRewards()` directly on EVMVault as backup
+2. This privileged function allows manual reward distribution if needed
+3. RewardsVaultV2 state is still updated via LayerZero retry mechanism
+
+Key considerations:
+
+- Gas costs are higher for remote claims due to cross-chain messaging
+- Slight delay between claim initiation and token receipt due to cross-chain finality
+- EVMVault balance must be monitored and topped up as needed
+- Owner intervention possible if LayerZero experiences issues
+
+## 1. setupDistribution
+
+- Call on stakingPro
+- Nested call to rewardsVaultV2, token info registered
+- Remains the same as setting up a local distribution, except that dstEid must be correctly specified
+
+## 2. deposit tokens [financing distribution]
+
+- On the remote chain, tokens get deposited to EVMVault.sol
+- calling `deposit` EVMVault fires of nested x-chain call to RewardsVaultV2.
+- On RewardsVaultV2, `_lzReceive` will process the deposit, and update `distribution.totalDeposited``
+
+Hence RewardsVaultV2 will have updated values wrt to deposit actions.
+
+## 3. Withdraw remote tokens
+
+- Withdraw from EVMVault, since thats where the tokens were deposited to.
+- `withdraw` initiates a nested x-chain call to RewardsVaultV2.
+- On RewardsVaultV2, `_lzReceive` will process the withdraw, and update `distribution.totalDeposited`
+
+## 4. Claiming Remote Rewards
+
+1. User calls `claimRewards()` on StakingPro
+2. StakingPro calculates rewards and calls `payRewards()` on RewardsVaultV2
+3. RewardsVaultV2 checks `dstEid`, and `payRewards` will trigger `_lzsend` to the corresponding EvmVault
+4. EvmVault will initiate token transfer to user on remote, via `_lzReceive`
+
+EvmVault has a privileged function `payRewards`, as a backup in case LZ x-chain communications fail.
+
+![Claiming Remote Rewards Flow](./images/claiming-remote.png)

@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import {SafeERC20, IERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./Events.sol";
+import "./Errors.sol";
 
+// OZ
 import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
-import {Ownable2Step, Ownable} from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
+import { SafeERC20, IERC20 } from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Ownable2Step, Ownable } from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 
+// LZ
 import { OApp, Origin, MessagingFee } from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import { OptionsBuilder } from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
@@ -24,21 +28,10 @@ contract EVMVault is OApp, Pausable, Ownable2Step {
 
     // Token address => TokenInfo
     mapping(address token => TokenInfo tokenInfo) public tokens;
-
     // Track rewards paid out to each user for each token
     mapping(address user => mapping(address token => uint256 amount)) public users;
 
-    //errors
-    error InvalidToken();
-    error ExcessDeposit();
-    error InsufficientBalance();
-    error InsufficientGas();
-
     // events
-    event Deposit(address token, address from, uint256 amount, uint256 distributionId);
-    event Withdraw(address token, address to, uint256 amount, uint256 distributionId);
-    event PayRewards(address token, address to, uint256 amount);
-    event SetUpToken(address token);
 
     constructor(uint32 dstEid_, address endpoint, address owner) OApp(endpoint, owner) Ownable(owner) {
         dstEid = dstEid_;
@@ -47,9 +40,9 @@ contract EVMVault is OApp, Pausable, Ownable2Step {
     //------------------------------- DEPOSIT/WITHDRAW ---------------------------------
 
     //note: call back to home: rewards vault
-    //note: caller is expected to reference the Distribution.totalRequired on the RewardsVault
+    //note: caller is expected to reference Distribution.totalRequired on the RewardsVault
     function deposit(address token, uint256 amount, address from, uint256 distributionId) external payable onlyOwner {
-        if(token == address(0)) revert InvalidToken();
+        if(token == address(0)) revert Errors.InvalidTokenAddress();
         
         // update distribution
         tokens[token].totalDeposited += amount;
@@ -67,7 +60,7 @@ contract EVMVault is OApp, Pausable, Ownable2Step {
 
             // check gas needed
             MessagingFee memory fee = _quote(dstEid, payload, options, false);
-            if(msg.value < fee.nativeFee) revert InsufficientGas();
+            if(msg.value < fee.nativeFee) revert Errors.InsufficientGas();
             
             // MessagingFee: Fee struct containing native gas and ZRO token
             // returns MessagingReceipt struct
@@ -79,12 +72,12 @@ contract EVMVault is OApp, Pausable, Ownable2Step {
     
     //note: call back to home: rewards vault
     function withdraw(address token, uint256 amount, address to, uint256 distributionId) external payable onlyOwner {
-        if(token == address(0)) revert InvalidToken();
+        if(token == address(0)) revert Errors.InvalidTokenAddress();
 
         TokenInfo memory tokenInfo = tokens[token];
         
         // check balance
-        if(tokenInfo.totalWithdrawn + amount > tokenInfo.totalDeposited) revert InsufficientBalance();
+        if(tokenInfo.totalWithdrawn + amount > tokenInfo.totalDeposited) revert Errors.InsufficientBalance();
         // update
         tokenInfo.totalWithdrawn += amount;
         
@@ -105,7 +98,7 @@ contract EVMVault is OApp, Pausable, Ownable2Step {
 
             // check gas needed
             MessagingFee memory fee = _quote(dstEid, payload, options, false);
-            if(msg.value < fee.nativeFee) revert InsufficientGas();
+            if(msg.value < fee.nativeFee) revert Errors.InsufficientGas();
             
             // MessagingFee: Fee struct containing native gas and ZRO token
             // returns MessagingReceipt struct

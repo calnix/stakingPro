@@ -84,7 +84,7 @@ library Errors {
     error NotInMaintenance();
     error InMaintenance();
 
-// -------------------------------------- RewardsVault --------------------------------------------------------------------
+// -------------------------------------- RewardsVault + EvmVault ------------------------------------------------------
     
     error InvalidDistributionId();
     error InsufficientDeposit();
@@ -96,4 +96,5 @@ library Errors {
     error PayableBlocked();
     // deposit::V2
     error CallDepositOnRemote();
+
 }
