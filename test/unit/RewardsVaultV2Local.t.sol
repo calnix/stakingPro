@@ -110,19 +110,26 @@ contract StateT11_Distribution1DepositedOnLocalVaultTest is StateT11_Distributio
         assertEq(d1.totalDeposited, totalRequired);
     }
 
+    function test_PayRewardsRevertsOnMsgValue() public {
+        // user2 has 0.1 ether
+        vm.deal(user2, 0.1 ether);
+
+        vm.startPrank(user2);
+            vm.expectRevert(Errors.PayableBlocked.selector);
+            pool.claimRewards{value: 0.1 ether}(vaultId1, 1);
+        vm.stopPrank();
+    }
+
     // test user can claim if remote evm token rewards
     function test_User2CanClaimRewards_Local() public {
         // check distribution data before
         RewardsVaultV1.Distribution memory d1Before = getDistributionFromRewardsVaultV2(1);
         assertEq(d1Before.totalClaimed, 0);
         // check paidOut before
-        assertEq(rewardsVaultV2.paidOut(user2, bytes32(uint256(uint160(user2))), d1Before.tokenAddress), 0);
+        assertEq(rewardsVaultV2.paidOut(user2, bytes32(uint256(uint160(user2))), 1), 0);
 
         // check token balance before
         uint256 balanceBefore = rewardsToken1.balanceOf(user2);
-
-        // user2 has 0.1 ether
-        vm.deal(user2, 0.1 ether);
 
         vm.startPrank(user2);
             vm.expectEmit(true, true, true, true);
@@ -131,14 +138,14 @@ contract StateT11_Distribution1DepositedOnLocalVaultTest is StateT11_Distributio
                 address(rewardsToken1),
                 abi.encodeCall(IERC20.transfer, (user2, 3166666666666666294))
             );
-            pool.claimRewards{value: 0.1 ether}(vaultId1, 1);
+            pool.claimRewards(vaultId1, 1);
         vm.stopPrank();
 
         // check distribution data after
         RewardsVaultV1.Distribution memory d1After = getDistributionFromRewardsVaultV2(1);
         assertEq(d1After.totalClaimed, 3166666666666666294);
         // check paidOut after
-        assertEq(rewardsVaultV2.paidOut(user2, bytes32(uint256(uint160(user2))), d1After.tokenAddress), 3166666666666666294);
+        assertEq(rewardsVaultV2.paidOut(user2, bytes32(uint256(uint160(user2))), 1), 3166666666666666294);
 
         // check token balance after
         uint256 balanceAfter = rewardsToken1.balanceOf(user2);

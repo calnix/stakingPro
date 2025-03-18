@@ -35,15 +35,15 @@ contract RewardsVaultV2 is RewardsVaultV1, OApp, Ownable2Step {
      *      2. Solana transfers using LayerZero messaging
      *      3. Other EVM chain transfers using LayerZero messaging
      * @param distributionId The ID of the distribution to pay rewards from
-     * @param staker Address of staker
+     * @param to Address of the user receiving rewards
      * @param amount Reward amount (expressed in the token's precision)
      */
-    function payRewards(uint256 distributionId, uint256 amount, address staker) external payable override whenNotPaused onlyRole(POOL_ROLE) {
+    function payRewards(uint256 distributionId, uint256 amount, address to) external payable override whenNotPaused onlyRole(POOL_ROLE) {
         // no need for input checks, as this is called by pool
 
         // get distribution + user
         Distribution memory distribution = distributions[distributionId];
-        UserAddresses memory user = users[staker];
+        UserAddresses memory user = users[to];
         
         // check balance
         uint256 balance = distribution.totalDeposited - distribution.totalClaimed;
@@ -52,26 +52,62 @@ contract RewardsVaultV2 is RewardsVaultV1, OApp, Ownable2Step {
         // update claimed
         distribution.totalClaimed += amount;
 
-        // get receiver + token addresses
-        address receiver = user.evmAddress == address(0) ? staker : user.evmAddress;
-        address token = bytes32ToAddress(distribution.tokenAddress);
-
         // update storage
         distributions[distributionId] = distribution;
-        paidOut[staker][addressToBytes32(receiver)][distributionId] += amount;
-
-        emit PayRewards(distributionId, staker, addressToBytes32(receiver), amount);
 
         // local: transfer to receiver
         if(distribution.dstEid == LOCAL_EID){
-            // reject eth transfers for local
-            if(msg.value > 0) revert Errors.PayableBlocked();
+            
+            // get receiver + token addresses
+            address receiver = user.evmAddress == address(0) ? to : user.evmAddress;
+            address token = bytes32ToAddress(distribution.tokenAddress);
+
+            // update storage
+            paidOut[to][addressToBytes32(receiver)][distribution.tokenAddress] += amount;
+
+            emit PayRewards(distributionId, to, addressToBytes32(receiver), amount);
  
             // transfer
             IERC20(token).safeTransfer(receiver, amount); 
         }
-        else { // we assume all else is x-chain evm
+
+        // solana
+        else if (distribution.dstEid == SOLANA_EID){
             
+            // how to do a zero address check here?
+            //if(user.solanaAddress == address(0)) revert Errors.InvalidSolanaAddress();
+
+            // update storage
+            paidOut[to][user.solanaAddress][distribution.tokenAddress] += amount;
+            emit PayRewards(distributionId, to, user.solanaAddress, amount);
+
+            // ------------------------ LZ ----------------------------
+
+            // create options: [?]
+            bytes memory options;
+            //options = OptionsBuilder.newOptions().addExecutorLzReceiveOption({_gas: uint128(totalGas), _value: 0});
+
+            // craft payload: beneficiary address + amount
+            bytes memory payload = abi.encode(distribution.tokenAddress, amount, user.solanaAddress);
+
+            // check gas needed
+            MessagingFee memory fee = _quote(distribution.dstEid, payload, options, false);
+            if(msg.value < fee.nativeFee) revert Errors.InsufficientGas();
+            
+            // MessagingFee: Fee struct containing native gas and ZRO token
+            // returns MessagingReceipt struct
+            _lzSend(distribution.dstEid, payload, options, fee, payable(msg.sender));
+
+        // we assume all else is x-chain evm
+        } else { 
+            
+            // get user address
+            address receiver = user.evmAddress == address(0) ? to : user.evmAddress;
+
+            // update storage
+            paidOut[to][addressToBytes32(receiver)][distribution.tokenAddress] += amount;
+            emit PayRewards(distributionId, to, addressToBytes32(receiver), amount);
+
             // ------------------------ LZ ----------------------------
 
             // create options: [?]

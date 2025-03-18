@@ -128,7 +128,7 @@ contract StateT11_Distribution1DepositedOnEvmVaultTest is StateT11_Distribution1
         assertEq(d1Before.totalClaimed, 0);
 
         // check paidOut before
-        assertEq(rewardsVaultV2.paidOut(user2, bytes32(uint256(uint160(user2))), d1Before.tokenAddress), 0);
+        assertEq(rewardsVaultV2.paidOut(user2, bytes32(uint256(uint160(user2))), 1), 0);
 
         // user2 has 0.1 ether
         vm.deal(user2, 0.1 ether);
@@ -145,7 +145,7 @@ contract StateT11_Distribution1DepositedOnEvmVaultTest is StateT11_Distribution1
         assertEq(d1After.totalClaimed, 3166666666666666294);
 
         // check paidOut after
-        assertEq(rewardsVaultV2.paidOut(user2, bytes32(uint256(uint160(user2))), d1After.tokenAddress), 3166666666666666294);
+        assertEq(rewardsVaultV2.paidOut(user2, bytes32(uint256(uint160(user2))), 1), 3166666666666666294);
     }
 }
 

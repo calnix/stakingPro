@@ -39,9 +39,8 @@ contract RewardsVaultV1 is Pausable, AccessControl {
     
     mapping(address user => UserAddresses userAddresses) public users;
     mapping(uint256 distributionId => Distribution distribution) public distributions;
-    
-    // bytes32 used for receiver and token addresses to account for future non-evm chains
-    mapping(address to => mapping(bytes32 receiver => mapping(bytes32 token => uint256 amount))) public paidOut;
+    // track payouts to addresses across distributions
+    mapping(address staker => mapping(bytes32 receiver => mapping(uint256 distributionId => uint256 amount))) public paidOut;
         
 //------- constructor ----------------------------------------------------------
     constructor(address moneyManager, address monitor, address owner, address pool) {
@@ -134,15 +133,15 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      *      2. Solana transfers using LayerZero messaging
      *      3. Other EVM chain transfers using LayerZero messaging
      * @param distributionId The ID of the distribution to pay rewards from
-     * @param to Address of the user receiving rewards
+     * @param staker Address of staker
      * @param amount Reward amount (expressed in the token's precision)
      */
-    function payRewards(uint256 distributionId, uint256 amount, address to) external payable virtual whenNotPaused onlyRole(POOL_ROLE) {
+    function payRewards(uint256 distributionId, uint256 amount, address staker) external payable virtual whenNotPaused onlyRole(POOL_ROLE) {
         if(msg.value > 0) revert Errors.PayableBlocked();
 
         // get distribution + user
         Distribution memory distribution = distributions[distributionId];
-        UserAddresses memory user = users[to];
+        UserAddresses memory user = users[staker];
 
         // check balance
         uint256 balance = distribution.totalDeposited - distribution.totalClaimed;
@@ -152,14 +151,14 @@ contract RewardsVaultV1 is Pausable, AccessControl {
         distribution.totalClaimed += amount;
 
         // get receiver + token addresses
-        address receiver = user.evmAddress == address(0) ? to : user.evmAddress;
+        address receiver = user.evmAddress == address(0) ? staker : user.evmAddress;
         address token = bytes32ToAddress(distribution.tokenAddress);
 
         // update storage
         distributions[distributionId] = distribution;
-        paidOut[to][addressToBytes32(receiver)][distribution.tokenAddress] += amount;
+        paidOut[staker][addressToBytes32(receiver)][distributionId] += amount;
     
-        emit PayRewards(distributionId, to, addressToBytes32(receiver), amount);
+        emit PayRewards(distributionId, staker, addressToBytes32(receiver), amount);
  
         // transfer
         IERC20(token).safeTransfer(receiver, amount); 
