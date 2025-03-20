@@ -162,16 +162,7 @@ contract StateDeployTest is StateDeploy {
         vm.startPrank(user1);
         
         vm.expectRevert(Errors.InvalidAddress.selector);
-        rewardsVault.setReceiver(address(0), bytes32(uint256(1)));
-        
-        vm.stopPrank();
-    }
-
-    function testCannotSetReceiverWithZeroSolanaAddress() public {
-        vm.startPrank(user1);
-        
-        vm.expectRevert(Errors.InvalidAddress.selector);
-        rewardsVault.setReceiver(address(0x1234567890123456789012345678901234567890), bytes32(0));
+        rewardsVault.setReceiverEvm(address(0));
         
         vm.stopPrank();
     }
@@ -179,23 +170,20 @@ contract StateDeployTest is StateDeploy {
     function testCanSetReceiver() public {
         // Setup test data
         address evmAddress = address(0x1234567890123456789012345678901234567890);
-        bytes32 solanaAddress = bytes32(uint256(1));
 
         vm.startPrank(user1);
+            // Expect event emission
+            vm.expectEmit(true, true, true, true);
+            emit EvmReceiverSet(user1, evmAddress);
 
-        // Expect event emission
-        vm.expectEmit(true, true, true, true);
-        emit ReceiverSet(user1, evmAddress, solanaAddress);
-
-        // Set receiver
-        rewardsVault.setReceiver(evmAddress, solanaAddress);
+            // Set receiver
+            rewardsVault.setReceiverEvm(evmAddress);
+        vm.stopPrank();
 
         // Verify storage update
         (address storedEvmAddress, bytes32 storedSolanaAddress) = rewardsVault.users(user1);
         assertEq(storedEvmAddress, evmAddress, "Incorrect EVM address stored");
-        assertEq(storedSolanaAddress, solanaAddress, "Incorrect Solana address stored");
-
-        vm.stopPrank();
+        assertEq(storedSolanaAddress, bytes32(0), "Incorrect Solana address stored");
     }
 
 }
@@ -228,7 +216,7 @@ contract StatePausedTest is StatePaused {
     function testCannotSetReceiverWhenPaused() public {
         vm.startPrank(user1);
         vm.expectRevert(abi.encodeWithSelector(Pausable.EnforcedPause.selector));
-        rewardsVault.setReceiver(address(0x1234567890123456789012345678901234567890), bytes32(uint256(1)));
+        rewardsVault.setReceiverEvm(address(0x1234567890123456789012345678901234567890));
         vm.stopPrank();
     }
 
@@ -317,7 +305,7 @@ contract StateUnpausedTest is StateUnpaused {
 
     function testCanSetReceiverWhenUnpaused() public {
         vm.startPrank(user1);
-        rewardsVault.setReceiver(address(0x1234567890123456789012345678901234567890), bytes32(uint256(1)));
+        rewardsVault.setReceiverEvm(address(0x1234567890123456789012345678901234567890));
         vm.stopPrank();
     }
 }

@@ -96,5 +96,9 @@ library Errors {
     error PayableBlocked();
     // deposit::V2
     error CallDepositOnRemote();
+    // collectUnclaimedRewards
+    error NoUnclaimedRewards();
+    // updateRemoteBalance
+    error InvalidOrigin();
 
 }

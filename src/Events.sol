@@ -109,8 +109,8 @@ event DistributionIndexUpdated(uint256 indexed distributionId, uint256 lastUpdat
 event DistributionCompleted(uint256 indexed distributionId, uint256 endTime, uint256 totalEmitted);
 
 
-// -------------------------------------- RewardsVault --------------------------------------------------------------------
-event ReceiverSet(address indexed setter, address indexed evmAddress, bytes32 indexed solanaAddress);
+// -------------------------------------- RewardsVaultV1 --------------------------------------------------------------------
+event EvmReceiverSet(address indexed setter, address indexed evmAddress);
 event DistributionCreated(uint256 indexed distributionId, uint32 dstEid, bytes32 tokenAddress);
 event DistributionUpdated(uint256 indexed distributionId, uint256 newTotalRequired);
 event DistributionEnded(uint256 indexed distributionId, uint256 finalTotalRequired);
@@ -118,9 +118,13 @@ event PayRewards(uint256 indexed distributionId, address indexed to, bytes32 ind
 event Deposit(uint256 indexed distributionId, uint32 dstEid, address indexed from, uint256 amount);
 event Withdraw(uint256 indexed distributionId, uint32 dstEid, address indexed to, uint256 amount);
 
+// -------------------------------------- RewardsVaultV2 --------------------------------------------------------------------
+event RemoteBalanceUpdated(uint256 indexed distributionId, uint256 amount, uint256 isDeposit);
 
 // -------------------------------------- EvmVault --------------------------------------------------------------------
-    event Deposit(address token, address from, uint256 amount, uint256 distributionId);
-    event Withdraw(address token, address to, uint256 amount, uint256 distributionId);
-    event PayRewards(address token, address to, uint256 amount);
-    event SetUpToken(address token);
+event Deposit(address token, address from, uint256 amount, uint256 distributionId);
+event Withdraw(address token, address to, uint256 amount, uint256 distributionId);
+event PayRewards(address token, address to, uint256 amount);
+event SetUpToken(address token);
+event UnclaimedRewards(address token, address receiver, uint256 unclaimableAmount);
+event CollectUnclaimedRewards(address token, address receiver, uint256 amount);

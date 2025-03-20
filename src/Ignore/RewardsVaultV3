@@ -28,6 +28,21 @@ contract RewardsVaultV2 is RewardsVaultV1, OApp, Ownable2Step {
         RewardsVaultV1(moneyManager, monitor, owner, pool) OApp(endpoint, owner) Ownable(owner) {
     }
 
+
+    function setReceiverSolana(bytes32 solanaAddress) external virtual whenNotPaused {
+        if(solanaAddress == bytes32(0)) revert Errors.InvalidAddress();
+
+        // Solana's "address(0)": Pubkey::default() will be 111111111111111111111111111111111
+        //uint64 nullValue = 111111111111111111111111111111111;
+        // 32 bytes, base58 encoded
+        //if(solanaAddress == bytes32(0x1111111111111111111111111111111111111111111111111111111111111111)) revert Errors.InvalidAddress();
+
+        users[msg.sender] = UserAddresses(address(0), solanaAddress);
+
+        emit ReceiverSet(msg.sender, solanaAddress);
+    }
+
+
     /**
      * @notice Transfers rewards to users, handling both local and cross-chain distributions
      * @dev Only callable by the Staking Pool contract. Handles three cases:

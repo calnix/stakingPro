@@ -1247,3 +1247,47 @@ Hence RewardsVaultV2 will have updated values wrt to deposit actions.
 EvmVault has a privileged function `payRewards`, as a backup in case LZ x-chain communications fail.
 
 ![Claiming Remote Rewards Flow](claimingRemote.png)
+
+## 5. Updating distribution
+
+1. Call `updateDistribution` on Pool, `totalRequired` changes
+2. `totalRequired` is updated on RewardsVaultV2
+3. Nothing done on EvmVault - it has no concept `totalRequired`
+
+### problem
+
+- withdraw on remote
+- home not updated, user calls [balance checks clears]
+- revert on remote
+
+### What this means for deposit, withdraw and claiming?
+
+- Can deposit/withdraw freely on EVMVault. `totalRequired` must be manually referenced.
+- updates between home and remote have to be async
+- could lead to situations where `totalDeposited` on home is stale, and reflects a larger figures than the actual balance on remote
+- hence, home claimRewards txns would not revert, while those on remote would, leading to a situation where storage on home incorrectly reflects what a user has claimed.
+
+**To avoid this, it is sensible to design it such that reverts are not an issue.**
+
+- If `_lzReceive` fails on EVMVault.sol due to insufficient balance, store difference as unclaimable.
+- When updating, avoid a situation where the incoming update could lead to shortage or invalid claims.
+
+### if withdraw [or totalRequired decreases]
+
+1. reduce on home first, via `updatedDistribution` on StakingPro
+2. then withdraw on remote
+
+Incoming claimRewards calls will be immediately treated on the update, as StakingPro and RewardsVault are updated.
+This prevents invalid claimRewards txns from going x-chain.
+
+### if deposit [or totaRequired increases]
+
+1. deposit on remote first.
+2. update on home, via `updatedDistribution` on StakingPro
+
+claimRewards txns revert until sufficient balance is available on remote chain.
+
+### other cases
+
+Other cases of concern would be when partial deposits are made instead of the full amount upfront.
+The onus in upon the operator to keep track and update accordingly. 

@@ -59,21 +59,17 @@ contract RewardsVaultV1 is Pausable, AccessControl {
      * @notice Sets the receiver address for the user
      * @dev Only callable when the contract is not paused
      * @param evmAddress The EVM address of the user
-     * @param solanaAddress The Solana address of the user
      */
-    function setReceiver(address evmAddress, bytes32 solanaAddress) external virtual whenNotPaused {
+    function setReceiverEvm(address evmAddress) external virtual whenNotPaused {
         if(evmAddress == address(0)) revert Errors.InvalidAddress();
-        if(solanaAddress == bytes32(0)) revert Errors.InvalidAddress();
 
-        users[msg.sender] = UserAddresses(evmAddress, solanaAddress);
+        users[msg.sender].evmAddress = evmAddress;
 
-        emit ReceiverSet(msg.sender, evmAddress, solanaAddress);
+        emit EvmReceiverSet(msg.sender, evmAddress);
     }
-
 
     /*//////////////////////////////////////////////////////////////
                               POOL
-
     //////////////////////////////////////////////////////////////*/
 
     /**
@@ -93,10 +89,7 @@ contract RewardsVaultV1 is Pausable, AccessControl {
             distribution.dstEid = dstEid;
             distribution.tokenAddress = tokenAddress;
             distribution.totalRequired = totalRequired;
-
-        // sanity check: will revert if address is not a token contract
-        if(dstEid == LOCAL_EID) IERC20(bytes32ToAddress(tokenAddress)).balanceOf(address(this));
-
+        
         // update
         distributions[distributionId] = distribution;
 
@@ -186,6 +179,8 @@ contract RewardsVaultV1 is Pausable, AccessControl {
         if(distribution.dstEid != LOCAL_EID) revert Errors.CallDepositOnRemote();
         // distribution must be setup
         if(distribution.tokenAddress == bytes32(0)) revert Errors.DistributionNotSetup();
+        // sanity check: will revert if address is not a token contract on local
+        IERC20(bytes32ToAddress(distribution.tokenAddress)).balanceOf(address(this));
         
         // check if excess: allow for partial deposits
         if(distribution.totalRequired < distribution.totalDeposited + amount) revert Errors.ExcessiveDeposit();
