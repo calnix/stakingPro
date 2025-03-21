@@ -244,4 +244,13 @@ contract EVMVault is OApp, Pausable, Ownable2Step, AccessControl {
     function unpause() external whenPaused onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
     }
+
+    /**
+     * @notice Allows the DEFAULT_ADMIN_ROLE to exfil any ERC20 tokens from the contract
+     * @dev Only callable when the contract is paused
+     * @param token Token address 
+     */
+    function exit(address token) external whenPaused onlyRole(DEFAULT_ADMIN_ROLE) {
+        IERC20(token).safeTransfer(msg.sender, IERC20(token).balanceOf(address(this)));
+    }
 }
