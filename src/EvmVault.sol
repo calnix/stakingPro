@@ -154,20 +154,6 @@ contract EVMVault is OApp, Pausable, Ownable2Step, AccessControl {
 
 //------------------------------- LAYERZERO --------------------------------------
 
-    function quote(uint256 distributionId, uint256 amount, bool isDeposit) external view returns (uint256 nativeFee, uint256 lzTokenFee) {
-
-        bytes memory payload = abi.encode(distributionId, amount, isDeposit);
-        
-        // create options
-        bytes memory options;
-        //options = OptionsBuilder.newOptions().addExecutorLzReceiveOption({_gas: uint128(totalGas), _value: 0});
-
-        MessagingFee memory fee = _quote(dstEid, payload, options, false);
-        
-        return (fee.nativeFee, fee.lzTokenFee);
-    }
-
-
     /** 
      * @dev Override of _lzReceive internal fn in OAppReceiver.sol. The public fn lzReceive, handles param validation.
      * @param payload message payload being received

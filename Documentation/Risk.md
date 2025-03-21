@@ -2,7 +2,8 @@
 
 Mainnet
 - NftLocker
-- [In ecosystem: MocaToken, MocaTokenAdapter, NftStreaming]
+- MocaTokenAdapter
+- NftStreaming
 
 Base
 - StakingPro + RewardsVault
@@ -14,7 +15,20 @@ Away
 ## Approach
 
 Pause everything everywhere first.
-Remediate and unpause accordingly. 
+Remediate and unpause accordingly.
+
+**X-Chain flows**
+
+1. StakingPro > RewardsVault > EvmVault
+2. nftLocker <> nftRegistry
+3. mocaTokenAdapter <> mocaOft
+
+Call `pause` on all contracts immediately.
+
+Contracts will enter paused state at differing times, since different chains will queue the pause txn differently.
+
+This means that there might be some in-flight txns that could be malicious.
+Before, unpausing, we should check the in-flight txns and assess if they all should be allowed to land or some should be rejected.
 
 ### StakingPro
 
