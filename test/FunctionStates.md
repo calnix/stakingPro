@@ -89,23 +89,17 @@ Token validation states:
 (-) Amount > staked amount (revert: `InsufficientBalance`)
 (+) Amount <= staked amount (should succeed)
 
-
 NFT validation states:
 (-) NFTs not staked in vault (revert: `NftNotStaked`)
 (-) NFTs not owned by vault (revert: `NftNotStaked`) 
 (+) NFTs properly staked in vault (should succeed)
 
-
 Vault states:
 (-) Vault does not exist [`_cache`]
 (-) `vault.endTime > 0`
 
-
-
 RP validation states:
 (-) Amount > staked RP (revert: `InsufficientBalance`)
 (+) Amount <= staked RP (should succeed)
-
-
 
 ## _updateUserAccounts

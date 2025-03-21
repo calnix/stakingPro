@@ -1274,13 +1274,29 @@ EvmVault has a privileged function `payRewards`, as a backup in case LZ x-chain 
 
 ### if withdraw [or totalRequired decreases]
 
-1. reduce on home first, via `updatedDistribution` on StakingPro
+1. reduce on home, via `updatedDistribution` on StakingPro
 2. then withdraw on remote
 
 Incoming claimRewards calls will be immediately treated on the update, as StakingPro and RewardsVault are updated.
 This prevents invalid claimRewards txns from going x-chain.
 
-### if deposit [or totaRequired increases]
+        However:
+
+        there could be claimRewards txns in mid-flight, that were initiated just before step 1.
+        due to the latency of cross-chain calls, these txns would `fail`; users would have token balances stored as 'unclaimable'.
+
+        To avoid this issue:
+         - allow some downtime between steps 1 and 2, to ensure all mid-flight claimRewards txns have time to complete.
+         - once they are, proceed with step 2.
+
+        If withdraw is immediately done step 1, some users may have their claimRewards txns 'fail'.
+        - these would be perceived as legitimate txns are they were initiated on home, before step 1 occured. 
+        - users will have token balances stored as 'unclaimable'
+        - as their claimRewards txns were in mid-flight, when the totalRequired was updated.
+        
+        To avoid this, user can call `collectUnclaimedRewards` to claim their rewards.
+
+### if deposit [or totalRequired increases]
 
 1. deposit on remote first.
 2. update on home, via `updatedDistribution` on StakingPro
@@ -1290,4 +1306,4 @@ claimRewards txns revert until sufficient balance is available on remote chain.
 ### other cases
 
 Other cases of concern would be when partial deposits are made instead of the full amount upfront.
-The onus in upon the operator to keep track and update accordingly. 
+The onus in upon the operator to keep track and update accordingly.

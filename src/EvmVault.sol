@@ -50,25 +50,24 @@ contract EVMVault is OApp, Pausable, Ownable2Step, AccessControl {
 
     /**
      * @notice Allows users to collect previously unclaimable rewards for a specific token
-     * @dev This function enables users to claim rewards that were previously unclaimable due to insufficient vault balance
      * @param token The address of the token to collect unclaimable rewards for
      */
-    function collectUnclaimedRewards(address token) external {
+    function collectUnclaimedRewards(address token) external whenNotPaused {
         if(token == address(0)) revert Errors.InvalidTokenAddress();
 
         uint256 unclaimableAmount = unclaimable[msg.sender][token];
         if(unclaimableAmount == 0) revert Errors.NoUnclaimedRewards();
         
-        // token info
-        TokenInfo storage tokenInfo = tokens[token];
-
-        uint256 available = tokenInfo.totalDeposited - tokenInfo.totalPaidOut;
-        uint256 amountToPay = available < unclaimableAmount ? available : unclaimableAmount;
+        // check balance
+        uint256 balance = IERC20(token).balanceOf(address(this));
+        uint256 amountToPay = balance < unclaimableAmount ? balance : unclaimableAmount;
 
         // update storage
-        tokenInfo.totalPaidOut += amountToPay;
-        tokenInfo.totalUnclaimable -= amountToPay;
+        tokens[token].totalUnclaimable -= amountToPay;
         unclaimable[msg.sender][token] -= amountToPay;
+        
+        tokens[token].totalPaidOut += amountToPay;
+        paidOut[msg.sender][token] += amountToPay;
 
         emit CollectUnclaimedRewards(token, msg.sender, amountToPay);
 
@@ -76,19 +75,49 @@ contract EVMVault is OApp, Pausable, Ownable2Step, AccessControl {
         IERC20(token).safeTransfer(msg.sender, amountToPay);
     }
 
-//------------------------------- DEPOSIT/WITHDRAW ---------------------------------
+//------------------------------- DEPOSIT/WITHDRAW -------------------------------
 
-    //note: call back to home: rewards vault
-    //note: caller is expected to reference Distribution.totalRequired on the RewardsVault
-    /**
-     * @notice Deposits tokens into the vault and notifies the rewards vault on the home chain
-     * @dev Only callable by owner. Requires sufficient gas to cover LayerZero messaging fees.
+    /** Process deposits and withdrawals
+
+        Deposit [or totalRequired increases]:
+            1. deposit here.
+            2. update on home, via `updatedDistribution` on StakingPro
+
+        user cannot claimRewards prematurely.
+        claimRewards txns revert until sufficient balance is available on remote chain.
+        
+        Withdraw [or totalRequired decreases]:
+            1. reduce on home, via `updatedDistribution` on StakingPro 
+            2. then withdraw on remote
+        
+        Incoming claimRewards calls will be immediately treated on the update, as StakingPro and RewardsVault are updated.
+        This prevents invalid claimRewards txns from going x-chain.
+
+        However:
+        there could be claimRewards txns in mid-flight, that were initiated just before step 1.
+        due to the latency of cross-chain calls, these txns would `fail`; users would have token balances stored as 'unclaimable'.
+
+        To avoid this issue:
+         - allow some downtime between steps 1 and 2, to ensure all mid-flight claimRewards txns have time to complete.
+         - once they are, proceed with step 2.
+
+        If withdraw is immediately done step 1, some users may have their claimRewards txns 'fail'.
+        - these would be perceived as legitimate txns are they were initiated on home, before step 1 occured. 
+        - users will have token balances stored as 'unclaimable'
+        - as their claimRewards txns were in mid-flight, when the totalRequired was updated.
+        
+        To avoid this, user can call `collectUnclaimedRewards` to claim their rewards.
+    */
+
+    /** Note: Refer to process comment block above for more details.
+     * @notice Deposits tokens into the vault
+     * @dev Caller is expected to reference Distribution.totalRequired on the RewardsVault
      * @param token The address of the token being deposited
      * @param amount The amount of tokens to deposit
      * @param from The address the tokens are being deposited from
      * @param distributionId The ID of the distribution these tokens are for
      */
-    function deposit(address token, uint256 amount, address from, uint256 distributionId) external payable onlyRole(MONEY_MANAGER_ROLE) {
+    function deposit(address token, uint256 amount, address from, uint256 distributionId) external payable whenNotPaused onlyRole(MONEY_MANAGER_ROLE) {
         if(token == address(0)) revert Errors.InvalidTokenAddress();
         if(distributionId == 0) revert Errors.InvalidDistributionId();
         
@@ -96,37 +125,17 @@ contract EVMVault is OApp, Pausable, Ownable2Step, AccessControl {
         tokens[token].totalDeposited += amount;
 
         emit Deposit(token, from, amount, distributionId);
-        
-        //----------------------- LZ stuff -----------------------
-        /*
-            // create options
-            bytes memory options;
-            options = OptionsBuilder.newOptions().addExecutorLzReceiveOption({_gas: uint128(totalGas), _value: 0});
-
-            // craft payload: isDeposit = 1
-            bytes memory payload = abi.encode(distributionId, amount, 1);
-
-            // check gas needed
-            MessagingFee memory fee = _quote(dstEid, payload, options, false);
-            if(msg.value < fee.nativeFee) revert Errors.InsufficientGas();
-            
-            // MessagingFee: Fee struct containing native gas and ZRO token
-            // returns MessagingReceipt struct
-            //_lzSend(dstEid, payload, options, fee, payable(msg.sender));
-        */
-
-        //----------------------- ----- -----------------------
     }
     
-    /** 
+    /** Note: Refer to process comment block above for more details.
      * @notice Withdraws tokens from the vault
-     * @dev Calls back to the rewards vault on the home chain, to update the distribution
+     * @dev Caller is expected to reference Distribution.totalRequired on the RewardsVault
      * @param token The address of the token being withdrawn
      * @param amount The amount of tokens to withdraw
      * @param to The address the tokens are being withdrawn to
      * @param distributionId The ID of the distribution these tokens are for
      */
-    function withdraw(address token, uint256 amount, address to, uint256 distributionId) external payable onlyRole(MONEY_MANAGER_ROLE) {
+    function withdraw(address token, uint256 amount, address to, uint256 distributionId) external payable whenNotPaused onlyRole(MONEY_MANAGER_ROLE) {
         if(token == address(0)) revert Errors.InvalidTokenAddress();
 
         TokenInfo memory tokenInfo = tokens[token];
@@ -141,30 +150,9 @@ contract EVMVault is OApp, Pausable, Ownable2Step, AccessControl {
         tokens[token] = tokenInfo;
 
         emit Withdraw(token, to, amount, distributionId);  
-
-        //----------------------- LZ stuff -----------------------
-            /*
-            // create options
-            bytes memory options;
-            //options = OptionsBuilder.newOptions().addExecutorLzReceiveOption({_gas: uint128(totalGas), _value: 0});
-
-            // craft payload: isDeposit = 0
-            bytes memory payload = abi.encode(distributionId, amount, 0);
-
-
-            // check gas needed
-            MessagingFee memory fee = _quote(dstEid, payload, options, false);
-            if(msg.value < fee.nativeFee) revert Errors.InsufficientGas();
-            
-            // MessagingFee: Fee struct containing native gas and ZRO token
-            // returns MessagingReceipt struct
-            _lzSend(dstEid, payload, options, fee, payable(msg.sender));
-            */
-
-        //----------------------- ----- -----------------------
     }
 
-//------------------------------- LAYERZERO ---------------------------------
+//------------------------------- LAYERZERO --------------------------------------
 
     function quote(uint256 distributionId, uint256 amount, bool isDeposit) external view returns (uint256 nativeFee, uint256 lzTokenFee) {
 
@@ -191,38 +179,53 @@ contract EVMVault is OApp, Pausable, Ownable2Step, AccessControl {
     function _lzReceive(Origin calldata /*origin*/, bytes32 /*guid*/, bytes calldata payload, address /*executor*/, bytes calldata /*options*/) internal override {
 
         (bytes32 tokenAddress, uint256 amount, address receiver) = abi.decode(payload, (bytes32, uint256, address));
-        
+
         // convert bytes32 to address
         address token = address(uint160(uint256(tokenAddress)));
 
-        TokenInfo memory tokenInfo = tokens[token];
-        uint256 available = tokenInfo.totalDeposited - tokenInfo.totalPaidOut;
+        // if paused, increment unclaimable, do not transfer
+        // crucial to prevent _lzReceive from reverting
+        if(paused()) {
 
-        // If available balance is less than requested amount, store difference as unclaimable
-        if (available < amount) {
+            unclaimable[receiver][token] += amount;
+            tokens[token].totalUnclaimable += amount;
+            emit UnclaimedRewards(token, receiver, amount);
 
-            uint256 unclaimableAmount = amount - available;
-
-            unclaimable[receiver][token] += unclaimableAmount;
-            tokens[token].totalUnclaimable += unclaimableAmount;
-
-            emit UnclaimedRewards(token, receiver, unclaimableAmount);
-
-            // Transfer whatever is available
-            if(available > 0) {
-                emit PayRewards(token, receiver, available);
-                IERC20(token).safeTransfer(receiver, available);
-            }
-            
         } else {
+            
+            uint256 balance = IERC20(token).balanceOf(address(this));
 
-            // Full amount available, transfer it all            
-            emit PayRewards(token, receiver, amount);
-            IERC20(token).safeTransfer(receiver, amount);
+            // insufficient balance: send remaining balance
+            if(balance < amount) {
+                
+                uint256 unclaimableAmount = amount - balance;
+
+                // update storage
+                unclaimable[receiver][token] += unclaimableAmount;
+                tokens[token].totalUnclaimable += unclaimableAmount;
+
+                tokens[token].totalPaidOut += balance;
+                paidOut[receiver][token] += balance;
+                
+
+                emit PayRewards(token, receiver, balance);
+                emit UnclaimedRewards(token, receiver, unclaimableAmount);
+
+                IERC20(token).safeTransfer(receiver, balance);
+
+            } else { // full amount available, transfer it all
+
+                tokens[token].totalPaidOut += amount;
+                paidOut[receiver][token] += amount;
+
+                emit PayRewards(token, receiver, amount);
+
+                IERC20(token).safeTransfer(receiver, amount);
+            }
         }
     }
 
-//------------------------------- OWNABLE2STEP ---------------------------------
+//------------------------------- OWNABLE2STEP -----------------------------------
 
     /**
      * @dev Starts the ownership transfer of the contract to a new account. Replaces the pending transfer if there is one.
